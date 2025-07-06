@@ -1,0 +1,6 @@
+{
+  "home_weather": {
+    "entity_id": "home_weather",
+    "actions": ["home_weather"]
+  }
+}

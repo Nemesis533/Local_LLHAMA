@@ -1,0 +1,46 @@
+body {
+  background-color: #f0f2f5;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
+
+.container {
+  width: 100%; /* or auto */
+  max-width: 100vw;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#status-image {
+  width: 150px;
+  height: auto;
+  margin-bottom: 20px;
+}
+
+.log-box {
+  width: 100%;          /* full width of its container */
+  max-width: 100vw;     /* prevent overflow beyond viewport */
+  box-sizing: border-box; /* include padding and border in width */
+  background-color: #111;
+  color: #0f0;
+  font-family: monospace;
+  padding: 10px;
+  height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  border: 1px solid #444;
+}
+.http-message {
+  color: #ff9900;  /* Orange color for HTTP messages */
+  font-weight: bold;
+}

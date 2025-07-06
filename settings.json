@@ -1,0 +1,45 @@
+{
+  "HomeAssistantClient": {
+    "base_url": {"value": "http://homeassistant.local:yourport", "type": "str"},
+    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9[...]]FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
+     "type": "str"},
+    "allowed_entities": {
+      "value": [
+        "light.kitchen_light",
+        "light.desk_light",
+        "light.couch_light",
+        "climate.as35p",
+        "climate.as25p"
+      ],
+      "type": "list"
+    },
+    "ALLOWED_DOMAINS":{
+       "value": ["light", "climate", "switch", "fan", "media_player", "thermostat"],
+        "type": "list"}
+  },
+  "LocalLLMChecker": {
+    "ALLOWED_IP_PREFIXES": {"value": ["192.168.1.", "127.0.0.1"], "type": "list"}
+  },
+  "SettingLoader": {
+    "base_model_path": {
+      "value": "/mnt/fast_storage/huggingface/hub/",
+      "type": "str"
+    },
+    "command_llm_name": {
+      "value": "meta-llama/Llama-3.1-8B",
+      "type": "str"
+    },
+    "prompt_guard_model_name": {
+      "value": "./llama_guard_trained_multilingual",
+      "type": "str"
+    },
+    "use_guard_llm": {
+      "value": "True",
+      "type": "bool"
+    },
+    "load_models_in_8_bit": {
+      "value": "True",
+      "type": "bool"
+    }
+  }
+}
