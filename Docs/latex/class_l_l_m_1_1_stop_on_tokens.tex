@@ -1,0 +1,64 @@
+\doxysection{LLM.\+Stop\+On\+Tokens Class Reference}
+\hypertarget{class_l_l_m_1_1_stop_on_tokens}{}\label{class_l_l_m_1_1_stop_on_tokens}\index{LLM.StopOnTokens@{LLM.StopOnTokens}}
+Inheritance diagram for LLM.\+Stop\+On\+Tokens\+:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{class_l_l_m_1_1_stop_on_tokens}
+\end{center}
+\end{figure}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_stop_on_tokens_a9294e8b92bf845ed776fba6bce2c7c06}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self, tokenizer, stop\+\_\+tokens)
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_stop_on_tokens_a5bba5a173090bbec634c656ca71ec4dd}{\+\_\+\+\_\+call\+\_\+\+\_\+}} (self, input\+\_\+ids, scores, \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}kwargs)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_a302d84704514440e03ca321c16b44081}\label{class_l_l_m_1_1_stop_on_tokens_a302d84704514440e03ca321c16b44081} 
+{\bfseries tokenizer} = tokenizer
+\item 
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_a7755c1ca201a72603c800fe731ca044e}\label{class_l_l_m_1_1_stop_on_tokens_a7755c1ca201a72603c800fe731ca044e} 
+{\bfseries stop\+\_\+tokens} = stop\+\_\+tokens
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@brief Custom stopping criteria to stop generation on specific token(s).
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_a9294e8b92bf845ed776fba6bce2c7c06}\index{LLM.StopOnTokens@{LLM.StopOnTokens}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!LLM.StopOnTokens@{LLM.StopOnTokens}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_stop_on_tokens_a9294e8b92bf845ed776fba6bce2c7c06} 
+LLM.\+Stop\+On\+Tokens.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{tokenizer}{, }\item[{}]{stop\+\_\+tokens}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@param tokenizer The tokenizer used to decode tokens.
+@param stop_tokens List of token IDs that trigger stopping when generated.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_l_l_m_1_1_stop_on_tokens_a5bba5a173090bbec634c656ca71ec4dd}\index{LLM.StopOnTokens@{LLM.StopOnTokens}!\_\_call\_\_@{\_\_call\_\_}}
+\index{\_\_call\_\_@{\_\_call\_\_}!LLM.StopOnTokens@{LLM.StopOnTokens}}
+\doxysubsubsection{\texorpdfstring{\_\_call\_\_()}{\_\_call\_\_()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_stop_on_tokens_a5bba5a173090bbec634c656ca71ec4dd} 
+LLM.\+Stop\+On\+Tokens.\+\_\+\+\_\+call\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{input\+\_\+ids}{, }\item[{}]{scores}{, }\item[{\texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{kwargs}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Check if the last token in input_ids is in stop_tokens.
+@param input_ids Tensor of token ids generated so far.
+@param scores Model output scores (not used here).
+@return True if last token is a stop token, else False.
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+LLM.\+py\end{DoxyCompactItemize}

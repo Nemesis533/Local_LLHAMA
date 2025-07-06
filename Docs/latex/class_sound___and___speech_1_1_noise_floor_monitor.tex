@@ -1,0 +1,120 @@
+\doxysection{Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor Class Reference}
+\hypertarget{class_sound___and___speech_1_1_noise_floor_monitor}{}\label{class_sound___and___speech_1_1_noise_floor_monitor}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_noise_floor_monitor_a1d0cc03ea2aabb7f6218d1924a0f2321}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self, rate=16000, chunk\+\_\+size=1024, window\+\_\+seconds=5)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_noise_floor_monitor_a16e142bf11d993383a531dabe68de644}{update\+\_\+and\+\_\+get\+\_\+average\+\_\+rms}} (self, data)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_noise_floor_monitor_a40b6e078974493511fe254de65a030a5}{get\+\_\+noise\+\_\+floor}} (self)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_noise_floor_monitor_a6cb1a645d61ec7d8b2994aa7e5294c61}{rms\+\_\+to\+\_\+dbfs}} (self, rms, ref=32768.\+0)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a9511aecef51ccd341cffd0cab4e12ff4}\label{class_sound___and___speech_1_1_noise_floor_monitor_a9511aecef51ccd341cffd0cab4e12ff4} 
+{\bfseries rate} = rate
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a199c61ebc1f338e4ad2b637dbd869c0a}\label{class_sound___and___speech_1_1_noise_floor_monitor_a199c61ebc1f338e4ad2b637dbd869c0a} 
+{\bfseries chunk\+\_\+size} = chunk\+\_\+size
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a2b517fd8524112aa064a283559aee900}\label{class_sound___and___speech_1_1_noise_floor_monitor_a2b517fd8524112aa064a283559aee900} 
+{\bfseries window\+\_\+seconds} = window\+\_\+seconds
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a0eb7e9ffe65f4df7403f598692ebc788}\label{class_sound___and___speech_1_1_noise_floor_monitor_a0eb7e9ffe65f4df7403f598692ebc788} 
+{\bfseries max\+\_\+chunks} = int(self.\+rate / self.\+chunk\+\_\+size \texorpdfstring{$\ast$}{*} self.\+window\+\_\+seconds)
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_ad78757885d77b8c7cd7c6cd09e5e3f0f}\label{class_sound___and___speech_1_1_noise_floor_monitor_ad78757885d77b8c7cd7c6cd09e5e3f0f} 
+{\bfseries rms\+\_\+values} = deque(maxlen=self.\+max\+\_\+chunks)
+\item 
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_afeb6e127b50b6b00536a72263fc2476e}\label{class_sound___and___speech_1_1_noise_floor_monitor_afeb6e127b50b6b00536a72263fc2476e} 
+float {\bfseries noise\+\_\+floor\+\_\+multiplier} = 1.\+05
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_noise_floor_monitor_a9c426b99947b9b2f692036229b8aa715}{\+\_\+calculate\+\_\+rms}} (self, data)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@class NoiseFloorMonitor
+@brief Monitors and calculates the noise floor (RMS) in an audio stream.
+
+Maintains a running buffer of RMS values to estimate background noise over time.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a1d0cc03ea2aabb7f6218d1924a0f2321}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_noise_floor_monitor_a1d0cc03ea2aabb7f6218d1924a0f2321} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{rate}{ = {\ttfamily 16000}, }\item[{}]{chunk\+\_\+size}{ = {\ttfamily 1024}, }\item[{}]{window\+\_\+seconds}{ = {\ttfamily 5}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Constructor for NoiseFloorMonitor.
+
+Initializes parameters for sampling rate, chunk size, and averaging window.
+
+@param rate: The sampling rate of the audio in Hz.
+@param chunk_size: Number of samples per audio chunk.
+@param window_seconds: Number of seconds to average RMS over.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a9c426b99947b9b2f692036229b8aa715}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}!\_calculate\_rms@{\_calculate\_rms}}
+\index{\_calculate\_rms@{\_calculate\_rms}!Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection{\texorpdfstring{\_calculate\_rms()}{\_calculate\_rms()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_noise_floor_monitor_a9c426b99947b9b2f692036229b8aa715} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor.\+\_\+calculate\+\_\+rms (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{data}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [protected]}}
+
+\begin{DoxyVerb}@brief Calculates the Root Mean Square (RMS) value from raw audio bytes.
+
+@param data: Byte string of audio data.
+@return: RMS value as a float.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a40b6e078974493511fe254de65a030a5}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}!get\_noise\_floor@{get\_noise\_floor}}
+\index{get\_noise\_floor@{get\_noise\_floor}!Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection{\texorpdfstring{get\_noise\_floor()}{get\_noise\_floor()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_noise_floor_monitor_a40b6e078974493511fe254de65a030a5} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor.\+get\+\_\+noise\+\_\+floor (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Returns the current estimated noise floor in dBFS.
+
+@return: Average of the stored RMS values in dBFS.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a6cb1a645d61ec7d8b2994aa7e5294c61}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}!rms\_to\_dbfs@{rms\_to\_dbfs}}
+\index{rms\_to\_dbfs@{rms\_to\_dbfs}!Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection{\texorpdfstring{rms\_to\_dbfs()}{rms\_to\_dbfs()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_noise_floor_monitor_a6cb1a645d61ec7d8b2994aa7e5294c61} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor.\+rms\+\_\+to\+\_\+dbfs (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{rms}{, }\item[{}]{ref}{ = {\ttfamily 32768.0}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Converts an RMS value to dBFS (decibels relative to full scale).
+
+@param rms: The RMS value to convert.
+@param ref: The reference value for 0 dBFS. Default is 32768.0 (max 16-bit PCM).
+@return: dBFS value as a float.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_noise_floor_monitor_a16e142bf11d993383a531dabe68de644}\index{Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}!update\_and\_get\_average\_rms@{update\_and\_get\_average\_rms}}
+\index{update\_and\_get\_average\_rms@{update\_and\_get\_average\_rms}!Sound\_And\_Speech.NoiseFloorMonitor@{Sound\_And\_Speech.NoiseFloorMonitor}}
+\doxysubsubsection{\texorpdfstring{update\_and\_get\_average\_rms()}{update\_and\_get\_average\_rms()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_noise_floor_monitor_a16e142bf11d993383a531dabe68de644} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Noise\+Floor\+Monitor.\+update\+\_\+and\+\_\+get\+\_\+average\+\_\+rms (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{data}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Updates the RMS buffer with new audio data and returns the running average in dBFS.
+
+@param data: Byte string of audio data.
+@return: Running average RMS in decibels relative to full scale (dBFS).
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Sound\+\_\+\+And\+\_\+\+Speech.\+py\end{DoxyCompactItemize}

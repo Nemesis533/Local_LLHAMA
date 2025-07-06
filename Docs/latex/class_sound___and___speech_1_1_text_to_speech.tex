@@ -1,0 +1,109 @@
+\doxysection{Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech Class Reference}
+\hypertarget{class_sound___and___speech_1_1_text_to_speech}{}\label{class_sound___and___speech_1_1_text_to_speech}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_text_to_speech_aaa8224354b855b4915dd1b091bdf1211}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self, model\+\_\+name="{}tts\+\_\+models/en/ek1/tacotron2"{}, device=\textquotesingle{}cuda\textquotesingle{})
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_text_to_speech_a3b8ecd0c4d5fcc80d13f423a7c166cca}{preprocess\+\_\+text}} (self, text)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_text_to_speech_a6772c247dcb7fc964c7524ef18f23d2b}{set\+\_\+playback\+\_\+volume}} (self, data, volume=1.\+0)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_text_to_speech_a479c66ed65fde8f19ca159459dd90cad}{reduce\+\_\+noise}} (self, audio, sr, n\+\_\+fft=2048, hop\+\_\+length=512, n\+\_\+std\+\_\+thresh=1.\+6)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_text_to_speech_a0c3031d301f651069d808e674d567b43}{speak}} (self, str text, blocksize=4096, latency=\textquotesingle{}low\textquotesingle{})
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_sound___and___speech_1_1_text_to_speech_afe9325681e428704c65aaba9b3ab2cfb}\label{class_sound___and___speech_1_1_text_to_speech_afe9325681e428704c65aaba9b3ab2cfb} 
+{\bfseries tts} = TTS(model\+\_\+name=model\+\_\+name)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@class TextToSpeech
+@brief A text-to-speech utility class using the Coqui TTS library.
+
+Handles text preprocessing, speech synthesis, noise reduction, and playback.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_sound___and___speech_1_1_text_to_speech_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_sound___and___speech_1_1_text_to_speech_aaa8224354b855b4915dd1b091bdf1211}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_text_to_speech_aaa8224354b855b4915dd1b091bdf1211} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{model\+\_\+name}{ = {\ttfamily "{}tts\+\_\+models/en/ek1/tacotron2"{}}, }\item[{}]{device}{ = {\ttfamily \textquotesingle{}cuda\textquotesingle{}}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Constructor that loads the specified TTS model.
+
+@param model_name: The Coqui TTS model name to load.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_sound___and___speech_1_1_text_to_speech_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_sound___and___speech_1_1_text_to_speech_a3b8ecd0c4d5fcc80d13f423a7c166cca}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}!preprocess\_text@{preprocess\_text}}
+\index{preprocess\_text@{preprocess\_text}!Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection{\texorpdfstring{preprocess\_text()}{preprocess\_text()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_text_to_speech_a3b8ecd0c4d5fcc80d13f423a7c166cca} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech.\+preprocess\+\_\+text (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{text}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Preprocesses the input text to remove unsupported characters.
+
+Removes non-ASCII characters to prevent TTS issues.
+
+@param text: The raw input text.
+@return: The cleaned/preprocessed text.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_text_to_speech_a479c66ed65fde8f19ca159459dd90cad}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}!reduce\_noise@{reduce\_noise}}
+\index{reduce\_noise@{reduce\_noise}!Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection{\texorpdfstring{reduce\_noise()}{reduce\_noise()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_text_to_speech_a479c66ed65fde8f19ca159459dd90cad} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech.\+reduce\+\_\+noise (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{audio}{, }\item[{}]{sr}{, }\item[{}]{n\+\_\+fft}{ = {\ttfamily 2048}, }\item[{}]{hop\+\_\+length}{ = {\ttfamily 512}, }\item[{}]{n\+\_\+std\+\_\+thresh}{ = {\ttfamily 1.6}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Reduces background noise using spectral gating.
+
+Uses the spectrogram and standard deviation thresholding to suppress noise.
+
+@param audio: The input audio waveform.
+@param sr: The sample rate.
+@param n_fft: Number of FFT components.
+@param hop_length: Number of samples between frames.
+@param n_std_thresh: Noise threshold in standard deviations.
+@return: Denoised audio as a NumPy array.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_text_to_speech_a6772c247dcb7fc964c7524ef18f23d2b}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}!set\_playback\_volume@{set\_playback\_volume}}
+\index{set\_playback\_volume@{set\_playback\_volume}!Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection{\texorpdfstring{set\_playback\_volume()}{set\_playback\_volume()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_text_to_speech_a6772c247dcb7fc964c7524ef18f23d2b} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech.\+set\+\_\+playback\+\_\+volume (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{data}{, }\item[{}]{volume}{ = {\ttfamily 1.0}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Adjusts the volume of audio data.
+
+Scales the audio waveform to the specified volume level.
+
+@param data: The audio data as a NumPy array.
+@param volume: Volume scaling factor between 0.0 and 1.0.
+@return: The volume-adjusted audio data.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_text_to_speech_a0c3031d301f651069d808e674d567b43}\index{Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}!speak@{speak}}
+\index{speak@{speak}!Sound\_And\_Speech.TextToSpeech@{Sound\_And\_Speech.TextToSpeech}}
+\doxysubsubsection{\texorpdfstring{speak()}{speak()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_text_to_speech_a0c3031d301f651069d808e674d567b43} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Text\+To\+Speech.\+speak (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{str}]{text}{, }\item[{}]{blocksize}{ = {\ttfamily 4096}, }\item[{}]{latency}{ = {\ttfamily \textquotesingle{}low\textquotesingle{}}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Converts input text to speech, processes audio, and plays it.
+@param text The input text string to be synthesized and spoken.
+@param blocksize The audio block size for playback buffering (default: 4096).
+@param latency Latency setting for audio playback, e.g., 'low' or 'high' (default: 'low').
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Sound\+\_\+\+And\+\_\+\+Speech.\+py\end{DoxyCompactItemize}

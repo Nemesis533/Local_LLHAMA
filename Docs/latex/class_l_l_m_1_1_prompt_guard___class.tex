@@ -1,0 +1,94 @@
+\doxysection{LLM.\+Prompt\+Guard\+\_\+\+Class Class Reference}
+\hypertarget{class_l_l_m_1_1_prompt_guard___class}{}\label{class_l_l_m_1_1_prompt_guard___class}\index{LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_prompt_guard___class_aa2ef5417f15810844fc258c65f69f8c2}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self, model\+\_\+path, prompt\+\_\+guard\+\_\+model\+\_\+name, device=None, threshold=0.\+95)
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_prompt_guard___class_a4dd9a5aaa36b0aa9911e297281d640dd}{load\+\_\+model}} (self)
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_prompt_guard___class_ae5369107ed1b724b28e43891615ac761}{build\+\_\+prompt}} (self, user\+\_\+input)
+\item 
+\mbox{\hyperlink{class_l_l_m_1_1_prompt_guard___class_a56d63b2cdddfe99b6b0d275211f6cc5b}{is\+\_\+safe}} (self, user\+\_\+input)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_af5052bad3cacc7dd19d8489d9cc61a70}\label{class_l_l_m_1_1_prompt_guard___class_af5052bad3cacc7dd19d8489d9cc61a70} 
+{\bfseries model\+\_\+path} = model\+\_\+path
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_ae02752ef780fdc7eba40bda118a2bfc7}\label{class_l_l_m_1_1_prompt_guard___class_ae02752ef780fdc7eba40bda118a2bfc7} 
+{\bfseries model\+\_\+name} = prompt\+\_\+guard\+\_\+model\+\_\+name
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_a10ed6cd056c962a771b8a74d7cfbecb5}\label{class_l_l_m_1_1_prompt_guard___class_a10ed6cd056c962a771b8a74d7cfbecb5} 
+{\bfseries device} = device
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_a286beb7dadb6bc5b2f3c9c1c06501b93}\label{class_l_l_m_1_1_prompt_guard___class_a286beb7dadb6bc5b2f3c9c1c06501b93} 
+{\bfseries threshold} = threshold
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_aca129ac9ba428a687ec9197100ec099c}\label{class_l_l_m_1_1_prompt_guard___class_aca129ac9ba428a687ec9197100ec099c} 
+{\bfseries model} = None
+\item 
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_a8f8daaa2a17e489ab203c337aa3667d6}\label{class_l_l_m_1_1_prompt_guard___class_a8f8daaa2a17e489ab203c337aa3667d6} 
+{\bfseries tokenizer} = None
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@brief Class to guard prompts for safety using a classification model.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_aa2ef5417f15810844fc258c65f69f8c2}\index{LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_prompt_guard___class_aa2ef5417f15810844fc258c65f69f8c2} 
+LLM.\+Prompt\+Guard\+\_\+\+Class.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{model\+\_\+path}{, }\item[{}]{prompt\+\_\+guard\+\_\+model\+\_\+name}{, }\item[{}]{device}{ = {\ttfamily None}, }\item[{}]{threshold}{ = {\ttfamily 0.95}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@param model_path Path to the directory containing the guard model.
+@param prompt_guard_model_name Name of the prompt guard model.
+@param device Device to run the model on (e.g., 'cuda' or 'cpu').
+@param threshold Probability threshold to classify prompt as safe.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_l_l_m_1_1_prompt_guard___class_ae5369107ed1b724b28e43891615ac761}\index{LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}!build\_prompt@{build\_prompt}}
+\index{build\_prompt@{build\_prompt}!LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}}
+\doxysubsubsection{\texorpdfstring{build\_prompt()}{build\_prompt()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_prompt_guard___class_ae5369107ed1b724b28e43891615ac761} 
+LLM.\+Prompt\+Guard\+\_\+\+Class.\+build\+\_\+prompt (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{user\+\_\+input}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Build a short-form prompt formatted for the safety classifier.
+@param user_input Raw user input string.
+@return Formatted prompt string for classification.
+\end{DoxyVerb}
+ \Hypertarget{class_l_l_m_1_1_prompt_guard___class_a56d63b2cdddfe99b6b0d275211f6cc5b}\index{LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}!is\_safe@{is\_safe}}
+\index{is\_safe@{is\_safe}!LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}}
+\doxysubsubsection{\texorpdfstring{is\_safe()}{is\_safe()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_prompt_guard___class_a56d63b2cdddfe99b6b0d275211f6cc5b} 
+LLM.\+Prompt\+Guard\+\_\+\+Class.\+is\+\_\+safe (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{user\+\_\+input}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Check if the user input is safe or suspicious.
+@param user_input Raw user input string to evaluate.
+@return True if input is considered safe, False if suspicious.
+\end{DoxyVerb}
+ \Hypertarget{class_l_l_m_1_1_prompt_guard___class_a4dd9a5aaa36b0aa9911e297281d640dd}\index{LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}!load\_model@{load\_model}}
+\index{load\_model@{load\_model}!LLM.PromptGuard\_Class@{LLM.PromptGuard\_Class}}
+\doxysubsubsection{\texorpdfstring{load\_model()}{load\_model()}}
+{\footnotesize\ttfamily \label{class_l_l_m_1_1_prompt_guard___class_a4dd9a5aaa36b0aa9911e297281d640dd} 
+LLM.\+Prompt\+Guard\+\_\+\+Class.\+load\+\_\+model (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Load the LLaMA-based prompt guard model with FP16 precision.
+@return True if model and tokenizer loaded successfully, False otherwise.
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+LLM.\+py\end{DoxyCompactItemize}

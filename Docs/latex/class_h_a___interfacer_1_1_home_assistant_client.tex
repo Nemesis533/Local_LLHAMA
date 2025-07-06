@@ -1,0 +1,207 @@
+\doxysection{HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client Class Reference}
+\hypertarget{class_h_a___interfacer_1_1_home_assistant_client}{}\label{class_h_a___interfacer_1_1_home_assistant_client}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a7585c07b6dcc7fd2caa5a72e189572e7}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self)
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a65dec95dbec309eb19ced7059647823d}\label{class_h_a___interfacer_1_1_home_assistant_client_a65dec95dbec309eb19ced7059647823d} 
+{\bfseries initialize\+\_\+\+HA} (self)
+\item 
+dict \mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a817378d6d2a7bc8acaeedfa438649b2e}{fetch\+\_\+domain\+\_\+actions}} (self)
+\item 
+dict \mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a0756b122202598f5438f42c390c7b036}{fetch\+\_\+entity\+\_\+map}} (self, dict exclusion\+\_\+dict=None, str filter\+\_\+mode=\textquotesingle{}domain\textquotesingle{}, list allowed\+\_\+entities=None \# Only used if filter\+\_\+mode==\textquotesingle{}entity\textquotesingle{})
+\item 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a380f91f544f93a3220cb785b3734caed}{send\+\_\+commands}} (self, dict payload, bool debug=True)
+\item 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a05956f67746d3e20e42c40d9467d7866}{get\+\_\+service\+\_\+info}} (self, domain, action)
+\item 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_adb330b05f6483a19a99f8a49c798ccf9}{generate\+\_\+devices\+\_\+prompt\+\_\+fragment}} (self)
+\item 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a7d4d12ac00d56464d8fe73e0c0d48094}{get\+\_\+home\+\_\+location}} (self)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a88c8dd0247878f4c3cfe939f2672817d}\label{class_h_a___interfacer_1_1_home_assistant_client_a88c8dd0247878f4c3cfe939f2672817d} 
+str {\bfseries base\+\_\+url} = "{}"{}
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_aaa6108d74121746d1f521de1feba08c8}\label{class_h_a___interfacer_1_1_home_assistant_client_aaa6108d74121746d1f521de1feba08c8} 
+str {\bfseries token} = "{}"{}
+\item 
+dict \mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a692c193d7f497dcad15ec4ae70e7c9f3}{headers}}
+\item 
+dict \mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a478d518dbf729cfddf2c067a7d34c6f9}{exclusion\+\_\+dict}}
+\item 
+list \mbox{\hyperlink{class_h_a___interfacer_1_1_home_assistant_client_a6f30976a26f359de56003e092b64e61c}{allowed\+\_\+entities}}
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a3bf40893e73559b1ece41f83deaa88c4}\label{class_h_a___interfacer_1_1_home_assistant_client_a3bf40893e73559b1ece41f83deaa88c4} 
+\mbox{\hyperlink{class_h_a___interfacer_1_1_simple_functions}{Simple\+Functions}} {\bfseries simple\+\_\+functions} = \mbox{\hyperlink{class_h_a___interfacer_1_1_simple_functions}{Simple\+Functions}}(self.\+get\+\_\+home\+\_\+location())
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_aa5f175fd930ae70a3683644ddb74c8fc}\label{class_h_a___interfacer_1_1_home_assistant_client_aa5f175fd930ae70a3683644ddb74c8fc} 
+dict {\bfseries domain\+\_\+to\+\_\+actions} = self.\+fetch\+\_\+domain\+\_\+actions()
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a10c8a0a0cbc6a441c1826e0a9d468652}\label{class_h_a___interfacer_1_1_home_assistant_client_a10c8a0a0cbc6a441c1826e0a9d468652} 
+dict {\bfseries entity\+\_\+map} = self.\+fetch\+\_\+entity\+\_\+map(exclusion\+\_\+dict=self.\+exclusion\+\_\+dict)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Static Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a4d1ee169d056182b9f6154a4df6d6d6e}\label{class_h_a___interfacer_1_1_home_assistant_client_a4d1ee169d056182b9f6154a4df6d6d6e} 
+list {\bfseries ALLOWED\+\_\+\+DOMAINS} = \mbox{[}\textquotesingle{}light\textquotesingle{}, \textquotesingle{}climate\textquotesingle{}, \textquotesingle{}switch\textquotesingle{}, \textquotesingle{}fan\textquotesingle{}, \textquotesingle{}media\+\_\+player\textquotesingle{}, \textquotesingle{}thermostat\textquotesingle{}\mbox{]}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@class HomeAssistantClient
+@brief Client to interact with Home Assistant API.
+
+This class handles fetching available domains, entities, and sending commands
+to Home Assistant devices. It also integrates simple functions for non-HA commands.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a7585c07b6dcc7fd2caa5a72e189572e7}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a7585c07b6dcc7fd2caa5a72e189572e7} 
+HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Initialize the client, fetch domain actions and entity map.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a817378d6d2a7bc8acaeedfa438649b2e}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!fetch\_domain\_actions@{fetch\_domain\_actions}}
+\index{fetch\_domain\_actions@{fetch\_domain\_actions}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{fetch\_domain\_actions()}{fetch\_domain\_actions()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a817378d6d2a7bc8acaeedfa438649b2e} 
+ dict HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+fetch\+\_\+domain\+\_\+actions (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Fetch all available domain actions (services) from Home Assistant.
+
+@return Dictionary mapping domains to a list of their supported actions.
+\end{DoxyVerb}
+ \Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a0756b122202598f5438f42c390c7b036}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!fetch\_entity\_map@{fetch\_entity\_map}}
+\index{fetch\_entity\_map@{fetch\_entity\_map}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{fetch\_entity\_map()}{fetch\_entity\_map()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a0756b122202598f5438f42c390c7b036} 
+ dict HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+fetch\+\_\+entity\+\_\+map (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{dict }]{exclusion\+\_\+dict}{ = {\ttfamily None}, }\item[{str }]{filter\+\_\+mode}{ = {\ttfamily \textquotesingle{}domain\textquotesingle{}}, }\item[{list }]{allowed\+\_\+entities}{ = {\ttfamily None~~\#~Only~used~if~filter\+\_\+mode==\textquotesingle{}entity\textquotesingle{}}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Fetch entities from Home Assistant, optionally filtered and excluded.
+
+@param exclusion_dict Dictionary of friendly name substrings to exclude.
+@param filter_mode Filter mode: 'domain' filters by allowed domains,
+                   'entity' filters by allowed_entities list,
+                   'none' applies no filtering.
+@param allowed_entities List of entity_ids to allow if filter_mode=='entity'.
+
+@return Dictionary mapping friendly_name to entity info and actions.
+\end{DoxyVerb}
+ \Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_adb330b05f6483a19a99f8a49c798ccf9}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!generate\_devices\_prompt\_fragment@{generate\_devices\_prompt\_fragment}}
+\index{generate\_devices\_prompt\_fragment@{generate\_devices\_prompt\_fragment}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{generate\_devices\_prompt\_fragment()}{generate\_devices\_prompt\_fragment()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_adb330b05f6483a19a99f8a49c798ccf9} 
+HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+generate\+\_\+devices\+\_\+prompt\+\_\+fragment (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Generate JSON fragment describing devices and their actions.
+
+@return JSON-formatted string with device names and supported actions.
+\end{DoxyVerb}
+ \Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a7d4d12ac00d56464d8fe73e0c0d48094}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!get\_home\_location@{get\_home\_location}}
+\index{get\_home\_location@{get\_home\_location}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{get\_home\_location()}{get\_home\_location()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a7d4d12ac00d56464d8fe73e0c0d48094} 
+HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+get\+\_\+home\+\_\+location (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Retrieve the configured home latitude and longitude from HA config.
+
+@return Dictionary with latitude and longitude or error message.
+\end{DoxyVerb}
+ \Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a05956f67746d3e20e42c40d9467d7866}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!get\_service\_info@{get\_service\_info}}
+\index{get\_service\_info@{get\_service\_info}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{get\_service\_info()}{get\_service\_info()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a05956f67746d3e20e42c40d9467d7866} 
+HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+get\+\_\+service\+\_\+info (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{domain}{, }\item[{}]{action}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Retrieve service info for a domain and action from Home Assistant.
+
+@param domain Domain name (e.g., 'light')
+@param action Action name (e.g., 'turn_on')
+
+@return Service info dict if found, else None.
+\end{DoxyVerb}
+ \Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a380f91f544f93a3220cb785b3734caed}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!send\_commands@{send\_commands}}
+\index{send\_commands@{send\_commands}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{send\_commands()}{send\_commands()}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a380f91f544f93a3220cb785b3734caed} 
+HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+send\+\_\+commands (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{dict}]{payload}{, }\item[{bool }]{debug}{ = {\ttfamily True}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Send commands to Home Assistant devices or handle simple functions.
+
+@param payload Dictionary containing 'commands' list.
+@param debug Enable debug prints.
+
+@return List of results for each command or None.
+\end{DoxyVerb}
+ 
+
+\label{doc-variable-members}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a6f30976a26f359de56003e092b64e61c}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!allowed\_entities@{allowed\_entities}}
+\index{allowed\_entities@{allowed\_entities}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{allowed\_entities}{allowed\_entities}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a6f30976a26f359de56003e092b64e61c} 
+list HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+allowed\+\_\+entities}
+
+{\bfseries Initial value\+:}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{=\ \ [}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{'light.kitchen\_light'},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{'light.desk\_light'},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{'light.couch\_light'},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{'climate.as35pbphra\_pre'},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{'climate.as25pbphra\_pre'},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ ]}
+
+\end{DoxyCode}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a478d518dbf729cfddf2c067a7d34c6f9}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!exclusion\_dict@{exclusion\_dict}}
+\index{exclusion\_dict@{exclusion\_dict}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{exclusion\_dict}{exclusion\_dict}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a478d518dbf729cfddf2c067a7d34c6f9} 
+dict HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+exclusion\+\_\+dict}
+
+{\bfseries Initial value\+:}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{=\ \ \{}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}exclude\_name1"{}}:\ \textcolor{stringliteral}{"{}APC1400"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}exclude\_name2"{}}:\ \textcolor{stringliteral}{"{}Trust1500"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}exclude\_name3"{}}:\ \textcolor{stringliteral}{"{}EATON"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \}}
+
+\end{DoxyCode}
+\Hypertarget{class_h_a___interfacer_1_1_home_assistant_client_a692c193d7f497dcad15ec4ae70e7c9f3}\index{HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}!headers@{headers}}
+\index{headers@{headers}!HA\_Interfacer.HomeAssistantClient@{HA\_Interfacer.HomeAssistantClient}}
+\doxysubsubsection{\texorpdfstring{headers}{headers}}
+{\footnotesize\ttfamily \label{class_h_a___interfacer_1_1_home_assistant_client_a692c193d7f497dcad15ec4ae70e7c9f3} 
+dict HA\+\_\+\+Interfacer.\+Home\+Assistant\+Client.\+headers}
+
+{\bfseries Initial value\+:}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{=\ \ \{}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}Authorization"{}}:\ f\textcolor{stringliteral}{"{}Bearer\ \{self.token\}"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}Content-\/Type"{}}:\ \textcolor{stringliteral}{"{}application/json"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \}}
+
+\end{DoxyCode}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+HA\+\_\+\+Interfacer.\+py\end{DoxyCompactItemize}

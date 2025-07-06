@@ -1,0 +1,116 @@
+\doxysection{Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player Class Reference}
+\hypertarget{class_sound___and___speech_1_1_sound_player}{}\label{class_sound___and___speech_1_1_sound_player}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_a733a4bc356c9ef7e55845a55ea2222e5}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_a48aedeb7dd57a778deb2bf84353d01f5}{load\+\_\+sound}} (self, sound\+\_\+name)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_a27edf49e450292ce40ed82cfb08e6ba4}{play}} (self, sound\+\_\+to\+\_\+play, float volume=1.\+0, wait\+\_\+for\+\_\+finish=True)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_ab7e036309c73f8c1c9025fb775c6b4f6}{stop}} (self)
+\item 
+\mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_a0a812b1b8ddbf5b60f4f9a4f2ebb2318}{set\+\_\+volume}} (self, float volume)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_sound___and___speech_1_1_sound_player_ae3fd40c24a8ea2c86002f54f67607382}\label{class_sound___and___speech_1_1_sound_player_ae3fd40c24a8ea2c86002f54f67607382} 
+float {\bfseries volume} = 1.\+0
+\item 
+\Hypertarget{class_sound___and___speech_1_1_sound_player_a10426d776d1125da31f3a64199e6328d}\label{class_sound___and___speech_1_1_sound_player_a10426d776d1125da31f3a64199e6328d} 
+dict {\bfseries loaded\+\_\+sounds} = \{\}
+\item 
+\Hypertarget{class_sound___and___speech_1_1_sound_player_a6d2eca5dc1d0840ec8b279513ae9d0a5}\label{class_sound___and___speech_1_1_sound_player_a6d2eca5dc1d0840ec8b279513ae9d0a5} 
+str {\bfseries sounds\+\_\+root\+\_\+folder} = "{}./sounds/"{}
+\item 
+dict \mbox{\hyperlink{class_sound___and___speech_1_1_sound_player_adc5d2332e227a99a953d24c9fe060131}{sounds\+\_\+dictionary}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@brief Handles loading, playing, stopping, and volume control for sounds using pygame.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_a733a4bc356c9ef7e55845a55ea2222e5}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_a733a4bc356c9ef7e55845a55ea2222e5} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Initialize the pygame mixer, volume, sound cache, and sound file mappings.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_a48aedeb7dd57a778deb2bf84353d01f5}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!load\_sound@{load\_sound}}
+\index{load\_sound@{load\_sound}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{load\_sound()}{load\_sound()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_a48aedeb7dd57a778deb2bf84353d01f5} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+load\+\_\+sound (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{sound\+\_\+name}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Load a sound by name if not already loaded.
+@param sound_name The name key of the sound (matching sounds_dictionary keys).
+@return pygame.mixer.Sound object or None if failed to load.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_sound_player_a27edf49e450292ce40ed82cfb08e6ba4}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!play@{play}}
+\index{play@{play}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{play()}{play()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_a27edf49e450292ce40ed82cfb08e6ba4} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+play (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{sound\+\_\+to\+\_\+play}{, }\item[{float }]{volume}{ = {\ttfamily 1.0}, }\item[{}]{wait\+\_\+for\+\_\+finish}{ = {\ttfamily True}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Play a sound with optional volume and blocking until done.
+@param sound_to_play SoundActions enum member specifying which sound to play.
+@param volume Playback volume between 0.0 and 1.0.
+@param wait_for_finish Whether to block execution until sound playback completes.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_sound_player_a0a812b1b8ddbf5b60f4f9a4f2ebb2318}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!set\_volume@{set\_volume}}
+\index{set\_volume@{set\_volume}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{set\_volume()}{set\_volume()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_a0a812b1b8ddbf5b60f4f9a4f2ebb2318} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+set\+\_\+volume (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{float}]{volume}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Set the global playback volume and update currently playing sounds.
+@param volume Volume level between 0.0 and 1.0.
+@throws ValueError if volume is out of range.
+\end{DoxyVerb}
+ \Hypertarget{class_sound___and___speech_1_1_sound_player_ab7e036309c73f8c1c9025fb775c6b4f6}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!stop@{stop}}
+\index{stop@{stop}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{stop()}{stop()}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_ab7e036309c73f8c1c9025fb775c6b4f6} 
+Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+stop (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Immediately stop all currently playing sounds.
+\end{DoxyVerb}
+ 
+
+\label{doc-variable-members}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{class_sound___and___speech_1_1_sound_player_adc5d2332e227a99a953d24c9fe060131}\index{Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}!sounds\_dictionary@{sounds\_dictionary}}
+\index{sounds\_dictionary@{sounds\_dictionary}!Sound\_And\_Speech.SoundPlayer@{Sound\_And\_Speech.SoundPlayer}}
+\doxysubsubsection{\texorpdfstring{sounds\_dictionary}{sounds\_dictionary}}
+{\footnotesize\ttfamily \label{class_sound___and___speech_1_1_sound_player_adc5d2332e227a99a953d24c9fe060131} 
+dict Sound\+\_\+\+And\+\_\+\+Speech.\+Sound\+Player.\+sounds\+\_\+dictionary}
+
+{\bfseries Initial value\+:}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{=\ \ \{}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}system\_awake"{}}:\ \textcolor{stringliteral}{"{}system\_awake.mp3"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}action\_closing"{}}:\ \textcolor{stringliteral}{"{}action\_closing.mp3"{}},}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \ \ \ \ \textcolor{stringliteral}{"{}system\_error"{}}:\ \textcolor{stringliteral}{"{}system\_error.mp3"{}}}
+\DoxyCodeLine{\ \ \ \ \ \ \ \ \}}
+
+\end{DoxyCode}
+
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+Sound\+\_\+\+And\+\_\+\+Speech.\+py\end{DoxyCompactItemize}

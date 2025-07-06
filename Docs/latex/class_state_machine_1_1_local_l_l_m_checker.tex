@@ -1,0 +1,100 @@
+\doxysection{State\+Machine.\+Local\+LLMChecker Class Reference}
+\hypertarget{class_state_machine_1_1_local_l_l_m_checker}{}\label{class_state_machine_1_1_local_l_l_m_checker}\index{StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}}
+\doxysubsubsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\mbox{\hyperlink{class_state_machine_1_1_local_l_l_m_checker_adaf9dca21567451ae033d701701d26d3}{\+\_\+\+\_\+init\+\_\+\+\_\+}} (self, host=\textquotesingle{}0.\+0.\+0.\+0\textquotesingle{}, port=5001, stdout\+\_\+buffer=None)
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a0d803c910f60c3a961797a218ebc6202}\label{class_state_machine_1_1_local_l_l_m_checker_a0d803c910f60c3a961797a218ebc6202} 
+{\bfseries serve\+\_\+index} (self)
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a2e4739b1a3608eae3716322983c92115}\label{class_state_machine_1_1_local_l_l_m_checker_a2e4739b1a3608eae3716322983c92115} 
+{\bfseries check\+\_\+local\+\_\+llm} (self)
+\item 
+\mbox{\hyperlink{class_state_machine_1_1_local_l_l_m_checker_a126c9f56e9e89b5744e39f06783d9241}{view\+\_\+stdout}} (self)
+\item 
+\mbox{\hyperlink{class_state_machine_1_1_local_l_l_m_checker_a3fa85f282cae0db437a209286f8b3f9b}{run}} (self)
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_ad3bb7ff562fa3309f91f9459f162ff74}\label{class_state_machine_1_1_local_l_l_m_checker_ad3bb7ff562fa3309f91f9459f162ff74} 
+{\bfseries app} = Flask(\+\_\+\+\_\+name\+\_\+\+\_\+, static\+\_\+url\+\_\+path=\textquotesingle{}/static\textquotesingle{}, static\+\_\+folder=\textquotesingle{}static\textquotesingle{})
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a95aa2bb2f75c89fddf6c4c6860f0db9d}\label{class_state_machine_1_1_local_l_l_m_checker_a95aa2bb2f75c89fddf6c4c6860f0db9d} 
+{\bfseries host} = host
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a68cd76ee75dbdc1c53651dcfce517727}\label{class_state_machine_1_1_local_l_l_m_checker_a68cd76ee75dbdc1c53651dcfce517727} 
+{\bfseries port} = port
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a2dc8a16d37cffb2ae8246f5d873f89c1}\label{class_state_machine_1_1_local_l_l_m_checker_a2dc8a16d37cffb2ae8246f5d873f89c1} 
+{\bfseries stdout\+\_\+buffer} = stdout\+\_\+buffer
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a6dfa70ff5b2fea618d0a13da74ac9d02}\label{class_state_machine_1_1_local_l_l_m_checker_a6dfa70ff5b2fea618d0a13da74ac9d02} 
+list {\bfseries ALLOWED\+\_\+\+IP\+\_\+\+PREFIXES} = \mbox{[}\textquotesingle{}192.\+168.\+88.\textquotesingle{}, \textquotesingle{}127.\+0.\+0.\+1\textquotesingle{}\mbox{]}
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a02eba83b4b6484c2f890ebb26f440f36}\label{class_state_machine_1_1_local_l_l_m_checker_a02eba83b4b6484c2f890ebb26f440f36} 
+{\bfseries check\+\_\+local\+\_\+llm}
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_ab8dcc1dd68dbfee01d9b8a30afde4815}\label{class_state_machine_1_1_local_l_l_m_checker_ab8dcc1dd68dbfee01d9b8a30afde4815} 
+{\bfseries view\+\_\+stdout}
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a9720dbc946530b6a549825daeb9e0f1d}\label{class_state_machine_1_1_local_l_l_m_checker_a9720dbc946530b6a549825daeb9e0f1d} 
+{\bfseries serve\+\_\+index}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Protected Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_acfa3371aa2c16c99192c7cc8c9997994}\label{class_state_machine_1_1_local_l_l_m_checker_acfa3371aa2c16c99192c7cc8c9997994} 
+{\bfseries \+\_\+register\+\_\+routes} (self)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+\begin{DoxyVerb}@class LocalLLMChecker
+@brief A simple Flask-based service to check if a process named 'local_llm' is running
+       and view live stdout output.
+\end{DoxyVerb}
+ 
+
+\label{doc-constructors}
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_doc-constructors}
+\doxysubsection{Constructor \& Destructor Documentation}
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_adaf9dca21567451ae033d701701d26d3}\index{StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}!\_\_init\_\_@{\_\_init\_\_}}
+\index{\_\_init\_\_@{\_\_init\_\_}!StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}}
+\doxysubsubsection{\texorpdfstring{\_\_init\_\_()}{\_\_init\_\_()}}
+{\footnotesize\ttfamily \label{class_state_machine_1_1_local_l_l_m_checker_adaf9dca21567451ae033d701701d26d3} 
+State\+Machine.\+Local\+LLMChecker.\+\_\+\+\_\+init\+\_\+\+\_\+ (\begin{DoxyParamCaption}\item[{}]{self}{, }\item[{}]{host}{ = {\ttfamily \textquotesingle{}0.0.0.0\textquotesingle{}}, }\item[{}]{port}{ = {\ttfamily 5001}, }\item[{}]{stdout\+\_\+buffer}{ = {\ttfamily None}}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Constructor for LocalLLMChecker.
+
+@param host: IP address to bind the Flask app to. Default is '127.0.0.1'.
+@param port: Port number for the Flask app. Default is 5001.
+@param stdout_buffer: Optional buffer for capturing stdout.
+\end{DoxyVerb}
+ 
+
+\label{doc-func-members}
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_doc-func-members}
+\doxysubsection{Member Function Documentation}
+\Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a3fa85f282cae0db437a209286f8b3f9b}\index{StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}!run@{run}}
+\index{run@{run}!StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}}
+\doxysubsubsection{\texorpdfstring{run()}{run()}}
+{\footnotesize\ttfamily \label{class_state_machine_1_1_local_l_l_m_checker_a3fa85f282cae0db437a209286f8b3f9b} 
+State\+Machine.\+Local\+LLMChecker.\+run (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Starts the Flask web server.
+\end{DoxyVerb}
+ \Hypertarget{class_state_machine_1_1_local_l_l_m_checker_a126c9f56e9e89b5744e39f06783d9241}\index{StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}!view\_stdout@{view\_stdout}}
+\index{view\_stdout@{view\_stdout}!StateMachine.LocalLLMChecker@{StateMachine.LocalLLMChecker}}
+\doxysubsubsection{\texorpdfstring{view\_stdout()}{view\_stdout()}}
+{\footnotesize\ttfamily \label{class_state_machine_1_1_local_l_l_m_checker_a126c9f56e9e89b5744e39f06783d9241} 
+State\+Machine.\+Local\+LLMChecker.\+view\+\_\+stdout (\begin{DoxyParamCaption}\item[{}]{self}{}\end{DoxyParamCaption})}
+
+\begin{DoxyVerb}@brief Simple text output of captured stdout.
+\end{DoxyVerb}
+ 
+
+The documentation for this class was generated from the following file\+:\begin{DoxyCompactItemize}
+\item 
+State\+Machine.\+py\end{DoxyCompactItemize}
