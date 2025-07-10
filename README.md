@@ -104,6 +104,12 @@ a class and add the class and the variable name/value/type to the file like so:
 6. **Feedback and Output**  
    - A TTS engine provides spoken confirmation or failure.
    - Output and logs are also available through a simple web UI for basic monitoring.
+  
+7. **FSM Diagram**
+
+   Below you can see an FSm diagram of how the system functions
+
+   ![alt text](https://github.com/Nemesis533/Local_LLHAMA/blob/main/FSM_diagram_0.png)
 
 ## Example Commands
 
