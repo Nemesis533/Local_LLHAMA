@@ -9,7 +9,7 @@ import time
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
 from .LLM import LLM_Class
 from .HA_Interfacer import HomeAssistantClient
-from .WebService import LocalLLHAMA_WebService
+
 
 class State(Enum):
     """
@@ -32,7 +32,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client,stdout_buffer=None):
+    def __init__(self, command_llm: LLM_Class, device, ha_client):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -53,8 +53,6 @@ class StateMachineInstance:
         self.sound_action_queue: Queue = Queue()    # Sound actions to play asynchronously
         self.speech_queue: Queue = Queue()          # Text responses to speak aloud
 
-        # Local model vitality checker thread
-        self.vitality = LocalLLHAMA_WebService(stdout_buffer=stdout_buffer)
 
         # Instantiate audio and NLP components
         self.noise_floor_monitor = NoiseFloorMonitor()

@@ -19,6 +19,7 @@ import time
 from .SettingsLoader import SettingLoaderClass
 from .StateMachine import StateMachineInstance
 from .HA_Interfacer import HomeAssistantClient
+from .WebService import LocalLLHAMA_WebService
 
 # set environment variable for CUDA
 os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/local/cuda'
@@ -63,7 +64,65 @@ def setup_logging():
 
     return log_buffer
 
-def main(base_path = ""):
+
+def resolve_base_path(base_path):
+    if base_path == "":
+        return os.path.dirname(os.path.abspath(sys.argv[0]))
+    return base_path
+
+def setup_settings(base_path):
+    loader: SettingLoaderClass = SettingLoaderClass(base_path)
+    loader.load()
+    return loader
+
+def start_local_web_service(logger):
+    webservice: LocalLLHAMA_WebService = LocalLLHAMA_WebService(stdout_buffer=logger)
+    thread = threading.Thread(target=webservice.run, daemon=True)
+    thread.start()
+
+def log_duration(message, func):
+    start = time.time()
+    func()
+    print(f"{message} in {time.time() - start:.2f} seconds")
+
+def setup_home_assistant(loader):
+    start = time.time()
+    ha_client = HomeAssistantClient()
+    loader.apply([ha_client])
+    ha_client.initialize_HA()
+    print(f"Home Assistant initialized in {time.time() - start:.2f} seconds")
+    return ha_client
+
+def load_llm_models(loader:SettingLoaderClass, ha_client):
+    start = time.time()
+    llm = loader.load_llm_models(ha_client)
+    print(f"LLM models loaded in {time.time() - start:.2f} seconds")
+    return llm
+
+def setup_state_machine(loader, llm, ha_client):
+    start = time.time()
+    sm = StateMachineInstance(llm, loader.device, ha_client)
+    print(f"State machine initialized in {time.time() - start:.2f} seconds")
+    return sm
+
+def setup_audio():
+    start = time.time()
+    subprocess.run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"])
+    check_mic_volume()
+    print(f"Audio setup done in {time.time() - start:.2f} seconds")
+
+def apply_additional_settings(loader:SettingLoaderClass, state_machine:StateMachineInstance):
+    start = time.time()
+    loader.apply([state_machine.awaker])
+    print(f"Settings applied to vitality and awaker in {time.time() - start:.2f} seconds")
+
+
+def run_state_machine(state_machine):
+    start = time.time()
+    state_machine.run()
+    print(f"State machine run exited after {time.time() - start:.2f} seconds")
+
+def main(base_path=""):
     """
     Main entry point of the application.
     Sets up LLM, Home Assistant, State Machine, and LocalLLMChecker with live stdout view.
@@ -71,64 +130,26 @@ def main(base_path = ""):
     start_time = time.time()
     print("Starting main()...")
 
-    if base_path == "":
-        base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-
-    # Instance the loader and load data from the settings file\]
-    loader :SettingLoaderClass = SettingLoaderClass(base_path)
-    loader.load()
-
-    step_start = time.time()
-    loader.load()
-    print(f"Settings loaded in {time.time() - step_start:.2f} seconds")
-
+    base_path = resolve_base_path(base_path)
+    loader = setup_settings(base_path)
     logger = setup_logging()
+
+    start_local_web_service(logger)
+    log_duration("Settings loaded", loader.load)
 
     print(f"Using {'GPU' if loader.device == 'cuda' else 'CPU'} for model.")
 
-    # Home Assistant setup
-    step_start = time.time()
-    ha_client = HomeAssistantClient()
-    loader.apply([ha_client])
-    ha_client.initialize_HA()
-    print(f"Home Assistant initialized in {time.time() - step_start:.2f} seconds")
+    ha_client = setup_home_assistant(loader)
+    command_llm = load_llm_models(loader, ha_client)
+    state_machine = setup_state_machine(loader, command_llm, ha_client)
 
-    # Load LLM model
-    step_start = time.time()
-    command_llm = loader.load_llm_models(ha_client)
-    print(f"LLM models loaded in {time.time() - step_start:.2f} seconds")
+    setup_audio()
 
-    # State machine setup
-    step_start = time.time()
-    state_machine = StateMachineInstance(command_llm, loader.device, ha_client, stdout_buffer=logger)
-    print(f"State machine initialized in {time.time() - step_start:.2f} seconds")
+    apply_additional_settings(loader, state_machine)
 
-    # Audio setup
-    step_start = time.time()
-    subprocess.run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"])
-    check_mic_volume()
-    print(f"Audio setup done in {time.time() - step_start:.2f} seconds")
-
-    # Apply settings to vitality and awaker
-    step_start = time.time()
-    loader.apply([state_machine.vitality, state_machine.awaker])
-    print(f"Settings applied to vitality and awaker in {time.time() - step_start:.2f} seconds")
-
-    # Start background checker thread
-    step_start = time.time()
-    llm_checker = state_machine.vitality
-    server_thread = threading.Thread(target=llm_checker.run, daemon=True)
-    server_thread.start()
-    print(f"Background LLM checker started in {time.time() - step_start:.2f} seconds")
-
-    # Start the state machine logic (likely blocking)
-    step_start = time.time()
-    state_machine.run()
-    print(f"State machine run exited after {time.time() - step_start:.2f} seconds")
+    run_state_machine(state_machine)
 
     print(f"Total startup time: {time.time() - start_time:.2f} seconds")
-
-
 
 if __name__ == "__main__":
     main()
