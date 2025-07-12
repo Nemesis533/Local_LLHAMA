@@ -22,6 +22,7 @@ from .SettingsLoader import SettingLoaderClass
 from .StateMachine import StateMachineInstance
 from .HA_Interfacer import HomeAssistantClient
 from .WebService import LocalLLHAMA_WebService
+from .logger import QueueLogger, shared_logger
 
 # set environment variable for CUDA
 os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/local/cuda'
@@ -39,6 +40,8 @@ torch.serialization.add_safe_globals([
 ])
 
 
+import logging
+
 def monitor_messages(queue, loader, ha_client, state_machine):
     """
     Monitor the queue and handle commands sent from the webservice process.
@@ -50,11 +53,19 @@ def monitor_messages(queue, loader, ha_client, state_machine):
         try:
             message = queue.get()  # blocking call
 
-            # If the message is a logging.LogRecord, emit it through the logger
             if isinstance(message, logging.LogRecord):
-                logger.handle(message)  # This will print to console and any other handlers
+                # Handle logging records
+                logger.handle(message)
 
-            # Handle control messages (strings)
+            elif isinstance(message, dict):
+                msg_type = message.get("type")
+                if msg_type == "console_output":
+                    # Log the console output data as info
+                    data = message.get("data", "")
+                    logger.info(data)
+                else:
+                    logger.warning(f"[Main] Received dict with unknown type: {msg_type}")
+
             elif isinstance(message, str):
                 if message == "restart_llm":
                     logger.info("[Main] Restart command received: restarting LLM models...")
@@ -70,6 +81,8 @@ def monitor_messages(queue, loader, ha_client, state_machine):
 
         except Exception as e:
             logger.error(f"[Main] Error processing queue message: {e}")
+
+
 
 def check_mic_volume():
     """
@@ -111,9 +124,9 @@ def setup_settings(base_path):
     return loader
 
 
-def start_local_web_service_process(logger, message_queue,loader:SettingLoaderClass):
+def start_local_web_service_process( message_queue,loader:SettingLoaderClass):
     def run_service():
-        webservice = LocalLLHAMA_WebService(stdout_buffer=logger, message_queue=message_queue)
+        webservice = LocalLLHAMA_WebService(message_queue=message_queue)
         webservice.settings_data = loader.data
         webservice.settings_file = loader.settings_file
         webservice.run()
@@ -166,15 +179,18 @@ def run_state_machine(state_machine):
 
 def main(base_path=""):
 
+
     start_time = time.time()
     print("Starting main()...")
     message_queue = Queue()
+    shared_logger.message_queue = message_queue
+
 
     base_path = resolve_base_path(base_path)
     loader = setup_settings(base_path)
     logger = setup_logging(message_queue)
     
-    webservice_process = start_local_web_service_process(logger, message_queue,loader)
+    webservice_process = start_local_web_service_process( message_queue,loader)
 
     # Start monitoring messages in a separate thread so main thread is not blocked
     monitor_thread = threading.Thread(target=monitor_messages, args=(message_queue, loader, None, None), daemon=True)

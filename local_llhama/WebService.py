@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request, abort, Response, send_file,Request
 from flask_cors import CORS
 import json
 import io
-import sys
+import threading
 import logging
 
 class LocalLLHAMA_WebService:
@@ -15,7 +15,7 @@ class LocalLLHAMA_WebService:
            and view live stdout output.
     """
 
-    def __init__(self, host='0.0.0.0', port=5001, stdout_buffer=None, message_queue=None):
+    def __init__(self, host='0.0.0.0', port=5001, message_queue=None):
         """
         @brief Constructor for LocalLLHAMA_WebService.
 
@@ -26,20 +26,15 @@ class LocalLLHAMA_WebService:
         self.message_queue = message_queue
         self.host = host
         self.port = port
-
-        # Get your "my_app" logger
-        self.logger = logging.getLogger("my_app")
-        self.logger.setLevel(logging.DEBUG)
+        self.stdout_buffer = io.StringIO()
+        self._start_log_listener()
+        
 
         # Create a StreamHandler that writes to the in-memory buffer
         buffer_handler = logging.StreamHandler(self.stdout_buffer)
         buffer_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         buffer_handler.setFormatter(formatter)
-
-        # Avoid adding duplicate handlers if already added
-        if not any(isinstance(h, logging.StreamHandler) and h.stream == self.stdout_buffer for h in self.logger.handlers):
-            self.logger.addHandler(buffer_handler)
 
         self.ALLOWED_IP_PREFIXES = ['192.168.88.', '127.0.0.1']
 
@@ -95,9 +90,7 @@ class LocalLLHAMA_WebService:
         def view_stdout():
             if not self._is_ip_allowed(request.remote_addr):
                 abort(403, description="Access denied")
-            # Return all logs captured so far
-            content = self.stdout_buffer.getvalue()
-            return Response(content, mimetype='text/plain')
+            return Response(self.stdout_buffer.getvalue(), mimetype='text/plain')
 
     def _is_ip_allowed(self, ip):
         return any(ip.startswith(prefix) for prefix in self.ALLOWED_IP_PREFIXES)
@@ -108,6 +101,25 @@ class LocalLLHAMA_WebService:
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
+        
+    def _start_log_listener(self):
+        def log_listener():
+            while True:
+                try:
+                    message = self.message_queue.get(timeout=1)
+                    if isinstance(message, dict) and message.get("type") == "console_output":
+                        self.stdout_buffer.write(message["data"] + "\n")
+                        self.stdout_buffer.flush()
+                    elif isinstance(message, logging.LogRecord):
+                        # Option 1: Format the LogRecord into a string and write it
+                        log_line = f"{message.levelname} - {message.name} - {message.getMessage()}"
+                        self.stdout_buffer.write(log_line + "\n")
+                        self.stdout_buffer.flush()
+                    else:
+                        print(f"Received unexpected message type: {type(message)}")
+                except Exception:
+                    continue
+        threading.Thread(target=log_listener, daemon=True).start()
     
 
 

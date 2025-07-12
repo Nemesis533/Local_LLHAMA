@@ -5,11 +5,12 @@ import time
 from enum import Enum
 import time
 import logging
+import sys
 # custom imports
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
 from .LLM import LLM_Class
 from .HA_Interfacer import HomeAssistantClient
-
+from .logger import shared_logger
 
 class State(Enum):
     """
@@ -46,6 +47,10 @@ class StateMachineInstance:
         # State and synchronization primitives
         self.state: State = State.LOADING
         self.lock = threading.Lock()
+
+        sys.stdout = shared_logger
+        sys.stderr = shared_logger
+
 
         # Queues for inter-thread communication
         self.result_queue: Queue = Queue()          # Wake word detection results
