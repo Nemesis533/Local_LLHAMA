@@ -45,7 +45,7 @@ chmod +x install.sh
 
 This installs all dependencies listed in `requirements.txt` and prepares the environment.
 
-## settings.json 
+## object_settings.json 
 
 This file contains json-stored values for the variables that can be changed in the program. When adding a user-settable variable, you'll have to create the variable in 
 a class and add the class and the variable name/value/type to the file like so:
@@ -146,28 +146,34 @@ All dependencies are listed in `requirements.txt`.
 
 ```
 .
-├── static/
-│   ├── index.html             # Basic webpage for stoud monitoring via web
-│   ├── script.js	           # Basic logic for index
-│   └── styles.css             # Styles for the index 
-├── sounds/
-│   ├── action_closing.mp3     # Sound asisgned for closing/failed queries
-│   ├── system_awake.mp3	   # Sound used to signalt to the user that it has awakened
-│   └── system_error.mp3       # Sound for cirtical errors 
-├── Docs					   # Doxygen-generated documentation - needs to be revised for cleanliness, but provides an orverall idea of the project
-	└──[...]				   
-├── command_schema.txt		   # Contains commands that are outside of Home Assistant scope
-├── HA_Interfacer.py           # Home Assistant API communication
-├── LLM.py                     # Class to handle LLAMA LLMs and inference logic
-├── SettingsLoader.py          # Class dedicated to loading settings and applying them using reflection
-├── Sound_And_Speech.py        # Contains all the sound-related elements, such as STT, TTS, sound player, etc
-├── StateMachine.py            # SFM which handles state transition
-├── requirements.txt           # Dependency list
-├── settings.json              # Settinsg file, including things like LLM path and HA token
-├── local_LLM_installer.sh     # Setup script
-├── Runtime.py                 # Entry point
-└── web_monitor.py			   # Handles the basic web monitor functionality currently implemented
+├── dev/
+│   ├── run-dev.py            # script to run the project in dev mode, preparign to create the pip installer
+│   └── wikidoc_creator.py    # script for auto-generation of wiki-doc style docs from comments
+├── FSM_diagram_0.png         # FSR diagram 
+├── local_llhama/
+│   ├── command_schema.txt    # Contains commands that are outside of Home Assistant scope
+│   ├── HA_Interfacer.py      # Home Assistant API communication
+│   ├── __init__.py           # 
+│   ├── LLM.py                # Class to handle LLAMA LLMs and inference logic
+│   ├── logger.py             # Used for logging across the system
+│   ├── Runtime.py            # Entry point
+│   ├── settings/             # Contains the .json settings files for the system, with object_settings.json beign the main one
+│   ├── SettingsLoader.py     # Class dedicated to loading settings and applying them using reflection
+│   ├── Sound_And_Speech.py   # Contains all the sound-related elements, such as STT, TTS, sound player, etc
+│   ├── sounds/               # Folder containing system sounds 
+│   ├── StateMachine.py       # SFM which handles state transition
+│   ├── static/               # Contains the webui elements
+│   └── WebService.py         # WebService for webui backend and other web services for the system
+├── local_LLM_installer.sh    # Setup script
+├── README.md                 # Readme
+├── requirements.txt          # Dependency list
+└── wiki_docs/                # wiki-doc style documentation folder.
 ```
+
+## WebUI
+
+A basic webui has been implemented - it allows to the stdout of the system and loads the object_settings file values; these can eb adited manually and saved for easier access. 
+Currently there is no input control or ability to restart the LLM system, but it will be implemented.
 
 ## License
 
@@ -203,13 +209,13 @@ For significant changes, please open a discussion before submitting a pull reque
 ## Future Work
 
 This is a basic implementation which I plan on expanding over time (when time permits) by adding:
-- Support for remote LLMs (passing commands to an LLM instanced elwhere on the network)
-- Proper webUI with control (start/stop/etc) for the system
+- Support for remote LLMs (passing commands to an LLM instanced elsewhere on the network)
+- Current WIP: Proper webUI with control (start/stop/etc) for the system
+- Current WIP: Prompt Guard toogle.
 - Perfomance optimizations
 - Support for multiple LLMS (for instance one fine tuned on commands and another for NL responses).
-- Prompt Guard toogle.
-- We'll see what else comes to mind!
 
+- We'll see what else comes to mind!
 
 ## Please Note
 

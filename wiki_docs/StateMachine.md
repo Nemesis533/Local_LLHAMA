@@ -4,32 +4,6 @@
 
 **Description:**
 
-Constructor for LocalLLMChecker.
-
-**Parameters:**
-
-- `host:`: IP address to bind the Flask app to. Default is '127.0.0.1'.
-- `port:`: Port number for the Flask app. Default is 5001.
-- `stdout_buffer:`: Optional buffer for capturing stdout.
-
-## Function `view_stdout`
-
-**Description:**
-
-Simple text output of captured stdout.
-
-
-## Function `run`
-
-**Description:**
-
-Starts the Flask web server.
-
-
-## Function `__init__`
-
-**Description:**
-
 Initialize the state machine, threads, queues, and component instances.
 
 **Parameters:**
