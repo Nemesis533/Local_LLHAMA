@@ -4,7 +4,7 @@ from queue import Queue, Empty
 import time
 from enum import Enum
 import time
-
+import logging
 # custom imports
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
 from .LLM import LLM_Class
@@ -32,7 +32,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client):
+    def __init__(self, command_llm: LLM_Class, device, ha_client, logger=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -41,7 +41,8 @@ class StateMachineInstance:
         """
         self.device = device
         self.noise_floor = 0
-
+        self.logger = logger or logging.getLogger("my_app")
+        self.logger.propagate = True
         # State and synchronization primitives
         self.state: State = State.LOADING
         self.lock = threading.Lock()
@@ -67,8 +68,6 @@ class StateMachineInstance:
         # Load the command LLM (using int8 for memory efficiency)
         self.command_llm = command_llm
         self.command_llm.load_model(use_int8=True)
-
-
 
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client

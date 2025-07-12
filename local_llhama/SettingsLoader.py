@@ -36,6 +36,7 @@ class SettingLoaderClass:
         self.use_guard_llm = True
         self.load_models_in_8_bit = True
         self.base_path = base_path
+        self.settings_file = f"{self.base_path}{self.json_path}"
         # Use CUDA if available, else fall back to CPU
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -45,7 +46,7 @@ class SettingLoaderClass:
         @exception Raises ValueError if the file cannot be parsed.
         """
         try:
-            with open(f"{self.base_path}{self.json_path}", 'r') as f:
+            with open(f"{self.settings_file}", 'r') as f:
                 self.data = json.load(f)
         except Exception as e:
             raise ValueError(f"Failed to load JSON file: {e}")
