@@ -1,7 +1,25 @@
+"""
+@file docstring_parser.py
+@brief A utility script to parse `@brief` and `@param`-style docstrings from Python files 
+       and generate Markdown documentation.
+
+This tool walks through a folder of Python source files, extracts function-level
+documentation, and saves formatted `.md` files for each script.
+"""
+
 import ast
 import os
 
 def parse_docstring(docstring):
+    """
+    @brief Parses a structured docstring to extract brief description and parameter info.
+
+    @param docstring The raw docstring from a Python function.
+
+    @return A tuple (description_lines, params) where:
+        - description_lines is a list of brief description lines.
+        - params is a list of tuples: (param_name, param_description).
+    """
     lines = docstring.strip().split('\n')
     description = []
     params = []
@@ -11,7 +29,6 @@ def parse_docstring(docstring):
             description.append(line.replace('@brief', '').strip())
         elif line.startswith('@param'):
             param_line = line.replace('@param', '').strip()
-            # split param_name and description safely
             if ' ' in param_line:
                 param_name, param_desc = param_line.split(' ', 1)
             else:
@@ -20,6 +37,14 @@ def parse_docstring(docstring):
     return description, params
 
 def process_file(file_path):
+    """
+    @brief Parses a Python file and extracts Markdown-formatted documentation 
+           for all functions with docstrings.
+
+    @param file_path Absolute path to the Python file.
+
+    @return Markdown string containing documentation for all documented functions.
+    """
     with open(file_path, 'r', encoding='utf-8') as f:
         try:
             tree = ast.parse(f.read(), filename=file_path)
@@ -44,6 +69,12 @@ def process_file(file_path):
     return md_output
 
 def process_folder(folder_path, output_folder):
+    """
+    @brief Walks through a folder and generates Markdown docs for each Python file found.
+
+    @param folder_path Root folder containing Python source files.
+    @param output_folder Directory where the generated Markdown files will be saved.
+    """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     for root, _, files in os.walk(folder_path):
@@ -53,7 +84,6 @@ def process_folder(folder_path, output_folder):
                 print(f"Processing {file_path} ...")
                 md = process_file(file_path)
                 if md.strip():
-                    # save markdown with same relative path, but flatten or keep structure if you want
                     relative_path = os.path.relpath(file_path, folder_path)
                     md_file_name = os.path.splitext(relative_path)[0].replace(os.sep, '_') + ".md"
                     output_path = os.path.join(output_folder, md_file_name)
@@ -61,8 +91,10 @@ def process_folder(folder_path, output_folder):
                         md_file.write(md)
 
 if __name__ == "__main__":
-    # Set your source folder and wiki output folder here:
-    source_folder = "./local_llhama"   # or path to your project folder
-    wiki_output_folder = "./wiki_docs"
+    """
+    @brief Main execution block. Set the input source directory and output directory for docs here.
+    """
+    source_folder = "./local_llhama"        # Folder containing your project source code
+    wiki_output_folder = "./wiki_docs"      # Folder to write Markdown docs
     process_folder(source_folder, wiki_output_folder)
     print("Done! Markdown docs are in:", wiki_output_folder)
