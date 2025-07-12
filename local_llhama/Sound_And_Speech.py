@@ -30,7 +30,7 @@ class SoundPlayer:
     """
     @brief Handles loading, playing, stopping, and volume control for sounds using pygame.
     """
-    def __init__(self):
+    def __init__(self, base_path):
         """
         @brief Initialize the pygame mixer, volume, sound cache, and sound file mappings.
         """
@@ -39,7 +39,8 @@ class SoundPlayer:
 
         self.volume = 1.0  # Default max volume
         self.loaded_sounds = {}  # Cache loaded pygame Sound objects
-        self.sounds_root_folder = "./sounds/"  # Base folder for sound files
+        self.base_path = base_path
+        self.sounds_root_folder = f"{self.base_path}/sounds/"  # Base folder for sound files
 
         # Map action names to filenames of sound files
         self.sounds_dictionary = {

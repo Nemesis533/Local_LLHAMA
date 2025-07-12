@@ -55,28 +55,35 @@ async function fetchLogs() {
     !isHttpGetToHost(line)
     );
     if (newLines.length > 0) {
-        for (const line of newLines) {
+      for (const line of newLines) {
         const trimmed = line.trim();
         const div = document.createElement('div');
 
         const imgUrl = selectImageForLine(trimmed);
         if (imgUrl) {
-            const img = document.createElement('img');
-            img.src = imgUrl;
-            img.alt = 'Log image';
-            img.style.maxWidth = '100%';
-            img.onerror = () => { img.remove(); };
-            div.appendChild(img);
+          const img = document.createElement('img');
+          img.src = imgUrl;
+          img.alt = 'Log image';
+          img.style.maxWidth = '100%';
+          img.onerror = () => { img.remove(); };
+          div.appendChild(img);
         } else {
-            div.textContent = trimmed;
-            if (isHttpMessage(trimmed)) {
+          div.textContent = trimmed;
+
+          if (/warning/i.test(trimmed)) {
+            div.classList.add('log-warning');
+          } else if (/error/i.test(trimmed)) {
+            div.classList.add('log-error');
+          } else if (/info/i.test(trimmed)) {
+            div.classList.add('log-info');
+          } else if (isHttpMessage(trimmed)) {
             div.classList.add('http-message');
-            }
+          }
         }
 
         outputEl.appendChild(div);
         lastLines.add(line);
-        }
+      }
 
       if (lastLines.size > 500) {
         lastLines = new Set(Array.from(lastLines).slice(-500));

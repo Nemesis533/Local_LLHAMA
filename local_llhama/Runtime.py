@@ -47,7 +47,7 @@ def monitor_messages(queue, loader, ha_client, state_machine):
     Monitor the queue and handle commands sent from the webservice process.
     Also process logging LogRecords pushed by QueueHandler.
     """
-    logger = logging.getLogger("my_app")  # Use the main logger
+    logger = logging.getLogger("Local LLHAMA")  # Use the main logger
 
     while True:
         try:
@@ -96,7 +96,7 @@ def check_mic_volume():
             print(line)
 
 def setup_logging(message_queue=None):
-    logger = logging.getLogger("my_app")
+    logger = logging.getLogger("Local LLHAMA")
     logger.setLevel(logging.DEBUG)
 
     # Avoid duplicate handlers
@@ -154,9 +154,9 @@ def load_llm_models(loader:SettingLoaderClass, ha_client):
     print(f"LLM models loaded in {time.time() - start:.2f} seconds")
     return llm
 
-def setup_state_machine(loader, llm, ha_client, logger):
+def setup_state_machine(loader, llm, ha_client, logger,base_path):
     start = time.time()
-    sm = StateMachineInstance(llm, loader.device, ha_client,logger )
+    sm = StateMachineInstance(llm, loader.device, ha_client,base_path=base_path )
     print(f"State machine initialized in {time.time() - start:.2f} seconds")
     return sm
 
@@ -202,7 +202,7 @@ def main(base_path=""):
 
     ha_client = setup_home_assistant(loader)
     command_llm = load_llm_models(loader, ha_client)
-    state_machine = setup_state_machine(loader, command_llm, ha_client,logger)
+    state_machine = setup_state_machine(loader, command_llm, ha_client,logger,base_path)
 
     setup_audio()
 

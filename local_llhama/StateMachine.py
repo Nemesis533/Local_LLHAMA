@@ -33,7 +33,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client, logger=None):
+    def __init__(self, command_llm: LLM_Class, device, ha_client, base_path=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -42,8 +42,7 @@ class StateMachineInstance:
         """
         self.device = device
         self.noise_floor = 0
-        self.logger = logger or logging.getLogger("my_app")
-        self.logger.propagate = True
+        self.base_path = base_path
         # State and synchronization primitives
         self.state: State = State.LOADING
         self.lock = threading.Lock()
@@ -67,7 +66,7 @@ class StateMachineInstance:
         self.transcriptor = AudioTranscriptionClass()
         self.transcriptor.init_model(device)
 
-        self.sound_player = SoundPlayer()
+        self.sound_player = SoundPlayer(self.base_path)
         self.speaker = TextToSpeech()
 
         # Load the command LLM (using int8 for memory efficiency)
