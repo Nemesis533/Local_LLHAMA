@@ -1,7 +1,7 @@
 {
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:yourport", "type": "str"},
-    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9[...]]FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
+    "base_url": {"value": "http://homeassistant.local:port", "type": "str"},
+    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
      "type": "str"},
     "allowed_entities": {
       "value": [

@@ -1,13 +1,17 @@
+# system imports
 import os
 import torch
 import json
 import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, StoppingCriteriaList,LlamaForSequenceClassification
 from accelerate import Accelerator
-from HA_Interfacer import HomeAssistantClient
-
-
 from torch.nn.functional import softmax
+
+# custom imports
+from .HA_Interfacer import HomeAssistantClient
+
+
+
 
 class StopOnTokens(StoppingCriteria):
     """
