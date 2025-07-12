@@ -1,14 +1,16 @@
+# system imports
 import threading
 from queue import Queue, Empty
 import time
 from enum import Enum
-from Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
-from LLM import LLM_Class
-from HA_Interfacer import HomeAssistantClient
-from flask import Flask, jsonify, request, abort, Response,send_from_directory
-from flask_cors import CORS
-import psutil
 import time
+import logging
+import sys
+# custom imports
+from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
+from .LLM import LLM_Class
+from .HA_Interfacer import HomeAssistantClient
+from .logger import shared_logger
 
 class State(Enum):
     """
@@ -24,81 +26,14 @@ class State(Enum):
     SEND_COMMANDS = "SEND_COMMANDS"
     NO_COMMANDS = "NO_COMMANDS"
 
-class LocalLLMChecker:
-    """
-    @class LocalLLMChecker
-    @brief A simple Flask-based service to check if a process named 'local_llm' is running
-           and view live stdout output.
-    """
 
-    def __init__(self, host='0.0.0.0', port=5001, stdout_buffer=None):
-        """
-        @brief Constructor for LocalLLMChecker.
-
-        @param host: IP address to bind the Flask app to. Default is '127.0.0.1'.
-        @param port: Port number for the Flask app. Default is 5001.
-        @param stdout_buffer: Optional buffer for capturing stdout.
-        """
-        self.app = Flask(__name__, static_url_path='/static', static_folder='static')
-        CORS(self.app)
-        self.host = host
-        self.port = port
-        self.stdout_buffer = stdout_buffer
-        self.ALLOWED_IP_PREFIXES = ['192.168.88.', '127.0.0.1']
-        self._register_routes()
-
-    def _register_routes(self):
-        self.app.add_url_rule('/check-local-llm', 'check_local_llm', self.check_local_llm)
-        self.app.add_url_rule('/stdout', 'view_stdout', self.view_stdout)
-        self.app.add_url_rule('/', 'index', self.serve_index)
-
-    def serve_index(self):
-        return send_from_directory('static', 'index.html')
-
-    def check_local_llm(self):
-        client_ip = request.remote_addr
-        if not any(client_ip.startswith(prefix) for prefix in self.ALLOWED_IP_PREFIXES):
-            abort(403, description="Access denied")
-
-        process_found = False
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                if 'local_llm' in proc.info['name'] or 'local_llm' in ' '.join(proc.info['cmdline']):
-                    process_found = True
-                    break
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                continue
-
-        status = "up" if process_found else "down"
-        return jsonify({'status': status, 'timestamp': time.time()})
-
-    def view_stdout(self):
-        """
-        @brief Simple text output of captured stdout.
-        """
-        client_ip = request.remote_addr
-        if not any(client_ip.startswith(prefix) for prefix in self.ALLOWED_IP_PREFIXES):
-            abort(403, description="Access denied")
-
-        if self.stdout_buffer:
-            content = self.stdout_buffer.getvalue()
-        else:
-            content = "Stdout capturing not enabled."
-
-        return Response(content, mimetype='text/plain')
-
-    def run(self):
-        """
-        @brief Starts the Flask web server.
-        """
-        self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False, threaded=True)
 
 class StateMachineInstance:
     """
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client,stdout_buffer=None):
+    def __init__(self, command_llm: LLM_Class, device, ha_client, base_path=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -107,10 +42,14 @@ class StateMachineInstance:
         """
         self.device = device
         self.noise_floor = 0
-
+        self.base_path = base_path
         # State and synchronization primitives
         self.state: State = State.LOADING
         self.lock = threading.Lock()
+
+        sys.stdout = shared_logger
+        sys.stderr = shared_logger
+
 
         # Queues for inter-thread communication
         self.result_queue: Queue = Queue()          # Wake word detection results
@@ -119,6 +58,7 @@ class StateMachineInstance:
         self.sound_action_queue: Queue = Queue()    # Sound actions to play asynchronously
         self.speech_queue: Queue = Queue()          # Text responses to speak aloud
 
+
         # Instantiate audio and NLP components
         self.noise_floor_monitor = NoiseFloorMonitor()
         self.awaker = WakeWordListener(self.noise_floor_monitor)
@@ -126,15 +66,12 @@ class StateMachineInstance:
         self.transcriptor = AudioTranscriptionClass()
         self.transcriptor.init_model(device)
 
-        self.sound_player = SoundPlayer()
+        self.sound_player = SoundPlayer(self.base_path)
         self.speaker = TextToSpeech()
 
         # Load the command LLM (using int8 for memory efficiency)
         self.command_llm = command_llm
         self.command_llm.load_model(use_int8=True)
-
-        # Local model vitality checker thread
-        self.vitality = LocalLLMChecker(stdout_buffer=stdout_buffer)
 
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
