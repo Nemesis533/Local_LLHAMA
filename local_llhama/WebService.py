@@ -1,9 +1,12 @@
 import time
 import psutil
 from pathlib import Path
-from flask import Flask, jsonify, request, abort, send_from_directory, Response, send_file
+from flask import Flask, jsonify, request, abort, Response, send_file,Request
 from flask_cors import CORS
-
+import json
+import io
+import sys
+import logging
 
 class LocalLLHAMA_WebService:
     """
@@ -12,7 +15,7 @@ class LocalLLHAMA_WebService:
            and view live stdout output.
     """
 
-    def __init__(self, host='0.0.0.0', port=5001, stdout_buffer=None):
+    def __init__(self, host='0.0.0.0', port=5001, stdout_buffer=None, message_queue=None):
         """
         @brief Constructor for LocalLLHAMA_WebService.
 
@@ -20,14 +23,31 @@ class LocalLLHAMA_WebService:
         @param port: Port number for the Flask app. Default is 5001.
         @param stdout_buffer: Optional buffer for capturing stdout.
         """
+        self.message_queue = message_queue
         self.host = host
         self.port = port
-        self.stdout_buffer = stdout_buffer
+
+        # Get your "my_app" logger
+        self.logger = logging.getLogger("my_app")
+        self.logger.setLevel(logging.DEBUG)
+
+        # Create a StreamHandler that writes to the in-memory buffer
+        buffer_handler = logging.StreamHandler(self.stdout_buffer)
+        buffer_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        buffer_handler.setFormatter(formatter)
+
+        # Avoid adding duplicate handlers if already added
+        if not any(isinstance(h, logging.StreamHandler) and h.stream == self.stdout_buffer for h in self.logger.handlers):
+            self.logger.addHandler(buffer_handler)
+
         self.ALLOWED_IP_PREFIXES = ['192.168.88.', '127.0.0.1']
 
         # Define base and static paths only once
         self.base_path = Path(__file__).resolve().parent
         self.static_path = self.base_path / 'static'
+        self.settings_data =""
+        self.settings_file =""
 
         self.app = Flask(
             __name__,
@@ -35,12 +55,26 @@ class LocalLLHAMA_WebService:
             static_folder=str(self.static_path)
         )
         CORS(self.app)
+
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.ERROR)
         self._register_routes()
 
     def _register_routes(self):
         @self.app.route('/')
         def index():
-            return send_file(self.static_path / 'dashboard.html')
+            return send_file(self.static_path / 'dashboard.html')               
+
+        @self.app.route('/settings', methods=['GET'])
+        def get_settings():
+                return self.settings_data
+
+        @self.app.route('/settings', methods=['POST'])
+        def save_settings():
+            data = request.get_json()
+            with open(self.settings_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            return jsonify({"status": "ok"})
 
         @self.app.route('/check-local-llm')
         def check_local_llm():
@@ -61,8 +95,8 @@ class LocalLLHAMA_WebService:
         def view_stdout():
             if not self._is_ip_allowed(request.remote_addr):
                 abort(403, description="Access denied")
-
-            content = self.stdout_buffer.getvalue() if self.stdout_buffer else "Stdout capturing not enabled."
+            # Return all logs captured so far
+            content = self.stdout_buffer.getvalue()
             return Response(content, mimetype='text/plain')
 
     def _is_ip_allowed(self, ip):
@@ -74,6 +108,8 @@ class LocalLLHAMA_WebService:
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
+    
+
 
     def run(self):
         """

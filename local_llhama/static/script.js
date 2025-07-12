@@ -89,9 +89,121 @@ async function fetchLogs() {
   }
 }
 
+async function fetchSettings() {
+  try {
+    const res = await fetch('/settings');
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const data = await res.json();
+    const container = document.getElementById('settings-content');
+    container.innerHTML = '';  // clear loading
+
+    for (const section in data) {
+      const sectionData = data[section];
+
+      const sectionDiv = document.createElement('div');
+      sectionDiv.classList.add('settings-section');
+
+      const title = document.createElement('h3');
+      title.textContent = section;
+      sectionDiv.appendChild(title);
+
+      for (const key in sectionData) {
+        const { value, type } = sectionData[key];
+
+        const label = document.createElement('label');
+        label.textContent = key;
+        label.style.display = 'block';
+        label.style.marginTop = '10px';
+
+        let input;
+        if (type === 'list') {
+          input = document.createElement('input');
+          input.type = 'text';
+          input.value = value.join(', ');
+          input.placeholder = 'Comma-separated values';
+        } else if (type === 'bool') {
+          input = document.createElement('select');
+          ['True', 'False'].forEach(optVal => {
+            const opt = document.createElement('option');
+            opt.value = optVal;
+            opt.text = optVal;
+            if (String(value) === optVal) opt.selected = true;
+            input.appendChild(opt);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = 'text';
+          input.value = value;
+        }
+
+        input.classList.add('setting-input');
+        input.dataset.section = section;
+        input.dataset.key = key;
+        input.dataset.type = type;
+
+        sectionDiv.appendChild(label);
+        sectionDiv.appendChild(input);
+      }
+
+      container.appendChild(sectionDiv);
+    }
+  } catch (err) {
+    document.getElementById('settings-content').textContent =
+      'Error loading settings: ' + err.message;
+  }
+}
+
+document.getElementById('save-settings-btn').addEventListener('click', async () => {
+  const inputs = document.querySelectorAll('.setting-input');
+  const updatedSettings = {};
+
+  inputs.forEach(input => {
+    const section = input.dataset.section;
+    const key = input.dataset.key;
+    const type = input.dataset.type;
+    let value = input.value;
+
+    if (!updatedSettings[section]) updatedSettings[section] = {};
+
+    if (type === 'list') {
+      value = value.split(',').map(v => v.trim());
+    } else if (type === 'bool') {
+      value = value === 'True';
+    }
+
+    updatedSettings[section][key] = {
+      value: value,
+      type: type
+    };
+  });
+
+  try {
+    const res = await fetch('/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedSettings)
+    });
+
+    if (res.ok) {
+      alert('✅ Settings saved!');
+    } else {
+      const text = await res.text();
+      alert('❌ Failed to save: ' + text);
+    }
+  } catch (err) {
+    alert('❌ Error saving settings: ' + err.message);
+  }
+});
+
+// Call on load
+fetchSettings();
+
+
+
 // Initial clear
 outputEl.innerHTML = '';
 
 // Fetch logs every 3 seconds
 fetchLogs();
+fetchSettings();
 setInterval(fetchLogs, 3000);

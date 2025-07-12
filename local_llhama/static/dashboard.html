@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>LLM Status Viewer</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <div class="container">
@@ -13,8 +13,23 @@
       alt="Status"
       onerror="this.style.display='none';"
     />
-    <div class="log-box" id="log-box"></div>
+
+    <div class="dashboard">
+      <!-- Settings Section -->
+      <section id="settings-dashboard">
+        <h2>Settings Overview</h2>
+        <div id="settings-content">Loading settings...</div>
+        <button id="save-settings-btn">💾 Save Settings</button>
+      </section>
+
+      <!-- Logs Section -->
+      <section id="logs-section">
+        <h2>Logs</h2>
+        <div class="log-box" id="log-box"></div>
+      </section>
+    </div>
   </div>
+
   <script src="/static/script.js"></script>
 </body>
 </html>
