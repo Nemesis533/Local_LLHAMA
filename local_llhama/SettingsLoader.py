@@ -1,6 +1,12 @@
+# system imports
 import json
-from LLM import LLM_Class
 import torch
+import os
+import sys
+
+# custom imports
+from .LLM import LLM_Class
+
 class SettingLoaderClass:
     """
     @class SettingLoader
@@ -17,7 +23,7 @@ class SettingLoaderClass:
     }
     """
 
-    def __init__(self, json_path ="settings.json"):
+    def __init__(self,base_path, json_path ="/settings/object_settings.json"):
         """
         @brief Constructor for SettingLoader.
         @param json_path Path to the JSON file containing configuration data.
@@ -29,6 +35,7 @@ class SettingLoaderClass:
         self.prompt_guard_model_name="./llama_guard_trained_multilingual"
         self.use_guard_llm = True
         self.load_models_in_8_bit = True
+        self.base_path = base_path
         # Use CUDA if available, else fall back to CPU
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -38,7 +45,7 @@ class SettingLoaderClass:
         @exception Raises ValueError if the file cannot be parsed.
         """
         try:
-            with open(self.json_path, 'r') as f:
+            with open(f"{self.base_path}{self.json_path}", 'r') as f:
                 self.data = json.load(f)
         except Exception as e:
             raise ValueError(f"Failed to load JSON file: {e}")

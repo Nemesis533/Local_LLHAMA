@@ -61,25 +61,40 @@ class HomeAssistantClient:
         """
         @brief Fetch all available domain actions (services) from Home Assistant.
 
-        @return Dictionary mapping domains to a list of their supported actions.
+        @return Dictionary mapping domains to a list of their supported actions,
+                or an error message in case of failure.
         """
         url = f"{self.base_url}/api/services"
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
 
-        services = response.json()
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            services = response.json()
 
-        domain_to_actions = {}
-        for item in services:
-            domain = item['domain']
-            actions = list(item['services'].keys())
-            domain_to_actions[domain] = actions
+            domain_to_actions = {}
+            for item in services:
+                domain = item['domain']
+                actions = list(item['services'].keys())
+                domain_to_actions[domain] = actions
 
-        return domain_to_actions
+            return domain_to_actions
+
+        except requests.exceptions.HTTPError as http_err:
+            return {"error": f"HTTP error occurred: {http_err}"}
+        except requests.exceptions.ConnectionError as conn_err:
+            return {"error": f"Connection error occurred: {conn_err}"}
+        except requests.exceptions.Timeout as timeout_err:
+            return {"error": f"Timeout error occurred: {timeout_err}"}
+        except requests.exceptions.RequestException as req_err:
+            return {"error": f"An error occurred during the request: {req_err}"}
+        except ValueError as val_err:
+            return {"error": f"Error decoding JSON: {val_err}"}
+        except KeyError as key_err:
+            return {"error": f"Unexpected response format: missing key {key_err}"}
 
     def fetch_entity_map(
         self,
