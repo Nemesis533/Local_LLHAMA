@@ -17,9 +17,12 @@ body, html {
 }
 
 #status-image {
-  width: 150px;
+  width: 80%;
+  max-width: 80px;  /* keeps the max width as before */
   height: auto;
   margin: 20px auto 0;
+  display: block;
+  object-fit: contain; /* ensures the image keeps aspect ratio */
 }
 
 .dashboard {
@@ -158,4 +161,17 @@ body, html {
 
 #save-settings-btn:hover {
   background-color: #45a049;
+}
+.log-warning {
+  color: #ffcc00; /* yellow */
+  font-weight: bold;
+}
+
+.log-info {
+  color: #0f0; /* green */
+}
+
+.log-error {
+  color: #f44336; /* red */
+  font-weight: bold;
 }
