@@ -480,8 +480,6 @@ class WakeWordListener:
                                     input=True,
                                     frames_per_buffer=CHUNK)
 
-            print("\nListening for wake word...")
-
             cooldown_time = 2             # Minimum time between detections
             ignore_rms_window = 3         # Time in seconds to ignore RMS updates after detection
             last_detection_time = 0       # Timestamp of the last wake word detection

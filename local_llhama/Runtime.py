@@ -28,6 +28,7 @@ from .WebService import LocalLLHAMA_WebService
 from .logger import  shared_logger
 from TTS.utils.radam import RAdam
 from . import system_controller as sr
+from .StateMachine import State
 
 
 # === Configuration ===
@@ -46,7 +47,7 @@ torch.serialization.add_safe_globals([
 ])
 
 
-def monitor_messages(ctx):
+def monitor_messages(ctx : sr.SystemContext):
     """
     @brief Monitor and process messages from the queue including logs and commands.
     """
@@ -68,8 +69,9 @@ def monitor_messages(ctx):
 
             elif isinstance(message, str):
                 if message == "restart_llm":
-                    sr.start_system(ctx)
-                    logger.info("[Main] Restart complete.")
+                    logger.info("[Main] Restarting the system, please wait.")
+                    ctx._should_stop.set()
+                    
                 else:
                     logger.warning(f"[Main] Unknown string message: {message}")
 
@@ -149,7 +151,6 @@ def main(base_path=""):
     """
     @brief Main entry point for initializing and running the full Local LLHAMA system.
     """
-    start_time = time.time()
     print("Starting main()...")
 
     # Create shared context
@@ -176,11 +177,17 @@ def main(base_path=""):
     ctx.monitor_thread.start()
 
     log_duration("Settings loaded", ctx.loader.load)
-
+    
     # Start the core system
     sr.start_system(ctx)
-
-    print(f"Total startup time: {time.time() - start_time:.2f} seconds")
+    ctx.state_machine.transition(State.LISTENING)
+    while True:
+        if not ctx._should_stop.is_set():
+            sr.run_state_machine(ctx.state_machine)
+        else:            
+            sr.start_system(ctx)
+            ctx.state_machine.transition(State.LISTENING)
+            ctx._should_stop.clear()          
 
 if __name__ == "__main__":
     main()

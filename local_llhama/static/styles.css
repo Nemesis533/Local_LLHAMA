@@ -145,3 +145,11 @@ body, html {
   color: #ff9900;
   font-weight: bold;
 }
+.log-line {
+  color: #0f0; /* default green */
+  white-space: pre-wrap;
+}
+
+.log-line.main-line {
+  color: cyan;
+}

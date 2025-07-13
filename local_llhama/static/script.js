@@ -73,7 +73,12 @@ socket.on('log_line', (data) => {
   } else {
     div.textContent = trimmed;
 
-    if (/warning/i.test(trimmed)) {
+    // Default log style
+    div.classList.add('log-line');
+
+    if (trimmed.includes('[Main]')) {
+      div.classList.add('main-line'); // cyan
+    } else if (/warning/i.test(trimmed)) {
       div.classList.add('log-warning');
     } else if (/error/i.test(trimmed)) {
       div.classList.add('log-error');
@@ -216,6 +221,7 @@ document.getElementById("restart-system-btn").addEventListener("click", () => {
   })
   .catch(err => alert("Error: " + err));
 });
+
 
 
 // Initial clear
