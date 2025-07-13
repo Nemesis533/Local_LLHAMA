@@ -153,8 +153,12 @@ def start_system(ctx : SystemContext):
     ha_client = setup_home_assistant(loader)
 
     # Load LLM models used for command processing and automations
-    if ctx.command_llm is not None:
+    if ctx.command_llm:
         print("Unloading existing model...")
+        if ctx.command_llm.prompt_guard:
+            unload_model(ctx.command_llm.prompt_guard)
+            del ctx.command_llm.prompt_guard
+            ctx.command_llm.prompt_guard = None
         unload_model(ctx.command_llm)  # custom cleanup if implemented
         del ctx.command_llm
         ctx.command_llm = None
