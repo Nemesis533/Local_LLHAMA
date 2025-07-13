@@ -109,6 +109,17 @@ class StateMachineInstance:
         if self.sound_thread.is_alive():
             self.sound_thread.join(timeout=3)
 
+        # Deleting all the objects that might use the gpu
+
+        del self.awaker 
+        del self.transcriptor
+        del self.speaker
+
+        self.speaker = None
+        self.transcriptor = None
+        self.awaker = None
+        
+
     print("State machine stopped.")
 
     def print_once(self, message, end='\n'):
