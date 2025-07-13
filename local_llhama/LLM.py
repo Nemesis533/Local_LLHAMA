@@ -105,12 +105,12 @@ class LLM_Class():
                 model_kwargs["torch_dtype"] = torch.float16  
 
             # Load model and tokenizer either from local cache or online
-            if os.path.exists(full_path):
-                print(f"Model found locally at {full_path}. Loading model...")
+            if os.path.exists(full_path):                
+                print(f"Model not found locally at {full_path}. Downloading model...")
                 self.model = AutoModelForCausalLM.from_pretrained(full_path, **model_kwargs)
                 self.tokenizer = AutoTokenizer.from_pretrained(full_path)
             else:
-                print(f"Model not found locally at {full_path}. Downloading model...")
+                print(f"Model found locally at {full_path}. Loading model...")
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.model_path, **model_kwargs)
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     full_path if os.path.exists(full_path) else self.model_name,

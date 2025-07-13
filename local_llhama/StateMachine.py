@@ -239,9 +239,9 @@ class StateMachineInstance:
             self.transition(State.LISTENING)
 
     def run(self):
-        self.transition(State.LISTENING)
+        
 
-        while True:
+        if True:
             time.sleep(0.1)  # Avoid busy waiting, reduce CPU load
 
             # Process wake word detection results

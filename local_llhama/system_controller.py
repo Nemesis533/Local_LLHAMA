@@ -13,6 +13,7 @@ import subprocess
 import time
 import torch
 import gc
+import threading
 
 # === Custom Imports ===
 from .SettingsLoader import SettingLoaderClass
@@ -28,6 +29,7 @@ class SystemContext:
         self.monitor_thread = None
         self.command_llm = None
         self.state_machine :StateMachineInstance = None
+        self._should_stop = threading.Event()
 
 def setup_settings(base_path):
     """
@@ -36,6 +38,7 @@ def setup_settings(base_path):
     @param base_path The base directory where settings are located.
     @return An initialized SettingLoaderClass instance.
     """
+    print("[Main] Loading Settings")
     loader = SettingLoaderClass(base_path)
     loader.load()
     return loader
@@ -47,11 +50,12 @@ def setup_home_assistant(loader):
     @param loader The settings loader.
     @return An initialized HomeAssistantClient instance.
     """
+    print("[Main] Setting up Home Assistant")
     start = time.time()
     ha_client = HomeAssistantClient()
     loader.apply([ha_client])
     ha_client.initialize_HA()
-    print(f"Home Assistant initialized in {time.time() - start:.2f} seconds")
+    print(f"[Main] Home Assistant initialized in {time.time() - start:.2f} seconds")
     return ha_client
 
 def load_llm_models(loader : SettingLoaderClass, ha_client):
@@ -62,9 +66,10 @@ def load_llm_models(loader : SettingLoaderClass, ha_client):
     @param ha_client The Home Assistant client.
     @return Loaded LLM model instance.
     """
+    print("[Main] Loading LLMs")
     start = time.time()
     llm = loader.load_llm_models(ha_client)
-    print(f"LLM models loaded in {time.time() - start:.2f} seconds")
+    print(f"[Main] LLM models loaded in {time.time() - start:.2f} seconds")
     return llm
 
 def setup_state_machine(loader, llm, ha_client, base_path):
@@ -78,6 +83,7 @@ def setup_state_machine(loader, llm, ha_client, base_path):
     @param base_path Application base path.
     @return A configured StateMachineInstance.
     """
+    print("[Main] Setting up the state machine")
     start = time.time()
     
     sm = StateMachineInstance(llm, loader.device, ha_client, base_path=base_path)
@@ -101,9 +107,9 @@ def run_state_machine(state_machine):
 
     @param state_machine The state machine instance.
     """
-    start = time.time()
+
     state_machine.run()
-    print(f"State machine run exited after {time.time() - start:.2f} seconds")
+
 
 def check_mic_volume():
     """
@@ -118,6 +124,7 @@ def setup_audio():
     """
     @brief Configure microphone input volume via PulseAudio.
     """
+    print("[Main] Setting up system audio")
     start = time.time()
     subprocess.run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"])
     check_mic_volume()
@@ -128,6 +135,7 @@ def unload_model(model):
         del model.model  # Assuming model.model is the PyTorch model
     torch.cuda.empty_cache()
     gc.collect()
+
 
 def start_system(ctx : SystemContext):
     
@@ -154,7 +162,6 @@ def start_system(ctx : SystemContext):
 
     # Load LLM models used for command processing and automations
     if ctx.command_llm:
-        print("Unloading existing model...")
         if ctx.command_llm.prompt_guard:
             unload_model(ctx.command_llm.prompt_guard)
             del ctx.command_llm.prompt_guard
