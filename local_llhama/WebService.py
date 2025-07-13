@@ -1,7 +1,7 @@
 import time
 import psutil
 from pathlib import Path
-from flask import Flask, jsonify, request, abort, Response, send_file
+from flask import Flask, jsonify, request, abort, send_file
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import json
@@ -30,7 +30,7 @@ class LocalLLHAMA_WebService:
         @param port Port number for the Flask app. Default is 5001.
         @param message_queue Optional queue for receiving log messages asynchronously.
         """
-        self.message_queue = message_queue
+        self.message_queue : queue = message_queue
         self.host = host
         self.port = port
         self.stdout_buffer = io.StringIO()
@@ -125,6 +125,21 @@ class LocalLLHAMA_WebService:
 
             status = "up" if process_found else "down"
             return jsonify({'status': status, 'timestamp': time.time()})
+        
+        @self.app.route("/restart-system", methods=["POST"])
+        def restart_system():
+            try:
+                data = request.get_json()
+                if data and data.get("action") == "restart":
+                    # Here you would enqueue the restart command in your queue
+                    # Example (assuming queue is globally accessible or imported):
+                    self.message_queue.put("restart_llm")
+
+                    return jsonify({"success": True})
+                else:
+                    return jsonify({"success": False, "error": "Invalid action"}), 400
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
 
     def _is_ip_allowed(self, ip):
         """

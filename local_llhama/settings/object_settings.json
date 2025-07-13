@@ -1,7 +1,7 @@
 {
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
-    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4ZjM1ZDVhZGI2OTg0OGNmYWNiZDg4MTQ1ZGRmZDQ4NCIsImlhdCI6MTc0NDk5NzEwNCwiZXhwIjoyMDYwMzU3MTA0fQ.57WNvyiHKnmT-_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
+    "base_url": {"value": "http://homeassistant.local:port", "type": "str"},
+    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ957WNvyiHKnmT-_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
      "type": "str"},
     "allowed_entities": {
       "value": [

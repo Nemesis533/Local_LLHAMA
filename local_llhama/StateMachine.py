@@ -27,7 +27,6 @@ class State(Enum):
     NO_COMMANDS = "NO_COMMANDS"
 
 
-
 class StateMachineInstance:
     """
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
@@ -57,7 +56,7 @@ class StateMachineInstance:
         self.command_queue: Queue = Queue()         # Parsed commands to be executed
         self.sound_action_queue: Queue = Queue()    # Sound actions to play asynchronously
         self.speech_queue: Queue = Queue()          # Text responses to speak aloud
-
+        self.stop_event = threading.Event()
 
         # Instantiate audio and NLP components
         self.noise_floor_monitor = NoiseFloorMonitor()
@@ -87,9 +86,30 @@ class StateMachineInstance:
 
         threading.Thread(target=self.command_worker, daemon=True).start()
 
+        
+
         self._last_printed_message = None
 
         print("State machine init completed")
+
+    def stop(self):
+        """
+        @brief Cleanly stop all background threads and prepare for shutdown or reset.
+        """
+        print("Shutting down state machine...")
+        self.stop_event.set()
+
+        # Put dummy items to unblock threads if waiting
+        self.sound_action_queue.put(None)
+        self.result_queue.put(None)
+
+        # Optional: join threads if needed (only if not daemonic)
+        if self.wakeword_thread.is_alive():
+            self.wakeword_thread.join(timeout=3)
+        if self.sound_thread.is_alive():
+            self.sound_thread.join(timeout=3)
+
+    print("State machine stopped.")
 
     def print_once(self, message, end='\n'):
         if message != self._last_printed_message:
@@ -130,12 +150,15 @@ class StateMachineInstance:
         """
         @brief Background thread that plays queued sound actions asynchronously.
         """
-        while True:
-            sound_action = self.sound_action_queue.get()
-            if sound_action is None:
-                break
-            print(f"Playing sound: {sound_action}")
-            self.sound_player.play(sound_action)
+        while not self.stop_event.is_set():
+            try:
+                sound_action = self.sound_action_queue.get(timeout=1)
+                if sound_action is None:
+                    continue
+                print(f"Playing sound: {sound_action}")
+                self.sound_player.play(sound_action)
+            except Empty:
+                continue
 
     def play_sound(self, sound_action):
         """
