@@ -65,7 +65,8 @@ class SettingLoaderClass:
             model_name=self.command_llm_name,
             device=self.device,
             ha_client=ha_client,
-            prompt_guard_model_name=self.prompt_guard_model_name                      
+            prompt_guard_model_name=self.prompt_guard_model_name,
+            load_guard=self.use_guard_llm                       
         )        
         return command_llm
 

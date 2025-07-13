@@ -43,7 +43,7 @@ class LLM_Class():
     """
     @brief A wrapper class for loading and interacting with a language model for smart home commands.
     """
-    def __init__(self, model_path, model_name, device, ha_client, prompt_guard_model_name, base_prompt=None, reuse_devices=True):
+    def __init__(self, model_path, model_name, device, ha_client, prompt_guard_model_name, base_prompt=None, reuse_devices=True, load_guard = True):
         """
         @param model_path Path where the model files are stored or cached.
         @param model_name Name of the model to load.
@@ -61,16 +61,21 @@ class LLM_Class():
         self.tokenizer = None  # Placeholder for tokenizer
         self.accelerator = Accelerator()
         self.ha_client: HomeAssistantClient = ha_client
+        self.use_guard_llm = load_guard
 
         # Optional base system prompt
         self.base_prompt = base_prompt or ""
 
         # Initialize prompt guard model for input safety checks
-        self.prompt_guard = PromptGuard_Class(self.model_path, self.prompt_guard_model_name, device=self.device)
-        self.prompt_guard.load_model()
+        if self.use_guard_llm:
+            self.prompt_guard = PromptGuard_Class(self.model_path, self.prompt_guard_model_name, device=self.device)
+            self.prompt_guard.load_model()
+        else:
+            print(f"Guard model {self.prompt_guard_model_name} is set to not load")
 
         # Context fragment containing device info for prompt
         self.devices_context = ""
+        self.load_guard = load_guard
 
         if reuse_devices:
             self.devices_context = self.ha_client.generate_devices_prompt_fragment()
