@@ -12,7 +12,7 @@ import time
 from collections import deque
 import whisper  
 from openwakeword.model import Model
-from queue import Queue
+import threading
 
 
 # Use PulseAudio for SDL audio driver
@@ -458,55 +458,57 @@ class WakeWordListener:
         """
         self.wakeword_thr = 0.70  # Confidence threshold for wake word detection
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
+        self.stop_event = threading.Event()
 
-    def listen_for_wake_word(self, result_queue: Queue):
-        """
-        @brief Continuously listens to audio input and triggers when a wake word is detected.
+    def listen_for_wake_word(self, result_queue):
+        while not self.stop_event.is_set():
+            """
+            @brief Continuously listens to audio input and triggers when a wake word is detected.
 
-        Uses OpenWakeWord for prediction and compares the average score to the threshold.
-        Sends the current noise floor to the result queue upon detection.
+            Uses OpenWakeWord for prediction and compares the average score to the threshold.
+            Sends the current noise floor to the result queue upon detection.
 
-        @param result_queue: Queue to communicate detection result (e.g., noise floor) back to main thread.
-        """
-        owwModel = Model(inference_framework="tflite")
-        CHUNK = 1280
+            @param result_queue: Queue to communicate detection result (e.g., noise floor) back to main thread.
+            """
+            owwModel = Model(inference_framework="tflite")
+            CHUNK = 1280
 
-        audio = pyaudio.PyAudio()
-        mic_stream = audio.open(format=pyaudio.paInt16,
-                                channels=1,
-                                rate=16000,
-                                input=True,
-                                frames_per_buffer=CHUNK)
+            audio = pyaudio.PyAudio()
+            mic_stream = audio.open(format=pyaudio.paInt16,
+                                    channels=1,
+                                    rate=16000,
+                                    input=True,
+                                    frames_per_buffer=CHUNK)
 
-        print("\nListening for wake word...")
+            print("\nListening for wake word...")
 
-        cooldown_time = 2             # Minimum time between detections
-        ignore_rms_window = 3         # Time in seconds to ignore RMS updates after detection
-        last_detection_time = 0       # Timestamp of the last wake word detection
+            cooldown_time = 2             # Minimum time between detections
+            ignore_rms_window = 3         # Time in seconds to ignore RMS updates after detection
+            last_detection_time = 0       # Timestamp of the last wake word detection
 
-        while True:
-            audio_data = mic_stream.read(CHUNK)
-            np_audio = np.frombuffer(audio_data, dtype=np.int16)
-            prediction = owwModel.predict(np_audio)
+            while True:
+                audio_data = mic_stream.read(CHUNK)
+                np_audio = np.frombuffer(audio_data, dtype=np.int16)
+                prediction = owwModel.predict(np_audio)
 
-            current_time = time.time()
+                current_time = time.time()
 
-            # Update noise floor only if not recently triggered
-            if (current_time - last_detection_time) > ignore_rms_window:
-                self.noise_floor_monitor.update_and_get_average_rms(audio_data)
+                # Update noise floor only if not recently triggered
+                if (current_time - last_detection_time) > ignore_rms_window:
+                    self.noise_floor_monitor.update_and_get_average_rms(audio_data)
 
-            for mdl in owwModel.prediction_buffer.keys():
-                scores = list(owwModel.prediction_buffer[mdl])
-                last_scores = scores[-5:]  # Get last 5 predictions
-                avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
+                for mdl in owwModel.prediction_buffer.keys():
+                    scores = list(owwModel.prediction_buffer[mdl])
+                    last_scores = scores[-5:]  # Get last 5 predictions
+                    avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
 
-                if avg_score >= self.wakeword_thr and (current_time - last_detection_time) > cooldown_time:
-                    last_detection_time = current_time
+                    if avg_score >= self.wakeword_thr and (current_time - last_detection_time) > cooldown_time:
+                        last_detection_time = current_time
 
-                    # Clear previous results
-                    while not result_queue.empty():
-                        result_queue.get()
+                        # Clear previous results
+                        while not result_queue.empty():
+                            result_queue.get()
 
-                    noise_floor = self.noise_floor_monitor.get_noise_floor()
-                    result_queue.put(noise_floor)
-                    break
+                        noise_floor = self.noise_floor_monitor.get_noise_floor()
+                        result_queue.put(noise_floor)
+                        break

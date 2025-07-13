@@ -107,54 +107,59 @@ class HomeAssistantClient:
 
         @param exclusion_dict Dictionary of friendly name substrings to exclude.
         @param filter_mode Filter mode: 'domain' filters by allowed domains,
-                           'entity' filters by allowed_entities list,
-                           'none' applies no filtering.
+                        'entity' filters by allowed_entities list,
+                        'none' applies no filtering.
         @param allowed_entities List of entity_ids to allow if filter_mode=='entity'.
 
         @return Dictionary mapping friendly_name to entity info and actions.
         """
-        url = f"{self.base_url}/api/states"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
+        try:
+            url = f"{self.base_url}/api/states"
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
 
-        entities = response.json()
+            entities = response.json()
 
-        exclusion_dict = exclusion_dict or {}
-        allowed_entities = allowed_entities or []
+            exclusion_dict = exclusion_dict or {}
+            allowed_entities = allowed_entities or []
 
-        entity_map = {}
+            entity_map = {}
 
-        for entity in entities:
-            domain, _ = entity['entity_id'].split('.', 1)
+            for entity in entities:
+                domain, _ = entity['entity_id'].split('.', 1)
 
-            # Filtering logic based on filter_mode
-            if filter_mode == 'domain':
-                if domain not in self.ALLOWED_DOMAINS:
+                # Filtering logic based on filter_mode
+                if filter_mode == 'domain':
+                    if domain not in self.ALLOWED_DOMAINS:
+                        continue
+                elif filter_mode == 'entity':
+                    if entity['entity_id'] not in allowed_entities:
+                        continue
+                elif filter_mode == 'none':
+                    pass  # No filtering applied
+                else:
+                    raise ValueError(f"Invalid filter_mode: {filter_mode}")
+
+                # Get friendly_name if available, fallback to entity_id (lowercase)
+                friendly_name = entity['attributes'].get('friendly_name', entity['entity_id']).lower()
+
+                # Exclude entities if their friendly_name contains any excluded substrings
+                if any(excluded_name.lower() in friendly_name for excluded_name in exclusion_dict.values()):
                     continue
-            elif filter_mode == 'entity':
-                if entity['entity_id'] not in allowed_entities:
-                    continue
-            elif filter_mode == 'none':
-                pass  # No filtering applied
-            else:
-                raise ValueError(f"Invalid filter_mode: {filter_mode}")
 
-            # Get friendly_name if available, fallback to entity_id (lowercase)
-            friendly_name = entity['attributes'].get('friendly_name', entity['entity_id']).lower()
+                # Get supported actions for the domain
+                actions = self.domain_to_actions.get(domain, [])
 
-            # Exclude entities if their friendly_name contains any excluded substrings
-            if any(excluded_name.lower() in friendly_name for excluded_name in exclusion_dict.values()):
-                continue
+                entity_map[friendly_name] = {
+                    'entity_id': entity['entity_id'],
+                    'actions': actions,
+                }
 
-            # Get supported actions for the domain
-            actions = self.domain_to_actions.get(domain, [])
+            return entity_map
 
-            entity_map[friendly_name] = {
-                'entity_id': entity['entity_id'],
-                'actions': actions,
-            }
-
-        return entity_map
+        except Exception as e:
+            print(f"Error fetching entity map: {e}")
+            return {}
 
     def send_commands(self, payload: dict, debug: bool = True):
         """

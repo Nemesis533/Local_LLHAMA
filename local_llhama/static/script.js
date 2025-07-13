@@ -200,6 +200,23 @@ document.getElementById('save-settings-btn').addEventListener('click', async () 
   }
 });
 
+document.getElementById("restart-system-btn").addEventListener("click", () => {
+  fetch("/restart-system", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "restart" })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert("System restart initiated.");
+    } else {
+      alert("Failed to restart system: " + data.error);
+    }
+  })
+  .catch(err => alert("Error: " + err));
+});
+
 
 // Initial clear
 outputEl.innerHTML = '';
