@@ -192,7 +192,7 @@ def setup_home_assistant(loader):
     return ha_client
 
 
-def load_llm_models(loader, ha_client):
+def load_llm_models(loader : SettingLoaderClass, ha_client):
     """
     @brief Load LLM models from disk or remote config.
 
@@ -274,7 +274,7 @@ def main(base_path=""):
     base_path = resolve_base_path(base_path)
     loader = setup_settings(base_path)
     logger = setup_logging(message_queue)
-    webservice_process = start_local_web_service_process(message_queue, loader)
+    start_local_web_service_process(message_queue, loader)
 
     # Start monitoring logs and commands from the web UI
     monitor_thread = threading.Thread(target=monitor_messages, args=(message_queue, loader, None, None), daemon=True)

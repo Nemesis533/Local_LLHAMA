@@ -1,14 +1,14 @@
 # Local_LLAMA: Offline, Multilingual Smart Home Voice Assistant
 
-**Local_LLAMA** is a local-first, multilingual, LLaMA-powered voice assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/). Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names.
+**Local_LLAMA** is a local-first, multilingual, LLaMA-powered voice assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/). Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. Being an indipendent system that can run on base linux and interface with HA (or potentially other domotics systems) via API, it also bypasses many of the compatibility restrictions that running a similar system in HA have (such as smart-speaker compatibility).
 
 ## Features
 
 - Wake word detection using `OpenWakeWord`
 - Voice recording with adaptive noise floor detection
 - Whisper-based speech-to-text conversion
-- LLaMA 3.2 (8B) LLM for command parsing and entity resolution
-- Optional PromptGuard safety layer (LLaMA 3.1 3B fine-tuned model)
+- LLaMA 3.1 (8B) LLM for command parsing and entity resolution
+- Optional PromptGuard safety layer (LLaMA 3.2 3B fine-tuned model)
 - Multilingual support: English, French, Spanish, Italian, German, Russian
   This allows you to call the command in any of the supported languages and not have to worry about it - you can say "la lumière du salon" for "living room light"
 - Fuzzy device/entity matching using dynamic Home Assistant entity list; for optmization purposes, a manual list of devices can also be assigned instead of filtering the full list from HA.
@@ -91,7 +91,7 @@ a class and add the class and the variable name/value/type to the file like so:
 4. **Command Parsing**  
    - If the guard model is used, the query will first be processed there, and only "safe" queries will be passed on. 
 	 The model is based on Llama Guard 3 is a Llama-3.1-8B fine tuned for the specific task in the supported languages.
-   - The transcribed text and a list of entities from Home Assistant are passed to a LLaMA 3.2 (8B) model. By default models are loaded in 8bit.
+   - The transcribed text and a list of entities from Home Assistant are passed to a LLaMA 3.1 (8B) model. By default models are loaded in 8bit.
    - Entities can be supplied manually or auto-fetched from Home Assistant (requires access token and URL in the settings file). You can also exclude devices from the entities list in the same manner.
    - The model identifies the appropriate devices, actions, and parameters, then generates a Home Assistant-compatible JSON command.
 

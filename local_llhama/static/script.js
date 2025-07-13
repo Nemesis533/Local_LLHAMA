@@ -1,6 +1,17 @@
 const outputEl = document.getElementById('log-box');
 
+// Start server
+const socket = io();
+
 let lastLines = new Set();
+
+socket.onAny((event, ...args) => {
+  console.log('Received event:', event, args);
+});
+
+socket.on('connect', () => {
+  console.log('✅ Connected to SocketIO server');
+});
 
 function isImageFilename(line) {
   return /\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i.test(line.trim());
@@ -35,66 +46,53 @@ function isHttpGetToHost(line) {
   return /GET\s+(\S+)\s+HTTP\/[0-9.]+/.test(line);
 }
 
-async function fetchLogs() {
-  try {
-    const res = await fetch('/stdout');
-    if (!res.ok) {
-      outputEl.innerHTML += `<div class="log-error">Error fetching logs: ${err}</div>`;
-      return;
-    }
-    const text = await res.text();
-    const lines = text.split('\n');
-
-    // Filter out lines:
-    //  - Already displayed
-    //  - Empty lines
-    //  - GET requests to host that you want to hide
-    const newLines = lines.filter(line => 
-    !lastLines.has(line) && 
-    line.trim() !== '' &&
-    !isHttpGetToHost(line)
-    );
-    if (newLines.length > 0) {
-      for (const line of newLines) {
-        const trimmed = line.trim();
-        const div = document.createElement('div');
-
-        const imgUrl = selectImageForLine(trimmed);
-        if (imgUrl) {
-          const img = document.createElement('img');
-          img.src = imgUrl;
-          img.alt = 'Log image';
-          img.style.maxWidth = '100%';
-          img.onerror = () => { img.remove(); };
-          div.appendChild(img);
-        } else {
-          div.textContent = trimmed;
-
-          if (/warning/i.test(trimmed)) {
-            div.classList.add('log-warning');
-          } else if (/error/i.test(trimmed)) {
-            div.classList.add('log-error');
-          } else if (/info/i.test(trimmed)) {
-            div.classList.add('log-info');
-          } else if (isHttpMessage(trimmed)) {
-            div.classList.add('http-message');
-          }
-        }
-
-        outputEl.appendChild(div);
-        lastLines.add(line);
-      }
-
-      if (lastLines.size > 500) {
-        lastLines = new Set(Array.from(lastLines).slice(-500));
-      }
-
-      outputEl.scrollTop = outputEl.scrollHeight;
-    }
-  } catch (err) {
-    outputEl.innerHTML += `<div class="error">Error fetching logs: ${err}</div>`;
+socket.on('log_line', (data) => {
+  console.log('Received log_line:', data); // <-- is this visible?
+  const line = data.line;
+  if (!line) {
+    console.warn('log_line received but line is missing or falsy:', data); // <-- put it here
+    return;
   }
-}
+  if (!line) {
+    console.warn('log_line event received with no line');
+    return;
+  }
+  const trimmed = line.trim();
+  if (!trimmed || lastLines.has(trimmed) || isHttpGetToHost(trimmed)) return;
+
+  const div = document.createElement('div');
+  const imgUrl = selectImageForLine(trimmed);
+
+  if (imgUrl) {
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.alt = 'Log image';
+    img.style.maxWidth = '100%';
+    img.onerror = () => { img.remove(); };
+    div.appendChild(img);
+  } else {
+    div.textContent = trimmed;
+
+    if (/warning/i.test(trimmed)) {
+      div.classList.add('log-warning');
+    } else if (/error/i.test(trimmed)) {
+      div.classList.add('log-error');
+    } else if (/info/i.test(trimmed)) {
+      div.classList.add('log-info');
+    } else if (isHttpMessage(trimmed)) {
+      div.classList.add('http-message');
+    }
+  }
+
+  outputEl.appendChild(div);
+  lastLines.add(trimmed);
+
+  if (lastLines.size > 500) {
+    lastLines = new Set(Array.from(lastLines).slice(-500));
+  }
+
+  outputEl.scrollTop = outputEl.scrollHeight;
+});
 
 async function fetchSettings() {
   try {
@@ -202,15 +200,8 @@ document.getElementById('save-settings-btn').addEventListener('click', async () 
   }
 });
 
-// Call on load
-fetchSettings();
-
-
 
 // Initial clear
 outputEl.innerHTML = '';
 
-// Fetch logs every 3 seconds
-fetchLogs();
 fetchSettings();
-setInterval(fetchLogs, 3000);

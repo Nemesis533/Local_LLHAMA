@@ -2,11 +2,15 @@ import time
 import psutil
 from pathlib import Path
 from flask import Flask, jsonify, request, abort, Response, send_file
+from flask_socketio import SocketIO
 from flask_cors import CORS
 import json
 import io
 import threading
 import logging
+import socket
+import traceback
+import queue
 
 class LocalLLHAMA_WebService:
     """
@@ -30,7 +34,6 @@ class LocalLLHAMA_WebService:
         self.host = host
         self.port = port
         self.stdout_buffer = io.StringIO()
-        self._start_log_listener()
 
         # Create a logging handler to store logs in memory
         buffer_handler = logging.StreamHandler(self.stdout_buffer)
@@ -51,9 +54,19 @@ class LocalLLHAMA_WebService:
         self.app = Flask(
             __name__,
             static_url_path='/static',
-            static_folder=str(self.static_path)
+            static_folder=str(self.static_path),
         )
         CORS(self.app)
+        self.socketio = SocketIO(self.app, cors_allowed_origins="*")
+        self.connected_clients = set()
+        self.clients_lock = threading.Lock()
+
+        # register handlers
+        self.socketio.on_event('connect', self.handle_connect)
+        self.socketio.on_event('disconnect', self.handle_disconnect)
+
+        # start background task under Socket.IO
+        self.socketio.start_background_task(self._log_listener)
 
         # Suppress Werkzeug request logs
         log = logging.getLogger('werkzeug')
@@ -113,17 +126,6 @@ class LocalLLHAMA_WebService:
             status = "up" if process_found else "down"
             return jsonify({'status': status, 'timestamp': time.time()})
 
-        @self.app.route('/stdout')
-        def view_stdout():
-            """
-            @brief Returns current contents of the stdout log buffer.
-
-            @return Text/plain response containing log output.
-            """
-            if not self._is_ip_allowed(request.remote_addr):
-                abort(403, description="Access denied")
-            return Response(self.stdout_buffer.getvalue(), mimetype='text/plain')
-
     def _is_ip_allowed(self, ip):
         """
         @brief Checks if the given IP address is allowed to access the service.
@@ -146,29 +148,84 @@ class LocalLLHAMA_WebService:
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
 
-    def _start_log_listener(self):
-        """
-        @brief Starts a background thread that listens for log messages from the queue.
+    def handle_connect(self):
+        ip = request.remote_addr
+        if not self._is_ip_allowed(ip):
+            print(f"Denied connection from {ip}")
+            return False  # Reject connection
 
-        Writes received messages into the in-memory stdout buffer.
-        """
-        def log_listener():
-            while True:
-                try:
-                    message = self.message_queue.get(timeout=1)
-                    if isinstance(message, dict) and message.get("type") == "console_output":
-                        self.stdout_buffer.write(message["data"] + "\n")
-                        self.stdout_buffer.flush()
-                    elif isinstance(message, logging.LogRecord):
-                        log_line = f"{message.levelname} - {message.name} - {message.getMessage()}"
-                        self.stdout_buffer.write(log_line + "\n")
-                        self.stdout_buffer.flush()
-                    else:
-                        print(f"Received unexpected message type: {type(message)}")
-                except Exception:
-                    continue
+        print('Client connected:', request.sid)
+        with self.clients_lock:
+            self.connected_clients.add(request.sid)
 
-        threading.Thread(target=log_listener, daemon=True).start()
+        # emit welcome message
+        self.socketio.emit(
+            'log_line',
+            {'line': 'Local_LLHAMA socket connected!'},
+            room=request.sid
+        )
+
+    def handle_disconnect(self):
+        print('Client disconnected:', request.sid)
+        with self.clients_lock:
+            self.connected_clients.discard(request.sid)
+
+
+
+    def _log_listener(self):
+        """
+        Runs in a Socket.IO-managed background task.
+        """
+        while True:
+            try:
+                message = self.message_queue.get(timeout=1)
+                log_line = None
+
+                if isinstance(message, dict) and message.get("type") == "console_output":
+                    log_line = message["data"]
+                elif isinstance(message, logging.LogRecord):
+                    log_line = f"{message.levelname} - {message.name} - {message.getMessage()}"
+                else:
+                    print(f"Received unexpected message type: {type(message)}")
+
+                if log_line:
+                    # buffer it somewhere if you want; here we just emit
+                    with self.app.app_context():
+                        # copy set to avoid mutation while iterating
+                        for sid in list(self.connected_clients):
+                            self.socketio.emit(
+                                'log_line',
+                                {'line': log_line},
+                                room=sid,
+                                namespace='/'   # adjust if using a custom namespace
+                            )
+
+                    # yield to the Socket.IO loop so messages are sent
+                    self.socketio.sleep(0)
+
+            except queue.Empty:
+                # no message this cycle, just yield control
+                self.socketio.sleep(0.1)
+                continue
+
+            except Exception:
+                print("Exception in log_listener:\n", traceback.format_exc())
+                # yield back so we don't block the loop
+                self.socketio.sleep(0.1)
+                continue
+
+
+    def get_host_ip(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Doesn't need to be reachable, just used to get the outgoing IP
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
 
     def run(self):
         """
@@ -176,4 +233,7 @@ class LocalLLHAMA_WebService:
 
         Launches the service on the configured host and port.
         """
-        self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False, threaded=True)
+        if self.host == '0.0.0.0':
+            self.host = self.get_host_ip()
+        self.socketio.run(self.app, host=self.host , port=5001, debug=False, use_reloader=False)
+
