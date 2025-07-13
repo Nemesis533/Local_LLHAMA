@@ -173,7 +173,7 @@ All dependencies are listed in `requirements.txt`.
 ## WebUI
 
 A basic webui has been implemented - it allows to the stdout of the system and loads the object_settings file values; these can eb adited manually and saved for easier access. 
-Currently there is no input control or ability to restart the LLM system, but it will be implemented.
+Currently there is no input control, ability to restart the system has been implemented.
 
 ## License
 
@@ -210,7 +210,7 @@ For significant changes, please open a discussion before submitting a pull reque
 
 This is a basic implementation which I plan on expanding over time (when time permits) by adding:
 - Support for remote LLMs (passing commands to an LLM instanced elsewhere on the network)
-- Current WIP: Proper webUI with control (start/stop/etc) for the system
+- Current WIP: Proper webUI with control (start/stop/etc) for the system - restart implemented.
 - Current WIP: Prompt Guard toogle.
 - Perfomance optimizations
 - Support for multiple LLMS (for instance one fine tuned on commands and another for NL responses).
