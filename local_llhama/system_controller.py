@@ -87,7 +87,7 @@ def setup_state_machine(loader, llm, ha_client, base_path):
     start = time.time()
     
     sm = StateMachineInstance(llm, loader.device, ha_client, base_path=base_path)
-    print(f"State machine initialized in {time.time() - start:.2f} seconds")
+    print(f"[Main] State machine initialized in {time.time() - start:.2f} seconds")
     return sm
 
 def apply_additional_settings(loader, state_machine):
@@ -99,7 +99,7 @@ def apply_additional_settings(loader, state_machine):
     """
     start = time.time()
     loader.apply([state_machine.awaker])
-    print(f"Settings applied to vitality and awaker in {time.time() - start:.2f} seconds")
+    print(f"[Main] Settings applied to vitality and awaker in {time.time() - start:.2f} seconds")
 
 def run_state_machine(state_machine):
     """
@@ -128,7 +128,7 @@ def setup_audio():
     start = time.time()
     subprocess.run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"])
     check_mic_volume()
-    print(f"Audio setup done in {time.time() - start:.2f} seconds")
+    print(f"[Main] Audio setup done in {time.time() - start:.2f} seconds")
 
 def unload_model(model):
     if hasattr(model, 'model'):
@@ -170,7 +170,7 @@ def start_system(ctx : SystemContext):
         del ctx.command_llm
         ctx.command_llm = None
 
-    print(f"Using {'GPU' if loader.device == 'cuda' else 'CPU'} for model.")
+    print(f"[Main] Using {'GPU' if loader.device == 'cuda' else 'CPU'} for model.")
 
     ctx.command_llm = load_llm_models(loader, ha_client)
 

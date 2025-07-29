@@ -151,7 +151,7 @@ def main(base_path=""):
     """
     @brief Main entry point for initializing and running the full Local LLHAMA system.
     """
-    print("Starting main()...")
+    print("[Main] Starting main()...")
 
     # Create shared context
     ctx = sr.SystemContext()
@@ -176,7 +176,7 @@ def main(base_path=""):
     )
     ctx.monitor_thread.start()
 
-    log_duration("Settings loaded", ctx.loader.load)
+    log_duration("[Main] Settings loaded", ctx.loader.load)
     
     # Start the core system
     sr.start_system(ctx)

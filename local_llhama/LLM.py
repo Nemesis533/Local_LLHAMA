@@ -200,8 +200,15 @@ class LLM_Class():
         ]
         }}
 
-        If nothing matches, respond with:
-        {{"commands": []}}
+        User input:
+        "Order pizza"
+
+        Response:
+        "I'm not sure how to help with that. I can only control devices in your smart home."
+
+        Response rules:
+        - If the input maps to a valid command, respond only with a valid JSON object as shown above.
+        - If it clearly does **not** map to any known device or action, respond instead in helpful natural language (no JSON).
         """
 
         # Combine system instructions with user input
@@ -256,15 +263,15 @@ class LLM_Class():
                 if json_match:
                     json_str = json_match.group(0).strip()
                     parsed_output = json.loads(json_str)
+                    if "commands" in parsed_output:
+                        return parsed_output  # structured output
+                    else:
+                        return {"error": assistant_response.strip()}  # invalid structure
                 else:
-                    parsed_output = {"commands": []}           
-
+                    return {"error": assistant_response.strip()}  # no JSON found
             except json.JSONDecodeError as e:
                 print(f"Failed to parse JSON from model output: {e}")
-                print("Raw model output:", result_text)
-                parsed_output = {"commands": []}
-
-            print(parsed_output)
+                return {"error": assistant_response.strip()}           
 
         else:
             # If input is not safe, return empty commands list
