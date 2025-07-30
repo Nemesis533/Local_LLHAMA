@@ -37,6 +37,10 @@
       "value": "True",
       "type": "bool"
     },
+    "use_ollama": {
+      "value": "True",
+      "type": "bool"
+    },
     "load_models_in_8_bit": {
       "value": "True",
       "type": "bool"

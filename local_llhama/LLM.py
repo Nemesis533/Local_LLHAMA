@@ -9,6 +9,7 @@ from torch.nn.functional import softmax
 
 # custom imports
 from .HA_Interfacer import HomeAssistantClient
+from .OllamaInterface import OllamaClient
 
 
 
@@ -43,7 +44,7 @@ class LLM_Class():
     """
     @brief A wrapper class for loading and interacting with a language model for smart home commands.
     """
-    def __init__(self, model_path, model_name, device, ha_client, prompt_guard_model_name, base_prompt=None, reuse_devices=True, load_guard = True):
+    def __init__(self, model_path, model_name, device, ha_client, prompt_guard_model_name, base_prompt=None, reuse_devices=True, load_guard = True, use_ollama = True):
         """
         @param model_path Path where the model files are stored or cached.
         @param model_name Name of the model to load.
@@ -62,6 +63,8 @@ class LLM_Class():
         self.accelerator = Accelerator()
         self.ha_client: HomeAssistantClient = ha_client
         self.use_guard_llm = load_guard
+        self.use_ollama = use_ollama
+        self.OllamaObj = None
 
         # Optional base system prompt
         self.base_prompt = base_prompt or ""
@@ -82,57 +85,61 @@ class LLM_Class():
 
     def load_model(self, use_int8=False):
         """
-        @brief Load the language model with optional int8 quantization or fp16 precision.
+        @brief Load the language model with optional int8 quantization or fp16 precision. if self.use_ollama is True, sends a test prompt to ensure that first execution is fast
         @param use_int8 If True, load the model using 8-bit quantization.
         @return True if model loaded successfully, False otherwise.
         """
-        try:
-            full_path = os.path.join(self.model_path, self.model_name)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        if not self.use_ollama:
+            try:
+                full_path = os.path.join(self.model_path, self.model_name)
+                device = "cuda" if torch.cuda.is_available() else "cpu"
 
-            model_kwargs = {
-                "low_cpu_mem_usage": True,
-                "device_map": device,
-                "trust_remote_code": True, 
-            }
+                model_kwargs = {
+                    "low_cpu_mem_usage": True,
+                    "device_map": device,
+                    "trust_remote_code": True, 
+                }
 
-            # Use bitsandbytes config for int8 if specified
-            if use_int8:
-                from transformers import BitsAndBytesConfig
-                quant_config = BitsAndBytesConfig(load_in_8bit=True)
-                model_kwargs["quantization_config"] = quant_config
-            else:
-                model_kwargs["torch_dtype"] = torch.float16  
+                # Use bitsandbytes config for int8 if specified
+                if use_int8:
+                    from transformers import BitsAndBytesConfig
+                    quant_config = BitsAndBytesConfig(load_in_8bit=True)
+                    model_kwargs["quantization_config"] = quant_config
+                else:
+                    model_kwargs["torch_dtype"] = torch.float16  
 
-            # Load model and tokenizer either from local cache or online
-            if os.path.exists(full_path):                
-                print(f"Model not found locally at {full_path}. Downloading model...")
-                self.model = AutoModelForCausalLM.from_pretrained(full_path, **model_kwargs)
-                self.tokenizer = AutoTokenizer.from_pretrained(full_path)
-            else:
-                print(f"Model found locally at {full_path}. Loading model...")
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.model_path, **model_kwargs)
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    full_path if os.path.exists(full_path) else self.model_name,
-                    cache_dir=self.model_path if not os.path.exists(full_path) else None,
-                )
+                # Load model and tokenizer either from local cache or online
+                if os.path.exists(full_path):                
+                    print(f"Model not found locally at {full_path}. Downloading model...")
+                    self.model = AutoModelForCausalLM.from_pretrained(full_path, **model_kwargs)
+                    self.tokenizer = AutoTokenizer.from_pretrained(full_path)
+                else:
+                    print(f"Model found locally at {full_path}. Loading model...")
+                    self.model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.model_path, **model_kwargs)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        full_path if os.path.exists(full_path) else self.model_name,
+                        cache_dir=self.model_path if not os.path.exists(full_path) else None,
+                    )
 
-            # Ensure tokenizer has pad token id set to eos token id for padding
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+                # Ensure tokenizer has pad token id set to eos token id for padding
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-            # Compile model if not using int8 quantization for faster inference
-            if not use_int8:
-                self.model = torch.compile(self.model, mode="reduce-overhead")
-                self.model.eval()
+                # Compile model if not using int8 quantization for faster inference
+                if not use_int8:
+                    self.model = torch.compile(self.model, mode="reduce-overhead")
+                    self.model.eval()
 
-            print(f"Model loaded successfully using {'int8' if use_int8 else 'fp16'} mode.")
-            return True
+                print(f"Model loaded successfully using {'int8' if use_int8 else 'fp16'} mode.")
+                return True
 
-        except Exception as e:
-            print(f"Failed to load model: {e}")
-            return False
+            except Exception as e:
+                print(f"Failed to load model: {e}")
+                return False
+        else:
+            self.OllamaObj = OllamaClient()
+            self.OllamaObj.system_prompt = self.build_system_prompt()
 
-    def build_prompt(self, transcription):
+    def build_system_prompt(self):
         """
         @brief Build the complete prompt including system instructions and user transcription.
         @param transcription User speech input as a string.
@@ -208,8 +215,16 @@ class LLM_Class():
 
         Response rules:
         - If the input maps to a valid command, respond only with a valid JSON object as shown above.
-        - If it clearly does **not** map to any known device or action, respond instead in helpful natural language (no JSON).
+        - If it clearly does **not** map to any known device or action, respond instead in helpful natural language and use the following JSON
+        {{"action": "speak", "text": "write your response here"}}.
         """
+
+        return system_section
+
+
+    def build_prompt(self, transcription):
+        
+        system_section = self.build_system_prompt()
 
         # Combine system instructions with user input
         return f"{system_section.strip()}\n\nUser input:\n{transcription.strip()}\n\nJSON response:"

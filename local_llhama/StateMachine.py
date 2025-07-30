@@ -1,10 +1,9 @@
 # system imports
 import threading
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 import time
 from enum import Enum
 import time
-import logging
 import sys
 # custom imports
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
@@ -145,17 +144,41 @@ class StateMachineInstance:
                 return
 
             structured_output = self.command_llm.parse_with_llm(transcription)
+            print(f"Structured output: {structured_output}")
 
-            if structured_output and structured_output.get("commands"):
-                print("Structured Commands:", structured_output)
-                self.command_queue.put(structured_output, timeout=1)
-                print("Successfully put command into queue")
-                self.transition(State.SEND_COMMANDS)
-            else:
-                message_to_speak = "No valid commands extracted, Please try again."
-                print("No valid commands extracted.")
-                self.speech_queue.put(message_to_speak)
+            if not structured_output:
+                print("LLM returned no output.")
+                self._handle_no_command()
+                return
+
+            # Case 1: LLM returned fallback "speak" response
+            if structured_output.get("action") == "speak" and "text" in structured_output:
+                text = structured_output["text"]
+                print("Speech Received from LLM")
+                self.speech_queue.put(text)
                 self.transition(State.SPEAKING)
+                return
+
+            # Case 2: LLM returned valid commands
+            if "commands" in structured_output and structured_output["commands"]:
+                print("Structured Commands:", structured_output)
+                try:
+                    self.command_queue.put(structured_output, timeout=1)
+                    print("Successfully put command into queue")
+                    self.transition(State.SEND_COMMANDS)
+                except Full:
+                    print("Command queue was full.")
+                    self._handle_no_command()
+                return
+
+            # Default fallback: no valid commands
+            self._handle_no_command()
+
+    def _handle_no_command(self):
+        message_to_speak = "No valid commands extracted, please try again."
+        print(message_to_speak)
+        self.speech_queue.put(message_to_speak)
+        self.transition(State.SPEAKING)
 
     def sound_player_worker(self):
         """
