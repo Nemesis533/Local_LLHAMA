@@ -120,26 +120,21 @@ class TextToSpeech:
     Handles text preprocessing, speech synthesis, noise reduction, and playback.
     """
 
-    def __init__(self, base_path, device = 'cuda'):
+    def __init__(self,base_path , device = 'cuda'):
         """
         @brief Constructor that loads the specified TTS model.
 
         @param model_name: The Coqui TTS model name to load.
         """
-        model_name="tts_models/en/ek1/tacotron2/vocoder_models--en--ljspeech--hifigan_v2"
+        model_name= os.path.expanduser("~/.local/share/tts/tts_models--en--ljspeech--tacotron2-DDC")
         self.base_path = base_path
         self.sounds_root_folder = os.path.join(self.base_path, "sounds")
         self.speaker = "female.wav"
         self.sr = 22050
 
-        #model_dir = os.path.expanduser("~/tts_models/tacotron2")
-        #model_name = f"{model_dir}/model.pth"
-        #config_path = f"{model_dir}/config.json"
-        #print(f"Loading TTS model from: {model_dir}")
-
         print(f"Loading TTS model: {model_name}")
-        self.tts = TTS(model_name=model_name)
-        self.tts.to(device)
+        self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+
         print("TTS Model loaded on GPU")
 
     def preprocess_text(self, text):
@@ -208,6 +203,9 @@ class TextToSpeech:
 
         # Generate waveform audio data from the text (returns raw wav samples)
         wav = self.tts.tts(text, speaker=f"{self.sounds_root_folder}/{self.speaker}", language="en", sample_rate=self.sr)
+
+        # Retrieve sample rate from the TTS synthesizer if available, else default to 22050 Hz
+        self.sr = self.tts.synthesizer.output_sample_rate if hasattr(self.tts, 'synthesizer') else 22050
 
         # Convert waveform to float32 NumPy array for processing
         wav = np.array(wav, dtype=np.float32)
