@@ -1,7 +1,7 @@
 {
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:port", "type": "str"},
-    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ957WNvyiHKnmT-_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
+    "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
+    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkYmJhNmNmNjgyYTE0ZTVlOWUyMDQ3YmIxZDA4YjU5NCIsImlhdCI6MTc1NjA1OTI5MiwiZXhwIjoyMDcxNDE5MjkyfQ.0kKCC1X2w2bjPhku_OYJX4F1eMHE3lAPXIU_qsHstuY",
      "type": "str"},
     "allowed_entities": {
       "value": [
@@ -34,12 +34,24 @@
       "type": "str"
     },
     "use_guard_llm": {
-      "value": "True",
+      "value": "False",
       "type": "bool"
     },
     "load_models_in_8_bit": {
       "value": "True",
       "type": "bool"
+    },
+    "use_ollama": {
+      "value": "True",
+      "type": "bool"
+    },
+      "ollama_ip": {
+      "value": "192.168.88.245:11434",
+      "type": "str"
+    },
+      "ollama_model": {
+      "value": "qwen3-14b-gpu128",
+      "type": "str"
     }
   }
 }

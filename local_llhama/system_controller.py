@@ -67,7 +67,7 @@ def load_llm_models(loader : SettingLoaderClass, ha_client):
     @return Loaded LLM model instance.
     """
     print("[Main] Loading LLMs")
-    start = time.time()
+    start = time.time()    
     llm = loader.load_llm_models(ha_client)
     print(f"[Main] LLM models loaded in {time.time() - start:.2f} seconds")
     return llm
