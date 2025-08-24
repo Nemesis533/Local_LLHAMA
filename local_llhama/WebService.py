@@ -250,5 +250,5 @@ class LocalLLHAMA_WebService:
         """
         if self.host == '0.0.0.0':
             self.host = self.get_host_ip()
-        self.socketio.run(self.app, host=self.host , port=5001, debug=False, use_reloader=False)
+        self.socketio.run(self.app, host=self.host , port=5001, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
 
