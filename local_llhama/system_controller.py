@@ -41,6 +41,7 @@ def setup_settings(base_path):
     print("[Main] Loading Settings")
     loader = SettingLoaderClass(base_path)
     loader.load()
+    loader.apply([])
     return loader
 
 def setup_home_assistant(loader):

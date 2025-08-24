@@ -221,7 +221,31 @@ document.getElementById("restart-system-btn").addEventListener("click", () => {
   })
   .catch(err => alert("Error: " + err));
 });
+// Handle prompt send
+document.getElementById('send-prompt-btn').addEventListener('click', async () => {
+  const inputEl = document.getElementById('prompt-input');
+  const text = inputEl.value.trim();
 
+  if (!text) return; // do nothing if empty
+
+  try {
+    const res = await fetch('/from_user_text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (res.ok) {
+      console.log('✅ Prompt sent successfully:', text);
+      inputEl.value = ''; // clear input after sending
+    } else {
+      const errText = await res.text();
+      console.error('❌ Failed to send prompt:', errText);
+    }
+  } catch (err) {
+    console.error('❌ Error sending prompt:', err);
+  }
+});
 
 
 // Initial clear

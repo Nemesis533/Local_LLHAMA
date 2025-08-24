@@ -31,7 +31,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client, base_path=None ):
+    def __init__(self, command_llm, device, ha_client, base_path=None ):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -138,8 +138,13 @@ class StateMachineInstance:
                 self.sm_logger.info("Transcription queue was empty, retrying later...")
                 self.transition(State.LISTENING)
                 return
-
-            structured_output = self.command_llm.parse_with_llm(transcription)
+            
+            if not isinstance(self.command_llm, OllamaClient):
+                structured_output = self.command_llm.parse_with_llm(transcription)
+            else:
+                structured_output = self.command_llm.send_message(transcription)
+                self.speech_queue.put(structured_output)
+                self.transition(State.SPEAKING)
 
             if structured_output and structured_output.get("commands"):
                 self.sm_logger.info("Structured Commands:", structured_output)
