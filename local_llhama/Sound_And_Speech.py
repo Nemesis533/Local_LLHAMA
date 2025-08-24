@@ -120,12 +120,23 @@ class TextToSpeech:
     Handles text preprocessing, speech synthesis, noise reduction, and playback.
     """
 
-    def __init__(self, model_name="tts_models/en/ek1/tacotron2", device = 'cuda'):
+    def __init__(self, base_path, device = 'cuda'):
         """
         @brief Constructor that loads the specified TTS model.
 
         @param model_name: The Coqui TTS model name to load.
         """
+        model_name="tts_models/en/ek1/tacotron2/vocoder_models--en--ljspeech--hifigan_v2"
+        self.base_path = base_path
+        self.sounds_root_folder = os.path.join(self.base_path, "sounds")
+        self.speaker = "female.wav"
+        self.sr = 22050
+
+        #model_dir = os.path.expanduser("~/tts_models/tacotron2")
+        #model_name = f"{model_dir}/model.pth"
+        #config_path = f"{model_dir}/config.json"
+        #print(f"Loading TTS model from: {model_dir}")
+
         print(f"Loading TTS model: {model_name}")
         self.tts = TTS(model_name=model_name)
         self.tts.to(device)
@@ -196,10 +207,7 @@ class TextToSpeech:
         text = self.preprocess_text(text)
 
         # Generate waveform audio data from the text (returns raw wav samples)
-        wav = self.tts.tts(text, speaker=None, language=None, sample_rate=None)
-
-        # Retrieve sample rate from the TTS synthesizer if available, else default to 22050 Hz
-        sr = self.tts.synthesizer.output_sample_rate if hasattr(self.tts, 'synthesizer') else 22050
+        wav = self.tts.tts(text, speaker=f"{self.sounds_root_folder}/{self.speaker}", language="en", sample_rate=self.sr)
 
         # Convert waveform to float32 NumPy array for processing
         wav = np.array(wav, dtype=np.float32)
@@ -208,7 +216,7 @@ class TextToSpeech:
         wav = self.set_playback_volume(wav, volume=1)
 
         # Reduce noise in the waveform to improve audio quality
-        denoised_data = self.reduce_noise(wav, sr)
+        denoised_data = self.reduce_noise(wav, self.sr)
 
         # Ensure the denoised audio length matches the original waveform length
         if len(denoised_data) < len(wav):
@@ -221,10 +229,10 @@ class TextToSpeech:
         # Make sure audio data is contiguous in memory for playback
         data = np.ascontiguousarray(denoised_data)
 
-        print(f"Playing audio with sample rate: {sr}, blocksize: {blocksize}, latency: {latency}")
+        print(f"Playing audio with sample rate: {self.sr}, blocksize: {blocksize}, latency: {latency}")
 
         # Play the processed audio using sounddevice library
-        sd.play(data, samplerate=sr, blocksize=blocksize, latency=latency)
+        sd.play(data, samplerate=self.sr, blocksize=blocksize, latency=latency)
 
         # Wait until playback finishes before continuing
         sd.wait()

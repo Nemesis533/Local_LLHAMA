@@ -86,7 +86,7 @@ def setup_state_machine(loader, llm, ha_client, base_path):
     print("[Main] Setting up the state machine")
     start = time.time()
     
-    sm = StateMachineInstance(llm, loader.device, ha_client, base_path=base_path)
+    sm = StateMachineInstance(llm, loader.device, ha_client,base_path=base_path)
     print(f"State machine initialized in {time.time() - start:.2f} seconds")
     return sm
 
