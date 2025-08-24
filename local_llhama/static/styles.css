@@ -115,8 +115,10 @@ body, html {
 
 
 /* Logs styling */
+/* Shorten log box */
 .log-box {
-  flex: 1;
+  flex: 0 1 300px; /* allows fixed height instead of stretching */
+  max-height: 500px; /* maximum height of logs */
   background-color: #111;
   color: #0f0;
   font-family: monospace;
@@ -125,31 +127,36 @@ body, html {
   white-space: pre-wrap;
   border: 1px solid #444;
   box-sizing: border-box;
+  margin-bottom: 10px; /* spacing before input */
 }
 
-.log-warning {
-  color: #ffcc00; /* yellow */
+/* Prompt input styling */
+.prompt-label {
   font-weight: bold;
+  margin-bottom: 4px;
+  display: block;
+  color: #333;
 }
 
-.log-info {
-  color: #0f0; /* green */
+.prompt-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
 }
 
-.log-error {
-  color: #f44336; /* red */
-  font-weight: bold;
+#send-prompt-btn {
+  padding: 8px 16px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  background-color: #2196F3;
+  color: white;
+  cursor: pointer;
 }
 
-.http-message {
-  color: #ff9900;
-  font-weight: bold;
-}
-.log-line {
-  color: #0f0; /* default green */
-  white-space: pre-wrap;
-}
-
-.log-line.main-line {
-  color: cyan;
+#send-prompt-btn:hover {
+  background-color: #0b7dda;
 }

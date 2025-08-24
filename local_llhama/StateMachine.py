@@ -8,7 +8,7 @@ import logging
 import sys
 # custom imports
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
-from .LLM import LLM_Class
+from .LLM import LLM_Class, OllamaClient
 from .HA_Interfacer import HomeAssistantClient
 
 class State(Enum):
@@ -65,7 +65,8 @@ class StateMachineInstance:
 
         # Load the command LLM (using int8 for memory efficiency)
         self.command_llm = command_llm
-        self.command_llm.load_model(use_int8=True)
+        if not isinstance(self.command_llm, OllamaClient):
+            self.command_llm.load_model(use_int8=True)
 
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
@@ -118,7 +119,7 @@ class StateMachineInstance:
 
     def print_once(self, message, end='\n'):
         if message != self._last_printed_message:
-            self.sm_logger.info(message, end=end)
+            self.sm_logger.info(message)
             self._last_printed_message = message
         # Else do nothing, avoid printing duplicate lines
 

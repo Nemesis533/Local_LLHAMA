@@ -476,6 +476,8 @@ class WakeWordListener:
 
             @param result_queue: Queue to communicate detection result (e.g., noise floor) back to main thread.
             """
+            
+
             owwModel = Model(inference_framework="tflite")
             CHUNK = 1280
 

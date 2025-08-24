@@ -367,6 +367,8 @@ class OllamaClient:
     """
  
     def __init__(self, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
+        global SMART_HOME_PROMPT_TEMPLATE
+        
         self.host = host.rstrip('/')
         self.model = model
         SMART_HOME_PROMPT_TEMPLATE += "If you cannot respond with the command, try to provide a natural language response to the user."
