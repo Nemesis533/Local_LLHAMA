@@ -61,7 +61,7 @@ class SettingLoaderClass:
         @return: A loaded instance of LLM_Class.
         """
         if self.use_ollama:
-            command_llm = OllamaClient(host=self.ollama_ip,model= self.ollama_model)
+            command_llm = OllamaClient(ha_client,host=self.ollama_ip,model= self.ollama_model)
         else:
             command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
             print(f"Loading command LLM model from {command_llm_path}")

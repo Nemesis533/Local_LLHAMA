@@ -5,7 +5,7 @@ import numpy as np
 import sounddevice as sd
 import re
 import librosa
-from TTS.api import TTS
+from chatterbox.tts import ChatterboxTTS
 import pyaudio
 import wave
 import time
@@ -129,12 +129,13 @@ class TextToSpeech:
         model_name= os.path.expanduser("~/.local/share/tts/tts_models--en--ljspeech--tacotron2-DDC")
         self.base_path = base_path
         self.sounds_root_folder = os.path.join(self.base_path, "sounds")
-        self.speaker = "female.wav"
+        self.speaker = "/home/llhama-usr/Local_LLHAMA/local_llhama/sounds/female.wav"
         self.sr = 22050
+        
 
         print(f"Loading TTS model: {model_name}")
-        self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-
+        self.tts : ChatterboxTTS = ChatterboxTTS.from_pretrained(device=device)
+        #self.speaker_embedding = self.tts.get_speaker_embedding(audio_prompt_path=self.speaker)
         print("TTS Model loaded on GPU")
 
     def preprocess_text(self, text):
@@ -202,10 +203,7 @@ class TextToSpeech:
         text = self.preprocess_text(text)
 
         # Generate waveform audio data from the text (returns raw wav samples)
-        wav = self.tts.tts(text, speaker=f"{self.sounds_root_folder}/{self.speaker}", language="en", sample_rate=self.sr)
-
-        # Retrieve sample rate from the TTS synthesizer if available, else default to 22050 Hz
-        self.sr = self.tts.synthesizer.output_sample_rate if hasattr(self.tts, 'synthesizer') else 22050
+        wav = self.tts.generate(text) #, speaker_embedding=self.speaker_embedding)
 
         # Convert waveform to float32 NumPy array for processing
         wav = np.array(wav, dtype=np.float32)
@@ -225,9 +223,12 @@ class TextToSpeech:
             denoised_data = denoised_data[:len(wav)]
 
         # Make sure audio data is contiguous in memory for playback
-        data = np.ascontiguousarray(denoised_data)
+        data = np.ascontiguousarray(np.squeeze(denoised_data))
 
         print(f"Playing audio with sample rate: {self.sr}, blocksize: {blocksize}, latency: {latency}")
+
+        if data.ndim == 1:
+            data = np.stack([data, data], axis=1)
 
         # Play the processed audio using sounddevice library
         sd.play(data, samplerate=self.sr, blocksize=blocksize, latency=latency)

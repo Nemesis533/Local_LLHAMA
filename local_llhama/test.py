@@ -1,34 +1,24 @@
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import XttsAudioConfig
-from TTS.config.shared_configs import BaseDatasetConfig
-from TTS.tts.models.xtts import XttsArgs
 import torch
-from TTS.api import TTS
+from chatterbox.tts import ChatterboxTTS
 import os
 
+# Agree to Coqui TTS terms
 os.environ["COQUI_TOS_AGREED"] = "1"
 
+# Select device
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Allow the custom config safely
-torch.serialization.add_safe_globals([XttsConfig])
-torch.serialization.add_safe_globals([XttsAudioConfig])
-torch.serialization.add_safe_globals([BaseDatasetConfig])
-torch.serialization.add_safe_globals([XttsArgs])
 
-# Initialize TTS
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+# Load the XTTS-2 TTS model
+model = ChatterboxTTS.from_pretrained(device=device)
 
-# Run TTS
-wav = tts.tts(
-    text="Hello world!", 
-    speaker_wav="my/cloning/audio.wav", 
-    language="en"
-)
+speaker_wav_path = "/home/llhama-usr/Local_LLHAMA/local_llhama/sounds/female.wav"
+if not os.path.isfile(speaker_wav_path):
+    raise FileNotFoundError(f"Speaker audio not found: {speaker_wav_path}")
 
-tts.tts_to_file(
-    text="Hello world!", 
-    speaker_wav="my/cloning/audio.wav", 
-    language="en", 
-    file_path="output.wav"
-)
+text = "Hello world!"
+
+# Generate waveform in memory
+wav = model.generate(text, audio_prompt_path=speaker_wav_path)
+
+print("TTS output saved to output.wav")

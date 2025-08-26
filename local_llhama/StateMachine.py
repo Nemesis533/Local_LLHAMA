@@ -133,7 +133,7 @@ class StateMachineInstance:
         if current_state == State.PARSING_VOICE:
             try:
                 transcription = self.transcription_queue.get(timeout=2)
-                self.sm_logger.info(f"Got transcription: {transcription}")
+                self.sm_logger.info(f"[Main] Got transcription: {transcription}")
             except Empty:
                 self.sm_logger.info("Transcription queue was empty, retrying later...")
                 self.transition(State.LISTENING)
@@ -143,19 +143,26 @@ class StateMachineInstance:
                 structured_output = self.command_llm.parse_with_llm(transcription)
             else:
                 structured_output = self.command_llm.send_message(transcription)
-                self.speech_queue.put(structured_output)
-                self.transition(State.SPEAKING)
 
-            if structured_output and structured_output.get("commands"):
-                self.sm_logger.info("Structured Commands:", structured_output)
-                self.command_queue.put(structured_output, timeout=1)
-                self.sm_logger.info("Successfully put command into queue")
-                self.transition(State.SEND_COMMANDS)
-            else:
-                message_to_speak = "No valid commands extracted, Please try again."
-                self.sm_logger.info("No valid commands extracted.")
-                self.speech_queue.put(message_to_speak)
-                self.transition(State.SPEAKING)
+            if structured_output:
+                if structured_output.get("commands"):
+                    self.sm_logger.info("Structured Commands:", structured_output)
+                    self.command_queue.put(structured_output, timeout=1)
+                    self.sm_logger.info("Successfully put command into queue")
+                    self.transition(State.SEND_COMMANDS)
+
+                elif structured_output.get("nl_response"):
+                    nl_message = structured_output.get("nl_response")
+                    self.sm_logger.info(f"[Main] NL Response: {nl_message}")
+                    self.speech_queue.put(nl_message)
+                    self.sm_logger.info("Successfully put NL response into speech queue")
+                    self.transition(State.SPEAKING)
+
+                else:
+                    message_to_speak = "No valid commands or responses extracted, Please try again."
+                    self.sm_logger.info("No valid commands or responses extracted.")
+                    self.speech_queue.put(message_to_speak)
+                    self.transition(State.SPEAKING)
 
     def sound_player_worker(self):
         """

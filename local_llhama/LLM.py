@@ -366,23 +366,35 @@ class OllamaClient:
     Client to interact with Ollama server for language model inference.
     """
  
-    def __init__(self, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
+    def __init__(self,ha_client, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
         global SMART_HOME_PROMPT_TEMPLATE
         
         self.host = host.rstrip('/')
         self.model = model
-        SMART_HOME_PROMPT_TEMPLATE += "If you cannot respond with the command, try to provide a natural language response to the user."
-        self.system_prompt = SMART_HOME_PROMPT_TEMPLATE
- 
+        self.ha_client : HomeAssistantClient = ha_client
+        self.devices_context = self.ha_client.generate_devices_prompt_fragment()
+
+        SMART_HOME_PROMPT_TEMPLATE += """
+        If you cannot respond with a command, try to provide a natural language response 
+        to the user in this JSON format:
+
+        {{
+            "nl_response": "<string>"
+        }}
+        """
+        self.system_prompt = SMART_HOME_PROMPT_TEMPLATE.format(
+            devices_context=self.devices_context,
+        )
+        
     def set_model(self, model_name: str):
         self.model = model_name
  
     def set_system_prompt(self, prompt: str):
         self.system_prompt = prompt
- 
+    
     def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096):
-        url = f"{self.host}/api/generate"
- 
+        url = f"http://{self.host}/api/generate"  # add http://
+
         payload = {
             "model": self.model,
             "prompt": user_message,
@@ -393,20 +405,25 @@ class OllamaClient:
                 "num_predict": max_tokens
             },
             "stream": False,
-            "think" : False,
+            "think": False
         }
- 
-        headers = {'Content-Type': 'application/json'}
- 
+
+        response = requests.post(url, json=payload)
+
         try:
-            # This sends a POST request, equivalent to curl -X POST
-            response = requests.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            result = response.json()
-            return result.get('response', '').strip()
- 
-        except requests.RequestException as e:
-            error_msg = ''
-            if e.response is not None:
-                error_msg = e.response.text
-            return f"Error communicating with Ollama: {e}\nServer response: {error_msg}"
+            data = response.json()
+        except ValueError:
+            print("Server returned invalid JSON:", response.text)
+            data = {}
+
+        # Ollama API usually returns a list of objects in 'output'
+        # Extract the text safely
+        output = ""
+        if "response" in data:
+            output = str(data["response"])
+
+        # Now it's safe to preprocess
+        #text = self.preprocess_text(output)
+        print(output)
+
+        return json.loads(output)

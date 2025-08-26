@@ -24,14 +24,11 @@ from multiprocessing import Process, Queue
 
 # TTS imports for 
 from logging.handlers import QueueHandler
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import XttsAudioConfig
-from TTS.config.shared_configs import BaseDatasetConfig
-from TTS.tts.models.xtts import XttsArgs
+
 # === Custom Imports ===
 from .WebService import LocalLLHAMA_WebService
 #from .logger import  shared_logger
-from TTS.utils.radam import RAdam
+
 from . import system_controller as sr
 from .StateMachine import State
 
@@ -40,14 +37,10 @@ os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/local/cuda'
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # al;lows torch safe configs for coqui
-torch.serialization.add_safe_globals([XttsConfig])
-torch.serialization.add_safe_globals([XttsAudioConfig])
-torch.serialization.add_safe_globals([BaseDatasetConfig])
-torch.serialization.add_safe_globals([XttsArgs])
+
 
 # Allow Coqui TTS to unpickle custom objects
 torch.serialization.add_safe_globals([
-    RAdam,
     defaultdict,
     OrderedDict,
     builtin_dict,

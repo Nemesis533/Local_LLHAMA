@@ -160,3 +160,30 @@ body, html {
 #send-prompt-btn:hover {
   background-color: #0b7dda;
 }
+
+.log-warning {
+  color: #ffcc00; /* yellow */
+  font-weight: bold;
+}
+
+.log-info {
+  color: rgb(234, 0, 255); /* green */
+}
+
+.log-error {
+  color: #f44336; /* red */
+  font-weight: bold;
+}
+
+.http-message {
+  color: #ff9900;
+  font-weight: bold;
+}
+.log-line {
+  color: #0f0; /* default green */
+  white-space: pre-wrap;
+}
+
+.log-line.main-line {
+  color: cyan;
+}
