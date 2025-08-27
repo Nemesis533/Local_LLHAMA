@@ -158,6 +158,29 @@ class LocalLLHAMA_WebService:
                     return jsonify({"success": False, "error": "Invalid action"}), 400
             except Exception as e:
                 return jsonify({"success": False, "error": str(e)}), 500
+            
+        @self.app.route('/llm_status/<host>', methods=['GET'])
+        def llm_status(host):
+            """
+            @brief Returns the online/offline status of a given LLM host.
+
+            The frontend expects a JSON response with `status` = "online" or "offline".
+            """
+            try:
+                # For now, check if 'local_llm' process exists on *this machine*.
+                # (You could extend this to check other hosts if needed.)
+                process_found = any(
+                    'local_llm' in (proc.info['name'] or '') or
+                    'local_llm' in ' '.join(proc.info.get('cmdline', []))
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline'])
+                    if self._safe_process(proc)
+                )
+
+                status = "online" if process_found else "offline"
+                return jsonify({"status": status})
+
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)}), 500
 
     def _is_ip_allowed(self, ip):
         """

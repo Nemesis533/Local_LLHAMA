@@ -135,7 +135,8 @@ class TextToSpeech:
 
         print(f"Loading TTS model: {model_name}")
         self.tts : ChatterboxTTS = ChatterboxTTS.from_pretrained(device=device)
-        #self.speaker_embedding = self.tts.get_speaker_embedding(audio_prompt_path=self.speaker)
+        #generating the first inference to ensure memory is allocated correctly
+        wav = self.tts.generate("generating")
         print("TTS Model loaded on GPU")
 
     def preprocess_text(self, text):
@@ -231,7 +232,7 @@ class TextToSpeech:
             data = np.stack([data, data], axis=1)
 
         # Play the processed audio using sounddevice library
-        sd.play(data, samplerate=self.sr, blocksize=blocksize, latency=latency)
+        sd.play(data, samplerate=self.sr, blocksize=blocksize, latency=latency,device='default')
 
         # Wait until playback finishes before continuing
         sd.wait()
