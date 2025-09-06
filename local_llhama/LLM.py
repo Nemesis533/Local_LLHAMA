@@ -6,11 +6,69 @@ import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, StoppingCriteriaList,LlamaForSequenceClassification
 from accelerate import Accelerator
 from torch.nn.functional import softmax
-
+import requests
 # custom imports
 from .HA_Interfacer import HomeAssistantClient
 
+# Reusable system prompt template
+SMART_HOME_PROMPT_TEMPLATE = """
+You are a smart home assistant that extracts structured commands from user speech.
 
+Device list and supported actions:
+{devices_context}
+
+Your job:
+- Map user input (in any language) to the most likely **English** device name and action from the list above.
+- Do not make up device names or actions.
+- If the input is vague, infer the most appropriate valid command.
+- Extract one command per device only.
+- Always respond with a single valid JSON object matching the format below, and nothing else.
+
+Examples:
+
+User input:
+"What is the weather at home?"
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "home_weather",
+    "target": "home_weather"
+    }}
+]
+}}
+
+User input:
+"Turn off the wall-e alarm."
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "turn off",
+    "target": "wall-e alarm"
+    }}
+]
+}}
+
+User input:
+"Play some music"
+
+JSON response:
+{{"commands": []}}
+
+Respond in this format exactly:
+{{
+"commands": [
+    {{"action": "turn on", "target": "living room AC"}},
+    {{"action": "increase temperature", "target": "bedroom thermostat", "value": "20°C"}}
+]
+}}
+
+If nothing matches, respond with:
+{{"commands": []}}
+"""
 
 
 class StopOnTokens(StoppingCriteria):
@@ -138,74 +196,11 @@ class LLM_Class():
         @param transcription User speech input as a string.
         @return Formatted prompt string ready for LLM input.
         """
-        # Regenerate devices context if empty (for slight performance gain)
-        if self.devices_context == "":
-            devices_context = self.ha_client.generate_devices_prompt_fragment()
-        else:
-            devices_context = self.devices_context
-
-        # System prompt instructing the LLM on task and formatting
-        system_section = self.base_prompt.strip() if self.base_prompt else f"""
-        You are a smart home assistant that extracts structured commands from user speech.
-
-        Device list and supported actions:
-        {devices_context}
-
-        Your job:
-        - Map user input (in any language) to the most likely **English** device name and action from the list above.
-        - Do not make up device names or actions.
-        - If the input is vague, infer the most appropriate valid command.
-        - Extract one command per device only.
-        - Always respond with a single valid JSON object matching the format below, and nothing else.
-
-        Examples:
-
-        User input:
-        "What is the weather at home?"
-
-        JSON response:
-        {{
-        "commands": [
-            {{
-            "action": "home_weather",
-            "target": "home_weather"
-            }}
-        ]
-        }}
-
-        User input:
-        "Turn off the wall-e alarm."
-
-        JSON response:
-        {{
-        "commands": [
-            {{
-            "action": "turn off",
-            "target": "wall-e alarm"
-            }}
-        ]
-        }}
-
-        User input:
-        "Play some music"
-
-        JSON response:
-        {{"commands": []}}
-
-        Respond in this format exactly:
-        {{
-        "commands": [
-            {{"action": "turn on", "target": "living room AC"}},
-            {{"action": "increase temperature", "target": "bedroom thermostat", "value": "20°C"}}
-        ]
-        }}
-
-        If nothing matches, respond with:
-        {{"commands": []}}
-        """
+        # Regenerate devices context if empty
+        devices_context = self.devices_context or self.ha_client.generate_devices_prompt_fragment()
 
         # Combine system instructions with user input
-        return f"{system_section.strip()}\n\nUser input:\n{transcription.strip()}\n\nJSON response:"
+        return f"{SMART_HOME_PROMPT_TEMPLATE.format(devices_context=devices_context).strip()}\n\nUser input:\n{transcription.strip()}\n\nJSON response:"
 
     def parse_with_llm(self, transcription):
         """
@@ -365,3 +360,70 @@ class PromptGuard_Class:
         print(f"Suspicious score = {unsafe_score:.4f}, threshold = {self.threshold} → safe = {is_safe}")
 
         return is_safe
+
+class OllamaClient:
+    """
+    Client to interact with Ollama server for language model inference.
+    """
+ 
+    def __init__(self,ha_client, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
+        global SMART_HOME_PROMPT_TEMPLATE
+        
+        self.host = host.rstrip('/')
+        self.model = model
+        self.ha_client : HomeAssistantClient = ha_client
+        self.devices_context = self.ha_client.generate_devices_prompt_fragment()
+
+        SMART_HOME_PROMPT_TEMPLATE += """
+        If you cannot respond with a command, try to provide a natural language response 
+        to the user in this JSON format:
+
+        {{
+            "nl_response": "<string>"
+        }}
+        """
+        self.system_prompt = SMART_HOME_PROMPT_TEMPLATE.format(
+            devices_context=self.devices_context,
+        )
+        
+    def set_model(self, model_name: str):
+        self.model = model_name
+ 
+    def set_system_prompt(self, prompt: str):
+        self.system_prompt = prompt
+    
+    def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096):
+        url = f"http://{self.host}/api/generate"  # add http://
+
+        payload = {
+            "model": self.model,
+            "prompt": user_message,
+            "system": self.system_prompt,
+            "options": {
+                "temperature": temperature,
+                "top_p": top_p,
+                "num_predict": max_tokens
+            },
+            "stream": False,
+            "think": False
+        }
+
+        response = requests.post(url, json=payload)
+
+        try:
+            data = response.json()
+        except ValueError:
+            print("Server returned invalid JSON:", response.text)
+            data = {}
+
+        # Ollama API usually returns a list of objects in 'output'
+        # Extract the text safely
+        output = ""
+        if "response" in data:
+            output = str(data["response"])
+
+        # Now it's safe to preprocess
+        #text = self.preprocess_text(output)
+        print(output)
+
+        return json.loads(output)

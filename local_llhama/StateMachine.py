@@ -8,7 +8,7 @@ import logging
 import sys
 # custom imports
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
-from .LLM import LLM_Class
+from .LLM import LLM_Class, OllamaClient
 from .HA_Interfacer import HomeAssistantClient
 
 class State(Enum):
@@ -31,7 +31,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm: LLM_Class, device, ha_client, base_path=None ):
+    def __init__(self, command_llm, device, ha_client, base_path=None ):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -65,7 +65,8 @@ class StateMachineInstance:
 
         # Load the command LLM (using int8 for memory efficiency)
         self.command_llm = command_llm
-        self.command_llm.load_model(use_int8=True)
+        if not isinstance(self.command_llm, OllamaClient):
+            self.command_llm.load_model(use_int8=True)
 
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
@@ -118,7 +119,7 @@ class StateMachineInstance:
 
     def print_once(self, message, end='\n'):
         if message != self._last_printed_message:
-            self.sm_logger.info(message, end=end)
+            self.sm_logger.info(message)
             self._last_printed_message = message
         # Else do nothing, avoid printing duplicate lines
 
@@ -132,24 +133,36 @@ class StateMachineInstance:
         if current_state == State.PARSING_VOICE:
             try:
                 transcription = self.transcription_queue.get(timeout=2)
-                self.sm_logger.info(f"Got transcription: {transcription}")
+                self.sm_logger.info(f"[Main] Got transcription: {transcription}")
             except Empty:
                 self.sm_logger.info("Transcription queue was empty, retrying later...")
                 self.transition(State.LISTENING)
                 return
-
-            structured_output = self.command_llm.parse_with_llm(transcription)
-
-            if structured_output and structured_output.get("commands"):
-                self.sm_logger.info("Structured Commands:", structured_output)
-                self.command_queue.put(structured_output, timeout=1)
-                self.sm_logger.info("Successfully put command into queue")
-                self.transition(State.SEND_COMMANDS)
+            
+            if not isinstance(self.command_llm, OllamaClient):
+                structured_output = self.command_llm.parse_with_llm(transcription)
             else:
-                message_to_speak = "No valid commands extracted, Please try again."
-                self.sm_logger.info("No valid commands extracted.")
-                self.speech_queue.put(message_to_speak)
-                self.transition(State.SPEAKING)
+                structured_output = self.command_llm.send_message(transcription)
+
+            if structured_output:
+                if structured_output.get("commands"):
+                    self.sm_logger.info("Structured Commands:", structured_output)
+                    self.command_queue.put(structured_output, timeout=1)
+                    self.sm_logger.info("Successfully put command into queue")
+                    self.transition(State.SEND_COMMANDS)
+
+                elif structured_output.get("nl_response"):
+                    nl_message = structured_output.get("nl_response")
+                    self.sm_logger.info(f"[Main] NL Response: {nl_message}")
+                    self.speech_queue.put(nl_message)
+                    self.sm_logger.info("Successfully put NL response into speech queue")
+                    self.transition(State.SPEAKING)
+
+                else:
+                    message_to_speak = "No valid commands or responses extracted, Please try again."
+                    self.sm_logger.info("No valid commands or responses extracted.")
+                    self.speech_queue.put(message_to_speak)
+                    self.transition(State.SPEAKING)
 
     def sound_player_worker(self):
         """
@@ -215,7 +228,9 @@ class StateMachineInstance:
             self.sm_logger.info("Speaking response...")
             transcription = self.speech_queue.get()
             self.speaker.speak(transcription)
-            self.sound_player.play(SoundActions.action_closing)
+            time.sleep(0.3) #delay for more natural interactions
+            if not isinstance(self.command_llm, OllamaClient):
+                self.sound_player.play(SoundActions.action_closing)
             self.transition(State.LISTENING)
 
     def handle_error(self):
