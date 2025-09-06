@@ -228,7 +228,9 @@ class StateMachineInstance:
             self.sm_logger.info("Speaking response...")
             transcription = self.speech_queue.get()
             self.speaker.speak(transcription)
-            self.sound_player.play(SoundActions.action_closing)
+            time.sleep(0.3) #delay for more natural interactions
+            if not isinstance(self.command_llm, OllamaClient):
+                self.sound_player.play(SoundActions.action_closing)
             self.transition(State.LISTENING)
 
     def handle_error(self):
