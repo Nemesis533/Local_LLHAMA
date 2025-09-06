@@ -34,6 +34,18 @@ fi
 # Upgrade pip inside the virtual environment
 echo "Upgrading pip to the latest version..."
 pip install --upgrade pip
+# Install required Python packages
+echo "Installing required Python packages..."
+pip install --upgrade \
+requests \
+openai-whisper \
+flask \
+flask_socketio \
+openwakeword \
+pyaudio \
+sounddevice \
+pygame \
+TTS \
 
 # Install required Python packages
 echo "Installing required packages: torch, transformers, accelerate, flask, flask-cors, psutil, requests, TTS"

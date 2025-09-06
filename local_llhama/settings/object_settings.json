@@ -1,7 +1,7 @@
 {
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:port", "type": "str"},
-    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ957WNvyiHKnmT-_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
+    "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
+    "token": {"value": "eyJhbGc[...]XVCJ9.[...]0kKCC1X2w2bjPhk[...]PXIU_qsHstuY",
      "type": "str"},
     "allowed_entities": {
       "value": [
@@ -20,7 +20,7 @@
   "LocalLLMChecker": {
     "ALLOWED_IP_PREFIXES": {"value": ["192.168.1.", "127.0.0.1"], "type": "list"}
   },
-  "SettingLoader": {
+  "SettingLoaderClass": {
     "base_model_path": {
       "value": "/mnt/fast_storage/huggingface/hub/",
       "type": "str"
@@ -34,12 +34,24 @@
       "type": "str"
     },
     "use_guard_llm": {
-      "value": "True",
+      "value": "False",
       "type": "bool"
     },
     "load_models_in_8_bit": {
       "value": "True",
       "type": "bool"
+    },
+    "use_ollama": {
+      "value": "True",
+      "type": "bool"
+    },
+      "ollama_ip": {
+      "value": "192.168.xx.xxx:11434",
+      "type": "str"
+    },
+      "ollama_model": {
+      "value": "qwen3-14b-gpu128",
+      "type": "str"
     }
   }
 }

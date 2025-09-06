@@ -3,7 +3,7 @@ import json
 import torch
 
 # custom imports
-from .LLM import LLM_Class
+from .LLM import LLM_Class, OllamaClient
 
 class SettingLoaderClass:
     """
@@ -34,6 +34,9 @@ class SettingLoaderClass:
         self.use_guard_llm = True
         self.load_models_in_8_bit = True
         self.base_path = base_path
+        self.use_ollama = True
+        self.ollama_ip =""
+        self.ollama_model =""
         self.settings_file = f"{self.base_path}{self.json_path}"
         # Use CUDA if available, else fall back to CPU
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -46,6 +49,7 @@ class SettingLoaderClass:
         try:
             with open(f"{self.settings_file}", 'r') as f:
                 self.data = json.load(f)
+                print("Settings Loading Successful")
         except Exception as e:
             raise ValueError(f"Failed to load JSON file: {e}")
         
@@ -56,35 +60,37 @@ class SettingLoaderClass:
         @param ha_client: An instance of HomeAssistantClient to integrate LLM with home automation.
         @return: A loaded instance of LLM_Class.
         """
-        command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
-        print(f"Loading command LLM model from {command_llm_path}")
-        command_llm = LLM_Class(
-            model_path=self.base_model_path,
-            model_name=self.command_llm_name,
-            device=self.device,
-            ha_client=ha_client,
-            prompt_guard_model_name=self.prompt_guard_model_name,
-            load_guard=self.use_guard_llm                       
-        )        
+        if self.use_ollama:
+            command_llm = OllamaClient(ha_client,host=self.ollama_ip,model= self.ollama_model)
+        else:
+            command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
+            print(f"Loading command LLM model from {command_llm_path}")
+            command_llm = LLM_Class(
+                model_path=self.base_model_path,
+                model_name=self.command_llm_name,
+                device=self.device,
+                ha_client=ha_client,
+                prompt_guard_model_name=self.prompt_guard_model_name,
+                load_guard=self.use_guard_llm                       
+            )        
         return command_llm
 
     def apply(self, objects):
         """
-        @brief Applies loaded settings to a list of objects.
-        @param objects List of instances to update.
-        Also applies to self if SettingLoader is included.
+        Applies settings from self.data to given objects (and self).
+        Reflection-based: looks at each attribute in the class config
+        and assigns it if the object has a matching attribute.
         """
-        # Include self in the list if the user wants to load into loader's own vars
         all_objects = objects + [self]
 
         for obj in all_objects:
             cls_name = obj.__class__.__name__
+
+            # Skip if this object's class has no section in data
             if cls_name not in self.data:
                 continue
 
-            config = self.data[cls_name]
-
-            for attr, info in config.items():
+            for attr, info in self.data[cls_name].items():
                 if not hasattr(obj, attr):
                     print(f"[Warning] '{cls_name}' has no attribute '{attr}'")
                     continue
@@ -94,9 +100,10 @@ class SettingLoaderClass:
 
                 try:
                     converted_value = self.cast_value(raw_value, expected_type)
-                    setattr(obj, attr, converted_value)
+                    setattr(obj, attr, converted_value)  # reflection
                 except Exception as e:
                     print(f"[Error] Failed to set '{cls_name}.{attr}': {e}")
+
 
 
 

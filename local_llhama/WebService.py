@@ -79,6 +79,7 @@ class LocalLLHAMA_WebService:
         """
         @brief Registers all Flask HTTP routes for the web service.
         """
+        
 
         @self.app.route('/')
         def index():
@@ -86,6 +87,23 @@ class LocalLLHAMA_WebService:
             @brief Serves the main dashboard HTML page.
             """
             return send_file(self.static_path / 'dashboard.html')
+        
+        @self.app.route('/from_user_text', methods=['POST'])
+        def from_user_text():
+            """
+            Receives user text from the frontend and processes it.
+            """
+            data = request.get_json()
+            if not data or 'text' not in data:
+                return jsonify({"error": "No text provided"}), 400
+
+            user_text = data['text']
+            
+
+            print("Received user text:", user_text)
+            self.send_ollama_command(text=user_text)
+
+            return jsonify({"success": True})
 
         @self.app.route('/settings', methods=['GET'])
         def get_settings():
@@ -140,6 +158,29 @@ class LocalLLHAMA_WebService:
                     return jsonify({"success": False, "error": "Invalid action"}), 400
             except Exception as e:
                 return jsonify({"success": False, "error": str(e)}), 500
+            
+        @self.app.route('/llm_status/<host>', methods=['GET'])
+        def llm_status(host):
+            """
+            @brief Returns the online/offline status of a given LLM host.
+
+            The frontend expects a JSON response with `status` = "online" or "offline".
+            """
+            try:
+                # For now, check if 'local_llm' process exists on *this machine*.
+                # (You could extend this to check other hosts if needed.)
+                process_found = any(
+                    'local_llm' in (proc.info['name'] or '') or
+                    'local_llm' in ' '.join(proc.info.get('cmdline', []))
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline'])
+                    if self._safe_process(proc)
+                )
+
+                status = "online" if process_found else "offline"
+                return jsonify({"status": status})
+
+            except Exception as e:
+                return jsonify({"status": "error", "error": str(e)}), 500
 
     def _is_ip_allowed(self, ip):
         """
@@ -185,7 +226,19 @@ class LocalLLHAMA_WebService:
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
 
-
+    def send_ollama_command(self, text: str):
+        """
+        @brief Send an Ollama command to the message queue.
+        @param text: The command text to send.
+        """
+        if hasattr(self, "message_queue") and self.message_queue:
+            message = {
+                "type": "ollama_command",
+                "data": text
+            }
+            self.message_queue.put(message)
+        else:
+            raise RuntimeError("Message queue not initialized.")
 
     def _log_listener(self):
         """

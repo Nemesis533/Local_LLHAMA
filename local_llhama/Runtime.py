@@ -24,14 +24,11 @@ from multiprocessing import Process, Queue
 
 # TTS imports for 
 from logging.handlers import QueueHandler
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import XttsAudioConfig
-from TTS.config.shared_configs import BaseDatasetConfig
-from TTS.tts.models.xtts import XttsArgs
+
 # === Custom Imports ===
 from .WebService import LocalLLHAMA_WebService
 #from .logger import  shared_logger
-from TTS.utils.radam import RAdam
+
 from . import system_controller as sr
 from .StateMachine import State
 
@@ -40,14 +37,10 @@ os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/local/cuda'
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # al;lows torch safe configs for coqui
-torch.serialization.add_safe_globals([XttsConfig])
-torch.serialization.add_safe_globals([XttsAudioConfig])
-torch.serialization.add_safe_globals([BaseDatasetConfig])
-torch.serialization.add_safe_globals([XttsArgs])
+
 
 # Allow Coqui TTS to unpickle custom objects
 torch.serialization.add_safe_globals([
-    RAdam,
     defaultdict,
     OrderedDict,
     builtin_dict,
@@ -57,7 +50,7 @@ torch.serialization.add_safe_globals([
 ])
 
 
-def monitor_messages(ctx : sr.SystemContext):
+def monitor_messages(ctx: sr.SystemContext):
     """
     @brief Monitor and process messages from the queue including logs and commands.
     """
@@ -74,6 +67,11 @@ def monitor_messages(ctx : sr.SystemContext):
                 msg_type = message.get("type")
                 if msg_type == "console_output":
                     logger.info(message.get("data", ""))
+                elif msg_type == "ollama_command":
+                    command_data = message.get("data")
+                    logger.info(f"[Main] Received Ollama command: {command_data}")
+                    ctx.state_machine.transcription_queue.put(command_data)
+                    ctx.state_machine.transition(State.PARSING_VOICE)
                 else:
                     logger.warning(f"[Main] Unknown dict type: {msg_type}")
 
@@ -81,7 +79,6 @@ def monitor_messages(ctx : sr.SystemContext):
                 if message == "restart_llm":
                     logger.info("[Main] Restarting the system, please wait.")
                     ctx._should_stop.set()
-                    
                 else:
                     logger.warning(f"[Main] Unknown string message: {message}")
 
