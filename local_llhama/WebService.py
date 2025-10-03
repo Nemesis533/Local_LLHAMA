@@ -1,3 +1,4 @@
+# === System Imports ===
 import time
 import psutil
 from pathlib import Path
@@ -136,7 +137,7 @@ class LocalLLHAMA_WebService:
 
             process_found = any(
                 'local_llm' in (proc.info['name'] or '') or
-                'local_llm' in ' '.join(proc.info.get('cmdline', []))
+                'local_llm' in ' '.join(proc.info.get('cmdline') or [])
                 for proc in psutil.process_iter(['pid', 'name', 'cmdline'])
                 if self._safe_process(proc)
             )

@@ -1,11 +1,9 @@
+# === System Imports ===
 import os
 import pygame
 from enum import Enum
 import numpy as np
-import sounddevice as sd
 import re
-import librosa
-from chatterbox.tts import ChatterboxTTS
 import pyaudio
 import wave
 import time
@@ -13,6 +11,7 @@ from collections import deque
 import whisper  
 from openwakeword.model import Model
 import threading
+import pyttsx3
 
 
 # Use PulseAudio for SDL audio driver
@@ -34,6 +33,7 @@ class SoundPlayer:
         """
         @brief Initialize the pygame mixer, volume, sound cache, and sound file mappings.
         """
+        self.cleanup()
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)  # Init mixer with standard settings
         pygame.mixer.set_num_channels(16)  # Allow up to 16 concurrent sounds
 
@@ -48,6 +48,15 @@ class SoundPlayer:
             "action_closing": "action_closing.mp3",
             "system_error": "system_error.mp3"
         }
+
+    def cleanup(self):
+        try:
+            if pygame.mixer.get_init():  # Only cleanup if mixer was initialized
+                pygame.mixer.stop()
+                pygame.mixer.quit()
+        except pygame.error:
+            # Ignore errors if mixer was never initialized or already quit
+            pass
 
     def load_sound(self, sound_name):
         """
@@ -115,127 +124,69 @@ class SoundPlayer:
 class TextToSpeech:
     """
     @class TextToSpeech
-    @brief A text-to-speech utility class using the Coqui TTS library.
+    @brief A lightweight local text-to-speech utility class using pyttsx3.
 
-    Handles text preprocessing, speech synthesis, noise reduction, and playback.
+    Runs fully offline, cross-platform, and much faster than ML-based models.
     """
 
-    def __init__(self,base_path , device = 'cuda'):
+    def __init__(self,base_path="", rate: int = 180, volume: float = 1.0, voice: str = None):
         """
-        @brief Constructor that loads the specified TTS model.
+        @brief Constructor that initializes the TTS engine.
 
-        @param model_name: The Coqui TTS model name to load.
+        @param rate: Speech rate (default: 180 words per minute).
+        @param volume: Volume level between 0.0 and 1.0 (default: 1.0).
+        @param voice: Optional voice name to select (e.g., "female", "male", "english").
         """
-        model_name= os.path.expanduser("~/.local/share/tts/tts_models--en--ljspeech--tacotron2-DDC")
-        self.base_path = base_path
-        self.sounds_root_folder = os.path.join(self.base_path, "sounds")
-        self.speaker = "/home/llhama-usr/Local_LLHAMA/local_llhama/sounds/female.wav"
-        self.sr = 22050
-        
+        self.engine = pyttsx3.init()
+        self.engine.setProperty("rate", rate)
+        self.engine.setProperty("volume", max(0.0, min(volume, 1.0)))
 
-        print(f"Loading TTS model: {model_name}")
-        self.tts : ChatterboxTTS = ChatterboxTTS.from_pretrained(device=device)
-        #generating the first inference to ensure memory is allocated correctly
-        wav = self.tts.generate("generating")
-        print("TTS Model loaded on GPU")
+        # Set a specific voice if requested
+        if voice:
+            voices = self.engine.getProperty("voices")
+            selected = None
+            for v in voices:
+                if voice.lower() in v.name.lower():
+                    selected = v.id
+                    break
+            if selected:
+                self.engine.setProperty("voice", selected)
+            else:
+                print(f"[WARN] Requested voice '{voice}' not found. Using default.")
 
-    def preprocess_text(self, text):
+    def preprocess_text(self, text: str) -> str:
         """
         @brief Preprocesses the input text to remove unsupported characters.
 
-        Removes non-ASCII characters to prevent TTS issues.
+        Removes non-ASCII characters for cleaner synthesis.
 
         @param text: The raw input text.
-        @return: The cleaned/preprocessed text.
+        @return: Cleaned/preprocessed text.
         """
-        text = re.sub(r'[^\x00-\x7F]+', '', text)
-        return text
+        return re.sub(r"[^\x00-\x7F]+", "", text)
 
-    def set_playback_volume(self, data, volume=1.0):
+    def set_playback_volume(self, volume: float):
         """
-        @brief Adjusts the volume of audio data.
+        @brief Adjusts the playback volume.
 
-        Scales the audio waveform to the specified volume level.
-
-        @param data: The audio data as a NumPy array.
         @param volume: Volume scaling factor between 0.0 and 1.0.
-        @return: The volume-adjusted audio data.
         """
         volume = max(0.0, min(volume, 1.0))
-        return data * volume
+        self.engine.setProperty("volume", volume)
 
-    def reduce_noise(self, audio, sr, n_fft=2048, hop_length=512, n_std_thresh=1.6):
+    def speak(self, text: str):
         """
-        @brief Reduces background noise using spectral gating.
+        @brief Converts input text to speech and plays it.
 
-        Uses the spectrogram and standard deviation thresholding to suppress noise.
-
-        @param audio: The input audio waveform.
-        @param sr: The sample rate.
-        @param n_fft: Number of FFT components.
-        @param hop_length: Number of samples between frames.
-        @param n_std_thresh: Noise threshold in standard deviations.
-        @return: Denoised audio as a NumPy array.
+        @param text: The input text string to be synthesized and spoken.
         """
-        stft = librosa.stft(audio, n_fft=n_fft, hop_length=hop_length)
-        magnitude, phase = np.abs(stft), np.angle(stft)
-
-        mean_freq = np.mean(magnitude, axis=1, keepdims=True)
-        std_freq = np.std(magnitude, axis=1, keepdims=True)
-        noise_threshold = mean_freq + n_std_thresh * std_freq
-
-        mask = magnitude >= noise_threshold
-        clean_mag = magnitude * mask
-
-        cleaned_stft = clean_mag * np.exp(1j * phase)
-        denoised_audio = librosa.istft(cleaned_stft, hop_length=hop_length)
-
-        return denoised_audio
-
-    def speak(self, text: str, blocksize=4096, latency='low'):
-        """
-        @brief Converts input text to speech, processes audio, and plays it.
-        @param text The input text string to be synthesized and spoken.
-        @param blocksize The audio block size for playback buffering (default: 4096).
-        @param latency Latency setting for audio playback, e.g., 'low' or 'high' (default: 'low').
-        """
-
-        # Preprocess input text before TTS (e.g., cleanup, normalization)
         text = self.preprocess_text(text)
+        if not text.strip():
+            print("[INFO] Empty or invalid text, nothing to speak.")
+            return
 
-        # Generate waveform audio data from the text (returns raw wav samples)
-        wav = self.tts.generate(text) #, speaker_embedding=self.speaker_embedding)
-
-        # Convert waveform to float32 NumPy array for processing
-        wav = np.array(wav, dtype=np.float32)
-
-        # Adjust the playback volume (scale waveform amplitude)
-        wav = self.set_playback_volume(wav, volume=1)
-
-        # Reduce noise in the waveform to improve audio quality
-        denoised_data = self.reduce_noise(wav, self.sr)
-
-        # Ensure the denoised audio length matches the original waveform length
-        if len(denoised_data) < len(wav):
-            # Pad with zeros if denoised is shorter
-            denoised_data = np.pad(denoised_data, (0, len(wav) - len(denoised_data)), mode='constant')
-        elif len(denoised_data) > len(wav):
-            # Trim if denoised is longer
-            denoised_data = denoised_data[:len(wav)]
-
-        # Make sure audio data is contiguous in memory for playback
-        data = np.ascontiguousarray(np.squeeze(denoised_data))
-
-        print(f"Playing audio with sample rate: {self.sr}, blocksize: {blocksize}, latency: {latency}")
-
-        if data.ndim == 1:
-            data = np.stack([data, data], axis=1)
-
-        # Play the processed audio using sounddevice library
-        sd.play(data, samplerate=self.sr, blocksize=blocksize, latency=latency,device='default')
-
-        # Wait until playback finishes before continuing
-        sd.wait()
+        self.engine.say(text)
+        self.engine.runAndWait()
 
 class AudioTranscriptionClass:
     """

@@ -1,7 +1,7 @@
 {
   "HomeAssistantClient": {
     "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
-    "token": {"value": "eyJhbGc[...]XVCJ9.[...]0kKCC1X2w2bjPhk[...]PXIU_qsHstuY",
+    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI4ZjM1ZDVhZGI2OTg0OGNmYWNiZDg4MTQ1ZGRmZDQ4NCIsImlhdCI6MTc0NDk5NzEwNCwiZXhwIjoyMDYwMzU3MTA0fQ.57WNvyiHKnmT-_FztWdyseT2RYjfAyJ3MxKo9VLQXlE",
      "type": "str"},
     "allowed_entities": {
       "value": [
@@ -46,11 +46,11 @@
       "type": "bool"
     },
       "ollama_ip": {
-      "value": "192.168.xx.xxx:11434",
+      "value": "192.168.88.239:11434",
       "type": "str"
     },
       "ollama_model": {
-      "value": "qwen3-14b-gpu128",
+      "value": "gpt-oss:20b",
       "type": "str"
     }
   }

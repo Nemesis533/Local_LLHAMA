@@ -1,4 +1,4 @@
-# system imports
+# === System Imports ===
 import os
 import torch
 import json
@@ -7,7 +7,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, 
 from accelerate import Accelerator
 from torch.nn.functional import softmax
 import requests
-# custom imports
+
+# === Custom Imports ===
 from .HA_Interfacer import HomeAssistantClient
 
 # Reusable system prompt template
@@ -393,7 +394,7 @@ class OllamaClient:
         self.system_prompt = prompt
     
     def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096):
-        url = f"http://{self.host}/api/generate"  # add http://
+        url = f"http://{self.host}/api/generate"  
 
         payload = {
             "model": self.model,
@@ -405,12 +406,11 @@ class OllamaClient:
                 "num_predict": max_tokens
             },
             "stream": False,
-            "think": False
+            "reasoning_effort": "low"
         }
 
-        response = requests.post(url, json=payload)
-
         try:
+            response = requests.post(url, json=payload)
             data = response.json()
         except ValueError:
             print("Server returned invalid JSON:", response.text)
@@ -422,8 +422,6 @@ class OllamaClient:
         if "response" in data:
             output = str(data["response"])
 
-        # Now it's safe to preprocess
-        #text = self.preprocess_text(output)
         print(output)
 
         return json.loads(output)

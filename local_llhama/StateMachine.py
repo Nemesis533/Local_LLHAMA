@@ -1,12 +1,12 @@
-# system imports
+# === System Imports ===
 import threading
 from queue import Queue, Empty
 import time
 from enum import Enum
 import time
 import logging
-import sys
-# custom imports
+
+# === Custom Imports ===
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
 from .LLM import LLM_Class, OllamaClient
 from .HA_Interfacer import HomeAssistantClient
