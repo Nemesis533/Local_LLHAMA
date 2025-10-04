@@ -2,6 +2,8 @@
 
 **Local_LLAMA** is a local-first, multilingual, LLaMA-powered voice assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/). Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. Being an indipendent system that can run on base linux and interface with HA (or potentially other domotics systems) via API, it also bypasses many of the compatibility restrictions that running a similar system in HA have (such as smart-speaker compatibility).
 
+## UPDATE - The system will soon be overhauled and updated to pimprove both performance, maintenability and features; current development branch is 'refactor'
+
 ## Features
 
 - Wake word detection using `OpenWakeWord`
