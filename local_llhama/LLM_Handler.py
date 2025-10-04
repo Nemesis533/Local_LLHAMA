@@ -375,13 +375,31 @@ class OllamaClient:
         self.ha_client : HomeAssistantClient = ha_client
         self.devices_context = self.ha_client.generate_devices_prompt_fragment()
 
+        self.languages = {
+                "English": "en",
+                "French": "fr",
+                "German": "de",
+                "Italian": "it",
+                "Spanish": "es",
+                "Russian": "ru"
+            }
+
         SMART_HOME_PROMPT_TEMPLATE += """
-        If you cannot respond with a command, try to provide a natural language response 
+        If you cannot respond with a command, try to provide a natural language response and the language you are providing it in 
         to the user in this JSON format:
 
         {{
-            "nl_response": "<string>"
+            "nl_response": "<string>",
+            "language":"<string>"
         }}
+
+        chosign between the following language tags                
+                "English": "en",
+                "French": "fr",
+                "German": "de",
+                "Italian": "it",
+                "Spanish": "es",
+                "Russian": "ru"
         """
         self.system_prompt = SMART_HOME_PROMPT_TEMPLATE.format(
             devices_context=self.devices_context,

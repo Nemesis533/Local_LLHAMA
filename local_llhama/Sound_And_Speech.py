@@ -3,7 +3,7 @@ import os
 import pygame
 from enum import Enum
 import numpy as np
-import re
+from pathlib import Path
 import pyaudio
 import wave
 import time
@@ -11,15 +11,18 @@ from collections import deque
 import whisper  
 from openwakeword.model import Model
 import threading
-import pyttsx3
+from piper import PiperVoice
+from enum import Enum
 
+# === Custom Imports ===
+from .Shared_Logger import LogLevel
 
 # Use PulseAudio for SDL audio driver
 os.environ['SDL_AUDIODRIVER'] = 'pulse'
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
 # Enum to represent different sound actions by name
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------- 
 class SoundActions(Enum):
     system_awake = 1      # Sound when system wakes up
     action_closing = 2    # Sound when an action closes
@@ -33,6 +36,7 @@ class SoundPlayer:
         """
         @brief Initialize the pygame mixer, volume, sound cache, and sound file mappings.
         """
+        self.class_prefix_message = "[SoundPlayer]"
         self.cleanup()
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)  # Init mixer with standard settings
         pygame.mixer.set_num_channels(16)  # Allow up to 16 concurrent sounds
@@ -70,7 +74,7 @@ class SoundPlayer:
                 # Load sound file and cache it
                 self.loaded_sounds[sound_name] = pygame.mixer.Sound(audio_path)
             except pygame.error as e:
-                print(f"[Error] Failed to load sound '{sound_name}': {e}")
+                print(f"{self.class_prefix_message} [{LogLevel.ERROR.name}] Failed to load sound '{sound_name}': {e}")
                 return None
         return self.loaded_sounds[sound_name]
 
@@ -121,72 +125,89 @@ class SoundPlayer:
         else:
             raise ValueError("Volume must be between 0.0 and 1.0")
 
+
 class TextToSpeech:
     """
-    @class TextToSpeech
-    @brief A lightweight local text-to-speech utility class using pyttsx3.
-
-    Runs fully offline, cross-platform, and much faster than ML-based models.
+    Text-to-Speech using Piper with real-time streaming playback and LLM language mapping.
     """
 
-    def __init__(self,base_path="", rate: int = 180, volume: float = 1.0, voice: str = None):
-        """
-        @brief Constructor that initializes the TTS engine.
+    # Map language tags to Piper voice initials
+    LANG_VOICE_INITIALS = {
+        "en": "en",
+        "fr": "fr",
+        "de": "de",
+        "it": "it",
+        "es": "es",
+        "ru": "ru"
+    }
 
-        @param rate: Speech rate (default: 180 words per minute).
-        @param volume: Volume level between 0.0 and 1.0 (default: 1.0).
-        @param voice: Optional voice name to select (e.g., "female", "male", "english").
-        """
-        self.engine = pyttsx3.init()
-        self.engine.setProperty("rate", rate)
-        self.engine.setProperty("volume", max(0.0, min(volume, 1.0)))
-
-        # Set a specific voice if requested
-        if voice:
-            voices = self.engine.getProperty("voices")
-            selected = None
-            for v in voices:
-                if voice.lower() in v.name.lower():
-                    selected = v.id
-                    break
-            if selected:
-                self.engine.setProperty("voice", selected)
-            else:
-                print(f"[WARN] Requested voice '{voice}' not found. Using default.")
+    def __init__(self, voice_dir: str):
+        self.voice_dir = Path(voice_dir)
+        if not self.voice_dir.exists():
+            raise FileNotFoundError(f"Voice directory not found: {voice_dir}")
+        self.class_prefix_message = "[TextToSpeech]"
+        self.p = pyaudio.PyAudio()
+        self.voice = None
 
     def preprocess_text(self, text: str) -> str:
+        return text.strip()
+
+    def select_voice_by_lang(self, lang_tag: str):
         """
-        @brief Preprocesses the input text to remove unsupported characters.
-
-        Removes non-ASCII characters for cleaner synthesis.
-
-        @param text: The raw input text.
-        @return: Cleaned/preprocessed text.
+        Dynamically select a Piper voice based on the language tag from LLM.
         """
-        return re.sub(r"[^\x00-\x7F]+", "", text)
+        if lang_tag not in self.LANG_VOICE_INITIALS:
+            raise ValueError(f"Unsupported language tag: {lang_tag}")
 
-    def set_playback_volume(self, volume: float):
+        prefix = self.LANG_VOICE_INITIALS[lang_tag]
+        matching_files = list(self.voice_dir.glob(f"{prefix}_*.onnx"))
+
+        if not matching_files:
+            raise FileNotFoundError(f"No voice found for language '{lang_tag}' in {self.voice_dir}")
+
+        voice_file = matching_files[0]  # Pick first match
+        self.voice = PiperVoice.load(voice_file)
+        print(f"{self.class_prefix_message} Loaded voice: {voice_file.name}")
+
+    def speak(self, text: str, lang_tag: str):
         """
-        @brief Adjusts the playback volume.
-
-        @param volume: Volume scaling factor between 0.0 and 1.0.
-        """
-        volume = max(0.0, min(volume, 1.0))
-        self.engine.setProperty("volume", volume)
-
-    def speak(self, text: str):
-        """
-        @brief Converts input text to speech and plays it.
-
-        @param text: The input text string to be synthesized and spoken.
+        Stream audio and play it in real-time while generating, using language from LLM.
         """
         text = self.preprocess_text(text)
-        if not text.strip():
-            print("[INFO] Empty or invalid text, nothing to speak.")
+        if not text:
+            raise ValueError(f"{self.class_prefix_message} Empty or invalid text")
+
+        # Load voice based on LLM language tag
+        self.select_voice_by_lang(lang_tag)
+
+        # Play first chunk to get audio params
+        first_chunk = None
+        for chunk in self.voice.synthesize(text):
+            first_chunk = chunk
+            break
+
+        if first_chunk is None:
             return
 
-        self.engine.say(text)
-        self.engine.runAndWait()
+        stream = self.p.open(
+            format=self.p.get_format_from_width(first_chunk.sample_width),
+            channels=first_chunk.sample_channels,
+            rate=first_chunk.sample_rate,
+            output=True,
+        )
+
+        stream.write(first_chunk.audio_int16_bytes)
+
+        # Continue streaming remaining chunks
+        for chunk in self.voice.synthesize(text):
+            stream.write(chunk.audio_int16_bytes)
+
+        stream.stop_stream()
+        stream.close()
+
+    def __del__(self):
+        self.p.terminate()
+
 
 class AudioTranscriptionClass:
     """
@@ -195,6 +216,7 @@ class AudioTranscriptionClass:
     """
 
     def __init__(self):
+        self.class_prefix_message = "[AudioTranscriptionClass]"
         self.model_name = "medium"  # Name of the Whisper model to use
         self.model = None           # Will hold the loaded Whisper model
 
@@ -205,6 +227,7 @@ class AudioTranscriptionClass:
         @param device: The device to load the model on ('cpu', 'cuda', etc.).
         """
         self.model = whisper.load_model(self.model_name, device=device)
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Whisper model '{self.model_name}' loaded on {device}.")
 
     def transcribe_audio(self, filename):
         """
@@ -214,69 +237,43 @@ class AudioTranscriptionClass:
         @return: The transcribed text, or an empty string if the file is not found.
         """
         if not os.path.exists(filename):
-            print(f"Error: File {filename} not found!")
+            print(f"{self.class_prefix_message} [{LogLevel.ERROR.name}] File {filename} not found!")
             return ""
 
-        print(f"Processing {filename} with Whisper...")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing {filename} with Whisper...")
         result = self.model.transcribe(filename)
         transcription = result["text"]
 
         os.remove(filename)  # Cleanup
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription completed and temporary file removed.")
         return transcription
+
 
 class AudioRecorderClass:
     """
     @class AudioRecorderClass
     @brief Records audio from a microphone and transcribes it using Whisper.
-
-    Handles noise floor detection, silence detection, and real-time RMS monitoring to 
-    determine when to stop recording.
     """
 
     def __init__(self, noise_floor_monitor, duration=10, sample_rate=16000, channels=1, chunk_size=1024):
-        """
-        @brief Constructor for AudioRecorderClass.
-
-        Initializes recording parameters and sets up RMS buffers for silence detection.
-
-        @param noise_floor_monitor: Instance of NoiseFloorMonitor for background noise analysis.
-        @param duration: Maximum recording duration in seconds.
-        @param sample_rate: Sampling rate in Hz.
-        @param channels: Number of input audio channels.
-        @param chunk_size: Number of frames per buffer (block size).
-        """
-        self.duration = duration                          # Max duration to record
-        self.sample_rate = sample_rate                    # Sampling rate
-        self.channels = channels                          # Mono or stereo
-        self.chunk_size = chunk_size                      # Size of each buffer chunk
+        self.class_prefix_message = "[AudioRecorderClass]"
+        self.duration = duration
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.chunk_size = chunk_size
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
-        self.noise_floor_multiplier = 0.95              # Threshold multiplier for silence detection
-        self.noise_threshold = 0                          # Will be set based on detected noise floor
-        self.silence_window_seconds = 2                   # Time to average for silence detection
+        self.noise_floor_multiplier = 0.95
+        self.noise_threshold = 0
+        self.silence_window_seconds = 2
         self.max_chunks = int(self.sample_rate / self.chunk_size * self.silence_window_seconds)
-        self.rms_values = deque(maxlen=self.max_chunks)   # Recent RMS values for silence detection
+        self.rms_values = deque(maxlen=self.max_chunks)
 
     def get_silence(self):
-        """
-        @brief Calculates the average RMS over the recent silence window.
-
-        @return: Mean of RMS values stored in the buffer.
-        """
         if not self.rms_values:
             return 0.0
         return sum(self.rms_values) / len(self.rms_values)
 
     def record_audio(self, transcriptor: AudioTranscriptionClass, noise_floor):
-        """
-        @brief Records audio from the microphone until silence is detected or duration expires.
-
-        Uses RMS level comparison to noise threshold for early stopping. Once recorded, 
-        it saves the audio as a WAV file and transcribes it using the provided Whisper-based transcriptor.
-
-        @param transcriptor: Instance of AudioTranscriptionClass used to transcribe audio.
-        @param noise_floor: Baseline noise floor value to set silence threshold.
-        @return: Transcribed text from recorded audio.
-        """
         p = pyaudio.PyAudio()
 
         stream = p.open(format=pyaudio.paInt16,
@@ -288,10 +285,10 @@ class AudioRecorderClass:
         self.noise_threshold = noise_floor * self.noise_floor_multiplier
         frames = []
 
-        print(f"Recording started, listening for at least 3 seconds and up to {self.duration} seconds...")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording started, listening for at least 3 seconds and up to {self.duration} seconds...")
 
         start_time = time.time()
-        min_recording_duration = 2  # Minimum time before evaluating silence
+        min_recording_duration = 2
 
         while True:
             data = stream.read(self.chunk_size)
@@ -306,11 +303,11 @@ class AudioRecorderClass:
 
             if elapsed_time >= min_recording_duration:
                 if measured_rms < self.noise_threshold and len(self.rms_values) >= (self.max_chunks - 1):
-                    print(f"RMS ({measured_rms:.2f}) dropped below noise threshold ({self.noise_threshold:.2f}), stopping recording.")
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RMS ({measured_rms:.2f}) dropped below noise threshold ({self.noise_threshold:.2f}), stopping recording.")
                     break
 
             if elapsed_time > self.duration:
-                print(f"Recording duration of {self.duration} seconds reached.")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording duration of {self.duration} seconds reached.")
                 break
 
         stream.stop_stream()
@@ -327,38 +324,23 @@ class AudioRecorderClass:
         transcription = transcriptor.transcribe_audio(filename)
         return transcription
 
+
 class NoiseFloorMonitor:
     """
     @class NoiseFloorMonitor
     @brief Monitors and calculates the noise floor (RMS) in an audio stream.
-
-    Maintains a running buffer of RMS values to estimate background noise over time.
     """
 
     def __init__(self, rate=16000, chunk_size=1024, window_seconds=5):
-        """
-        @brief Constructor for NoiseFloorMonitor.
-
-        Initializes parameters for sampling rate, chunk size, and averaging window.
-        
-        @param rate: The sampling rate of the audio in Hz.
-        @param chunk_size: Number of samples per audio chunk.
-        @param window_seconds: Number of seconds to average RMS over.
-        """
-        self.rate = rate                          # Audio sampling rate
-        self.chunk_size = chunk_size              # Size of each audio chunk
-        self.window_seconds = window_seconds      # Duration of RMS averaging window
+        self.class_prefix_message = "[NoiseFloorMonitor]"
+        self.rate = rate
+        self.chunk_size = chunk_size
+        self.window_seconds = window_seconds
         self.max_chunks = int(self.rate / self.chunk_size * self.window_seconds)
-        self.rms_values = deque(maxlen=self.max_chunks)  # Buffer for recent RMS values
+        self.rms_values = deque(maxlen=self.max_chunks)
         self.noise_floor_multiplier = 1.05
 
     def _calculate_rms(self, data):
-        """
-        @brief Calculates the Root Mean Square (RMS) value from raw audio bytes.
-
-        @param data: Byte string of audio data.
-        @return: RMS value as a float.
-        """
         audio_data = np.frombuffer(data, dtype=np.int16)
         if audio_data.size == 0:
             return 0.0
@@ -369,68 +351,35 @@ class NoiseFloorMonitor:
         return np.sqrt(mean_squared)
 
     def update_and_get_average_rms(self, data):
-        """
-        @brief Updates the RMS buffer with new audio data and returns the running average in dBFS.
-
-        @param data: Byte string of audio data.
-        @return: Running average RMS in decibels relative to full scale (dBFS).
-        """
         rms = self._calculate_rms(data) 
         self.rms_values.append(self.rms_to_dbfs(rms))
         return float(np.mean(self.rms_values))
     
     def get_noise_floor(self):
-        """
-        @brief Returns the current estimated noise floor in dBFS.
-
-        @return: Average of the stored RMS values in dBFS.
-        """
         if not self.rms_values:
             return 0.0
-        return self.noise_floor_multiplier*sum(self.rms_values) / len(self.rms_values)
+        return self.noise_floor_multiplier * sum(self.rms_values) / len(self.rms_values)
     
     def rms_to_dbfs(self, rms, ref=32768.0):
-        """
-        @brief Converts an RMS value to dBFS (decibels relative to full scale).
-
-        @param rms: The RMS value to convert.
-        @param ref: The reference value for 0 dBFS. Default is 32768.0 (max 16-bit PCM).
-        @return: dBFS value as a float.
-        """
         if rms == 0:
             return -float('inf')
         return 20 * np.log10(rms / ref)
+
 
 class WakeWordListener:
     """
     @class WakeWordListener
     @brief Listens to the microphone and detects a predefined wake word using OpenWakeWord.
-
-    Continuously streams audio, analyzes it in real time, and triggers when the wake word is detected.
     """
 
     def __init__(self, noise_floor_monitor):
-        """
-        @brief Constructor for WakeWordListener.
-
-        @param noise_floor_monitor: Instance of NoiseFloorMonitor to track RMS levels for ambient noise.
-        """
-        self.wakeword_thr = 0.70  # Confidence threshold for wake word detection
+        self.class_prefix_message = "[WakeWordListener]"
+        self.wakeword_thr = 0.70
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
         self.stop_event = threading.Event()
 
     def listen_for_wake_word(self, result_queue):
         while not self.stop_event.is_set():
-            """
-            @brief Continuously listens to audio input and triggers when a wake word is detected.
-
-            Uses OpenWakeWord for prediction and compares the average score to the threshold.
-            Sends the current noise floor to the result queue upon detection.
-
-            @param result_queue: Queue to communicate detection result (e.g., noise floor) back to main thread.
-            """
-            
-
             owwModel = Model(inference_framework="tflite")
             CHUNK = 1280
 
@@ -441,9 +390,9 @@ class WakeWordListener:
                                     input=True,
                                     frames_per_buffer=CHUNK)
 
-            cooldown_time = 2             # Minimum time between detections
-            ignore_rms_window = 3         # Time in seconds to ignore RMS updates after detection
-            last_detection_time = 0       # Timestamp of the last wake word detection
+            cooldown_time = 2
+            ignore_rms_window = 3
+            last_detection_time = 0
 
             while True:
                 audio_data = mic_stream.read(CHUNK)
@@ -452,22 +401,19 @@ class WakeWordListener:
 
                 current_time = time.time()
 
-                # Update noise floor only if not recently triggered
                 if (current_time - last_detection_time) > ignore_rms_window:
                     self.noise_floor_monitor.update_and_get_average_rms(audio_data)
 
                 for mdl in owwModel.prediction_buffer.keys():
                     scores = list(owwModel.prediction_buffer[mdl])
-                    last_scores = scores[-5:]  # Get last 5 predictions
+                    last_scores = scores[-5:]
                     avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
 
                     if avg_score >= self.wakeword_thr and (current_time - last_detection_time) > cooldown_time:
                         last_detection_time = current_time
-
-                        # Clear previous results
                         while not result_queue.empty():
                             result_queue.get()
-
                         noise_floor = self.noise_floor_monitor.get_noise_floor()
                         result_queue.put(noise_floor)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue.")
                         break

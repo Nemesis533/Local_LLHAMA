@@ -35,6 +35,7 @@ class LocalLLHamaSystemController:
         self.command_llm = None
         self.state_machine: StateMachineInstance = None
         self._should_stop = threading.Event()
+        self.started = False
 
 
     # === Setup & Initialization Methods ===
@@ -184,3 +185,5 @@ class LocalLLHamaSystemController:
         self.apply_additional_settings(loader, self.state_machine)
             
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] System Started")    
+
+        self.started = True

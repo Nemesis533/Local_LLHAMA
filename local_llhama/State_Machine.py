@@ -43,6 +43,7 @@ class StateMachineInstance:
         self.device = device
         self.noise_floor = 0
         self.base_path = base_path
+        voice_dir = "/home/llhama-usr/Local_LLHAMA/piper_voices"
 
         self.web_server_message_queue  : mp.Queue  = web_server_message_queue
         self.action_message_queue : mp.Queue  = action_message_queue
@@ -57,6 +58,7 @@ class StateMachineInstance:
         # Initialize queues and threads
         self.load_queues()
 
+
         self.stop_event = threading.Event()
 
         # Instantiate audio and NLP components
@@ -67,7 +69,9 @@ class StateMachineInstance:
         self.transcriptor.init_model(device)
 
         self.sound_player = SoundPlayer(self.base_path)
-        self.speaker = TextToSpeech(base_path=self.base_path)
+        self.speaker = TextToSpeech(voice_dir=voice_dir)
+
+        self.load_threads()
 
         # Load the command LLM (using int8 for memory efficiency)
         self.command_llm = command_llm
@@ -224,8 +228,9 @@ class StateMachineInstance:
 
                 elif structured_output.get("nl_response"):
                     nl_message = structured_output.get("nl_response")
+                    lang = structured_output.get("language")
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] NL Response: {nl_message}")
-                    self.speech_queue.put(nl_message)
+                    self.speech_queue.put([nl_message,lang])
                     message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
                     self.send_messages(message)
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
@@ -300,7 +305,7 @@ class StateMachineInstance:
         if current_state == State.SPEAKING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Speaking response...")
             transcription = self.speech_queue.get()
-            self.speaker.speak(transcription)
+            self.speaker.speak(transcription[0],transcription[1])
             time.sleep(0.3) #delay for more natural interactions
             if not isinstance(self.command_llm, OllamaClient):
                 self.sound_player.play(SoundActions.action_closing)
@@ -367,7 +372,6 @@ class StateMachineInstance:
                 if current_state == State.LISTENING and wakeword_data:
                     self.print_once(f"Wakeword detected! Transitioning to RECORDING. Noise Floor is {wakeword_data}")
                     self.noise_floor = wakeword_data
-
                     # Clear any remaining wake word events to avoid stale data
                     while not self.result_queue.empty():
                         self.result_queue.get()
