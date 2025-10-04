@@ -11,7 +11,7 @@ from collections import deque
 import whisper  
 from openwakeword.model import Model
 import threading
-from piper import PiperVoice
+from piper import SynthesisConfig, PiperVoice
 from enum import Enum
 
 # === Custom Imports ===
@@ -131,7 +131,6 @@ class TextToSpeech:
     Text-to-Speech using Piper with real-time streaming playback and LLM language mapping.
     """
 
-    # Map language tags to Piper voice initials
     LANG_VOICE_INITIALS = {
         "en": "en",
         "fr": "fr",
@@ -153,9 +152,6 @@ class TextToSpeech:
         return text.strip()
 
     def select_voice_by_lang(self, lang_tag: str):
-        """
-        Dynamically select a Piper voice based on the language tag from LLM.
-        """
         if lang_tag not in self.LANG_VOICE_INITIALS:
             raise ValueError(f"Unsupported language tag: {lang_tag}")
 
@@ -165,45 +161,42 @@ class TextToSpeech:
         if not matching_files:
             raise FileNotFoundError(f"No voice found for language '{lang_tag}' in {self.voice_dir}")
 
-        voice_file = matching_files[0]  # Pick first match
+        voice_file = matching_files[0]
         self.voice = PiperVoice.load(voice_file)
         print(f"{self.class_prefix_message} Loaded voice: {voice_file.name}")
 
     def speak(self, text: str, lang_tag: str):
-        """
-        Stream audio and play it in real-time while generating, using language from LLM.
-        """
         text = self.preprocess_text(text)
         if not text:
             raise ValueError(f"{self.class_prefix_message} Empty or invalid text")
 
-        # Load voice based on LLM language tag
         self.select_voice_by_lang(lang_tag)
 
-        # Play first chunk to get audio params
-        first_chunk = None
-        for chunk in self.voice.synthesize(text):
-            first_chunk = chunk
-            break
-
-        if first_chunk is None:
-            return
-
-        stream = self.p.open(
-            format=self.p.get_format_from_width(first_chunk.sample_width),
-            channels=first_chunk.sample_channels,
-            rate=first_chunk.sample_rate,
-            output=True,
+        # Synthesis configuration for natural voice
+        syn_config = SynthesisConfig(
+            volume=0.5,          # half as loud
+            length_scale=1.0,    # slower, more natural
+            noise_scale=1.0,     # natural variation
+            noise_w_scale=1.0,   # more speaking variation
+            normalize_audio=False
         )
 
-        stream.write(first_chunk.audio_int16_bytes)
+        stream = None
 
-        # Continue streaming remaining chunks
-        for chunk in self.voice.synthesize(text):
+        # Stream audio in real-time
+        for i, chunk in enumerate(self.voice.synthesize(text, syn_config=syn_config)):
+            if stream is None:
+                stream = self.p.open(
+                    format=self.p.get_format_from_width(chunk.sample_width),
+                    channels=chunk.sample_channels,
+                    rate=chunk.sample_rate,
+                    output=True,
+                )
             stream.write(chunk.audio_int16_bytes)
 
-        stream.stop_stream()
-        stream.close()
+        if stream:
+            stream.stop_stream()
+            stream.close()
 
     def __del__(self):
         self.p.terminate()
