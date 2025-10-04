@@ -1,18 +1,20 @@
-from flask import Flask, jsonify, request, abort, send_file
+from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import io
 import threading
-import logging
 import socket
 import queue
 from pathlib import Path
 import psutil
 import traceback
-
+import logging
 
 # Import blueprints from the routes package
 from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp
+
+# Import LogLevel
+from .Shared_Logger import LogLevel
 
 
 class LocalLLHAMA_WebService:
@@ -22,11 +24,8 @@ class LocalLLHAMA_WebService:
         self.port = port
         self.stdout_buffer = io.StringIO()
 
-        # Logging setup
-        buffer_handler = logging.StreamHandler(self.stdout_buffer)
-        buffer_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        buffer_handler.setFormatter(formatter)
+        # Class prefix for messages
+        self.class_prefix_message = "[WebServer]"
 
         # Allowed IPs
         self.ALLOWED_IP_PREFIXES = ['192.168.88.', '127.0.0.1']
@@ -66,27 +65,10 @@ class LocalLLHAMA_WebService:
         # Background log listener
         self.socketio.start_background_task(self._log_listener)
 
-        # Suppress werkzeug logs
-        log = logging.getLogger('werkzeug')
-        log.setLevel(logging.ERROR)
-
-
     def _is_ip_allowed(self, ip):
-        """
-        @brief Checks if the given IP address is allowed to access the service.
-
-        @param ip The remote IP address as a string.
-        @return True if allowed, False otherwise.
-        """
         return any(ip.startswith(prefix) for prefix in self.ALLOWED_IP_PREFIXES)
 
     def _safe_process(self, proc):
-        """
-        @brief Validates that process info is accessible without raising exceptions.
-
-        @param proc A psutil.Process instance.
-        @return True if process info is accessible, False otherwise.
-        """
         try:
             proc.info
             return True
@@ -96,10 +78,10 @@ class LocalLLHAMA_WebService:
     def handle_connect(self):
         ip = request.remote_addr
         if not self._is_ip_allowed(ip):
-            print(f"Denied connection from {ip}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Denied connection from {ip}")
             return False  # Reject connection
 
-        print('Client connected:', request.sid)
+        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client connected: {request.sid}")
         with self.clients_lock:
             self.connected_clients.add(request.sid)
 
@@ -111,15 +93,11 @@ class LocalLLHAMA_WebService:
         )
 
     def handle_disconnect(self):
-        print('Client disconnected:', request.sid)
+        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client disconnected: {request.sid}")
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
 
     def send_ollama_command(self, text: str):
-        """
-        @brief Send an Ollama command to the message queue.
-        @param text: The command text to send.
-        """
         if hasattr(self, "message_queue") and self.message_queue:
             message = {
                 "type": "ollama_command",
@@ -130,9 +108,6 @@ class LocalLLHAMA_WebService:
             raise RuntimeError("Message queue not initialized.")
 
     def _log_listener(self):
-        """
-        Runs in a Socket.IO-managed background task.
-        """
         while True:
             try:
                 message = self.message_queue.get(timeout=1)
@@ -143,39 +118,31 @@ class LocalLLHAMA_WebService:
                 elif isinstance(message, logging.LogRecord):
                     log_line = f"{message.levelname} - {message.name} - {message.getMessage()}"
                 else:
-                    print(f"Received unexpected message type: {type(message)}")
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Received unexpected message type: {type(message)}")
 
                 if log_line:
-                    # buffer it somewhere if you want; here we just emit
                     with self.app.app_context():
-                        # copy set to avoid mutation while iterating
                         for sid in list(self.connected_clients):
                             self.socketio.emit(
                                 'log_line',
                                 {'line': log_line},
                                 room=sid,
-                                namespace='/'   # adjust if using a custom namespace
+                                namespace='/'
                             )
-
-                    # yield to the Socket.IO loop so messages are sent
                     self.socketio.sleep(0)
 
             except queue.Empty:
-                # no message this cycle, just yield control
                 self.socketio.sleep(0.1)
                 continue
 
             except Exception:
-                print("Exception in log_listener:\n", traceback.format_exc())
-                # yield back so we don't block the loop
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Exception in log_listener:\n{traceback.format_exc()}")
                 self.socketio.sleep(0.1)
                 continue
-
 
     def get_host_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # Doesn't need to be reachable, just used to get the outgoing IP
             s.connect(('8.8.8.8', 80))
             ip = s.getsockname()[0]
         except Exception:
@@ -185,11 +152,6 @@ class LocalLLHAMA_WebService:
         return ip
 
     def run(self):
-        """
-        @brief Starts the Flask web server.
-
-        Launches the service on the configured host and port.
-        """
         if self.host == '0.0.0.0':
             self.host = self.get_host_ip()
-        self.socketio.run(self.app, host=self.host , port=5001, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
+        self.socketio.run(self.app, host=self.host, port=5001, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)

@@ -9,7 +9,7 @@ from torch.nn.functional import softmax
 import requests
 
 # === Custom Imports ===
-from .HA_Interfacer import HomeAssistantClient
+from .Home_Assistant_Interface import HomeAssistantClient
 
 # Reusable system prompt template
 SMART_HOME_PROMPT_TEMPLATE = """

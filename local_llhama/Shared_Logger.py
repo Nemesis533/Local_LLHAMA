@@ -1,32 +1,63 @@
-"""
-@class QueueLogger
-@brief Logger that captures and processes console output into structured messages.
+import os
+import re
+import sys
+from enum import IntEnum
+from multiprocessing import Process, Queue
+from colorama import init, Fore, Style
+from datetime import datetime
 
-This class intercepts stdout/stderr output and converts relevant log lines into
-structured dictionary entries. It supports optional queueing to enable asynchronous
-log handling, such as transferring logs to a UI or another thread.
-"""
+# Initialize colorama for cross-platform color support
+init(autoreset=True)
 
-class QueueLogger:
-    def __init__(self, message_queue=None):
-        """
-        @brief Initializes the QueueLogger instance.
+# Define log levels
+class LogLevel(IntEnum):
+    INFO = 1
+    WARNING = 2
+    CRITICAL = 3
 
-        @param message_queue Optional queue to which processed log entries will be pushed.
-        """
+LEVEL_MAP = {
+    "INFO": LogLevel.INFO,
+    "WARNING": LogLevel.WARNING,
+    "CRITICAL": LogLevel.CRITICAL
+}
+
+# Global dev mode flag
+DEV_MODE = os.environ.get("PRESSURE_NN_DEV_MODE") == "1"
+
+class AsyncQueueLogger:
+    COLOR_MAP = {
+        LogLevel.INFO: Fore.GREEN,
+        LogLevel.WARNING: Fore.YELLOW,
+        LogLevel.CRITICAL: Fore.RED,
+    }
+
+    def __init__(self, log_file_path="app.log", level=LogLevel.INFO):
         self._buffer = ""
         self._messages = []
-        self.message_queue = message_queue
+        self.log_file_path = log_file_path
+        self.level = level
 
+        # Control whether messages should be printed
+        # In dev mode, print based on level; in production, never print
+        self._console_enabled = DEV_MODE
+
+        # Save original stdout/stderr
+        self._original_stdout = sys.__stdout__
+        self._original_stderr = sys.__stderr__
+
+        # Async logging queue
+        self._log_queue = Queue()
+        self._process = Process(target=self._log_worker, args=(self._log_queue, log_file_path))
+        self._process.daemon = True
+        self._process.start()
+
+        # Ensure log file exists
+        if not os.path.exists(log_file_path):
+            with open(log_file_path, "w") as f:
+                pass
+
+    # --- Console interception ---
     def write(self, message):
-        """
-        @brief Processes incoming text message from stdout/stderr.
-
-        Captures the message, filters out irrelevant lines (such as HTTP requests),
-        and converts the relevant lines into structured log entries.
-
-        @param message The string to be logged.
-        """
         self._buffer += message
         while True:
             if "\n" in self._buffer:
@@ -39,7 +70,7 @@ class QueueLogger:
             if not line:
                 break
 
-            # Skip irrelevant HTTP log lines
+            # Skip HTTP request lines if needed
             if (
                 line.startswith("127.0.0.1 - - [") or
                 "HTTP/1.1" in line or
@@ -47,41 +78,83 @@ class QueueLogger:
             ):
                 continue
 
-            # Create and store the structured log entry
-            if line:
-                log_entry = {"type": "console_output", "data": line}
-                self._messages.append(log_entry)
+            self._messages.append({"type": "console_output", "data": line})
 
-                if self.message_queue:
-                    self.message_queue.put(log_entry)
+            # Detect log level from message
+            match = re.search(r"\[(INFO|WARNING|CRITICAL)\]", line, re.IGNORECASE)
+            if match:
+                level_str = match.group(1).upper()
+                level = LEVEL_MAP.get(level_str, LogLevel.INFO)
+            else:
+                level = LogLevel.INFO
 
-            # If no newline in original message, stop processing further
+            # Console output only in dev mode and if level passes
+            if self._console_enabled and level >= self.level:
+                self._write_to_console(line, level)
+
+            # Always log to file asynchronously
+            self.log(line, level)
+
             if "\n" not in message:
                 break
 
     def flush(self):
-        """
-        @brief Flushes the buffer and pushes any remaining data as a log entry.
-
-        Ensures that partially collected logs are processed and queued.
-        """
         if self._buffer.strip():
-            log_entry = {"type": "console_output", "data": self._buffer.strip()}
-            self._messages.append(log_entry)
-            if self.message_queue:
-                self.message_queue.put(log_entry)
+            line = self._buffer.strip()
+            self._messages.append({"type": "console_output", "data": line})
+            self.log(line, LogLevel.INFO)
+
+            # Flush to console in dev mode
+            if self._console_enabled:
+                self._write_to_console(line, LogLevel.INFO)
+
             self._buffer = ""
 
     def pop_messages(self):
-        """
-        @brief Retrieves and clears the internal log message list.
-
-        @return List of log entries captured since the last pop.
-        """
         msgs = self._messages
         self._messages = []
         return msgs
 
+    # --- Async file logging ---
+    def log(self, message, level=LogLevel.INFO):
+        if level >= self.level:
+            self._log_queue.put((level.name, message))
 
-# Create a globally shared instance of the logger
-shared_logger = QueueLogger()
+    def set_level(self, level):
+        if isinstance(level, LogLevel):
+            self.level = level
+        else:
+            raise ValueError("level must be an instance of LogLevel")
+
+    # --- Internal helpers ---
+    def _write_to_console(self, message, level):
+        # Default color based on log level
+        color = self.COLOR_MAP.get(level, "")
+
+        # Override if message contains [Supervisor]
+        if "[Supervisor]" in message and not "[CRITICAL]" in message:
+            color = Fore.MAGENTA  # purple
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            self._original_stdout.write(f"{color}[{timestamp}] {message}{Style.RESET_ALL}\n")
+            self._original_stdout.flush()
+        except Exception:
+            pass
+
+    def _log_worker(self, queue, file_path):
+        with open(file_path, "a") as f:
+            while True:
+                try:
+                    level_name, message = queue.get()
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"[{timestamp}] [{level_name}] {message}\n")
+                    f.flush()
+                except Exception as e:
+                    f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ERROR] Failed to log message: {e}\n")
+                    f.flush()
+
+
+# --- Shared logger instance ---
+shared_logger = AsyncQueueLogger()
+

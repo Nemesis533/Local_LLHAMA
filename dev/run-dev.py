@@ -1,42 +1,28 @@
 """
-@file dev_entrypoint.py
-@brief Development entry point for running Local LLHAMA directly from source.
+@file run_dev.py
+@brief Development entry point for running Local LLHAMA via Run_System.
 
-This script sets up the Python path to include the project root, then
-invokes the main entry function from the `local_llhama` package.
+This script ensures the project root is in sys.path and invokes
+the Run_System module directly for development.
 
 Usage:
-    python dev_entrypoint.py
+    python run_dev.py
 """
 
 import os
 import sys
+import runpy
 
 # === Path Setup ===
+# Add the project root (one level up from dev/) to sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
 
-# Add the Local_LLHAMA project root to sys.path for local imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Debugging info
+print("sys.path:", sys.path)
+print("Project root contents:", os.listdir(project_root))
 
-# === Import Main App Entrypoint ===
-from local_llhama import main as run_main
-
-def main():
-    """
-    @brief Launch Local LLHAMA using local source directory for development.
-
-    Sets the base path explicitly so config files and assets are located properly
-    when running from a dev environment.
-    """
-    print("Starting Local LLHAMA in development mode...")  
-    
-    # Determine the full path to the local_llhama directory
-    project_root = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))),
-        "local_llhama"
-    )
-
-    # Start the main application logic with the project root path
-    run_main(project_root)
-
+# === Launch the target module ===
 if __name__ == "__main__":
-    main()
+    print("Starting Local LLHAMA via Run_System (development mode)...")
+    runpy.run_module("local_llhama.Run_System", run_name="__main__")

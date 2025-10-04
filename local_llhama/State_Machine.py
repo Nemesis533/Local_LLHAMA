@@ -1,5 +1,6 @@
 # === System Imports ===
 import threading
+from threading import Thread, Event
 from queue import Queue, Empty
 import time
 from enum import Enum
@@ -8,8 +9,8 @@ import logging
 
 # === Custom Imports ===
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
-from .LLM import LLM_Class, OllamaClient
-from .HA_Interfacer import HomeAssistantClient
+from .LLM_Handler import LLM_Class, OllamaClient
+from .Home_Assistant_Interface import HomeAssistantClient
 
 class State(Enum):
     """
@@ -45,12 +46,11 @@ class StateMachineInstance:
         self.state: State = State.LOADING
         self.lock = threading.Lock()
         self.sm_logger = logging.getLogger("Local LLHAMA")
-        # Queues for inter-thread communication
-        self.result_queue: Queue = Queue()          # Wake word detection results
-        self.transcription_queue: Queue = Queue()   # Transcriptions from audio input
-        self.command_queue: Queue = Queue()         # Parsed commands to be executed
-        self.sound_action_queue: Queue = Queue()    # Sound actions to play asynchronously
-        self.speech_queue: Queue = Queue()          # Text responses to speak aloud
+
+        # Initialize queues and threads
+        self.load_queues()
+
+
         self.stop_event = threading.Event()
 
         # Instantiate audio and NLP components
@@ -71,6 +71,41 @@ class StateMachineInstance:
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
 
+
+ 
+
+        self._last_printed_message = None
+
+        self.sm_logger.info("State machine init completed")
+
+    # ===============================
+    # Queue Management
+    # ===============================
+
+    def load_queues(self):
+        """Initialize all communication queues used by the state machine."""
+        self.result_queue = Queue()         # Wake word detection results
+        self.transcription_queue = Queue()  # Transcriptions from audio input
+        self.command_queue = Queue()        # Parsed commands to execute
+        self.sound_action_queue = Queue()   # Sound actions to play asynchronously
+        self.speech_queue = Queue()         # Text responses to speak aloud
+
+        # Store all in a dict for convenience
+        self.queues = {
+            "result": self.result_queue,
+            "transcription": self.transcription_queue,
+            "command": self.command_queue,
+            "sound_action": self.sound_action_queue,
+            "speech": self.speech_queue,
+        }
+
+    # ===============================
+    # Thread Management
+    # ===============================
+
+    def load_threads(self):
+        """Initialize worker threads."""
+
         # Start background threads
         self.wakeword_thread = threading.Thread(target=self.awaker.listen_for_wake_word, args=(self.result_queue,))
         self.wakeword_thread.daemon = True
@@ -80,40 +115,40 @@ class StateMachineInstance:
         self.sound_thread.daemon = True
         self.sound_thread.start()
 
-        threading.Thread(target=self.command_worker, daemon=True).start()
+        self.command_worker_thread = threading.Thread(target=self.command_worker, daemon=True).start()       
 
-        
+        # Store all in a dict for easy access
+        self.threads = {
+            "wakeword": self.wakeword_thread,
+            "sound": self.sound_thread,
+            "commands" : self.command_worker_thread
+        }
 
-        self._last_printed_message = None
-
-        self.sm_logger.info("State machine init completed")
-
+    # ===============================
+    # Stop Logic
+    # ===============================
     def stop(self):
         """
-        @brief Cleanly stop all background threads and prepare for shutdown or reset.
+        Cleanly stop all background threads and prepare for shutdown or reset.
         """
         self.sm_logger.info("Shutting down state machine...")
         self.stop_event.set()
 
-        # Put dummy items to unblock threads if waiting
+        # Unblock any threads waiting on queues
         self.sound_action_queue.put(None)
         self.result_queue.put(None)
 
-        # Optional: join threads if needed (only if not daemonic)
-        if self.wakeword_thread.is_alive():
-            self.wakeword_thread.join(timeout=3)
-        if self.sound_thread.is_alive():
-            self.sound_thread.join(timeout=3)
+        # Join threads if running
+        for name, thread in self.threads.items():
+            if thread.is_alive():
+                thread.join(timeout=3)
+                self.sm_logger.info(f"{name} thread stopped.")
 
-        # Deleting all the objects that might use the gpu
-
-        del self.awaker 
-        del self.transcriptor
-        del self.speaker
-
-        self.speaker = None
-        self.transcriptor = None
-        self.awaker = None       
+        # Clean up GPU-related or heavy resources
+        for attr in ("awaker", "transcriptor", "speaker"):
+            if hasattr(self, attr):
+                delattr(self, attr)
+                setattr(self, attr, None)
 
         self.sm_logger.info("State machine stopped.")
 
@@ -122,6 +157,37 @@ class StateMachineInstance:
             self.sm_logger.info(message)
             self._last_printed_message = message
         # Else do nothing, avoid printing duplicate lines
+
+    # ----------------------------------------
+    # Restart logic
+    # ----------------------------------------
+    def restart(self):
+        """
+        Stop all components and restart the state machine cleanly.
+        """
+        self.sm_logger.info("Restarting state machine...")
+
+        # Stop existing threads and clear resources
+        self.stop()
+
+        # Recreate stop event, queues, and threads
+        self.stop_event = Event()
+        self.load_queues()
+        self.load_threads()
+
+    # Join threads
+        for name, thread in self.threads.items():
+            if thread.is_alive():
+                thread.join(timeout=3)
+                self.sm_logger.info(f"{name} thread stopped.")
+
+        # Delete or reset GPU-heavy components
+        for attr in ("awaker", "transcriptor", "speaker"):
+            if hasattr(self, attr):
+                delattr(self, attr)
+                setattr(self, attr, None)
+
+        self.sm_logger.info("State machine stopped.")
 
     def command_worker(self):
         """
@@ -249,8 +315,6 @@ class StateMachineInstance:
 
     def run(self):
         
-
-        if True:
             time.sleep(0.1)  # Avoid busy waiting, reduce CPU load
 
             # Process wake word detection results

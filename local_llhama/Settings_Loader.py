@@ -3,7 +3,7 @@ import json
 import torch
 
 # === Custom Imports ===
-from .LLM import LLM_Class, OllamaClient
+from .LLM_Handler import LLM_Class, OllamaClient
 
 class SettingLoaderClass:
     """
@@ -103,9 +103,6 @@ class SettingLoaderClass:
                     setattr(obj, attr, converted_value)  # reflection
                 except Exception as e:
                     print(f"[Error] Failed to set '{cls_name}.{attr}': {e}")
-
-
-
 
     @staticmethod
     def cast_value(value, type_str):
