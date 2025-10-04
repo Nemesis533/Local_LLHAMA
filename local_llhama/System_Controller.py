@@ -15,7 +15,7 @@ import threading
 
 # === Custom Imports ===
 from .Settings_Loader import SettingLoaderClass
-from .State_Machine import StateMachineInstance
+from .State_Machine import StateMachineInstance, State
 from .Home_Assistant_Interface import HomeAssistantClient
 from .Shared_Logger import LogLevel
 
@@ -28,7 +28,8 @@ class LocalLLHamaSystemController:
     def __init__(self, base_path):
         self.class_prefix_message = "[Controller]"
         self.base_path = base_path
-        self.message_queue = None
+        self.web_server_message_queue = None
+        self.action_message_queue = None
         self.loader : SettingLoaderClass = None
         self.monitor_thread = None
         self.command_llm = None
@@ -81,7 +82,11 @@ class LocalLLHamaSystemController:
         """
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Setting up the state machine")
         start = time.time()
-        sm = StateMachineInstance(llm, loader.device, ha_client, base_path=self.base_path)
+        sm = StateMachineInstance(llm, loader.device,
+                                   ha_client, 
+                                   base_path=self.base_path,
+                                     action_message_queue=self.action_message_queue,
+                                     web_server_message_queue=self.web_server_message_queue)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine initialized in {time.time() - start:.2f} seconds"
         )
@@ -177,22 +182,5 @@ class LocalLLHamaSystemController:
 
         # 7. Apply runtime configuration
         self.apply_additional_settings(loader, self.state_machine)
-
-        # 8. Patch monitor thread
-        if self.monitor_thread:
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updating monitor thread references")
-            self.monitor_thread._args = (
-                self.message_queue,
-                loader,
-                ha_client,
-                self.state_machine,
-            )
             
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting state machine loop")
-    
-    def run_system(self):        
-
-        # 9. Run the automation loop
-        self.state_machine.run()
-
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] === Local LLHAMA System Running ===")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] System Started")    

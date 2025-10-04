@@ -4,11 +4,10 @@ from flask_cors import CORS
 import io
 import threading
 import socket
-import queue
+import multiprocessing as mp
+from queue import Queue, Empty
 from pathlib import Path
 import psutil
-import traceback
-import logging
 
 # Import blueprints from the routes package
 from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp
@@ -18,8 +17,9 @@ from .Shared_Logger import LogLevel
 
 
 class LocalLLHAMA_WebService:
-    def __init__(self, host='0.0.0.0', port=5001, message_queue=None):
-        self.message_queue: queue = message_queue
+    def __init__(self, host='0.0.0.0', port=5001, action_message_queue=None,web_server_message_queue=None):
+        self.web_server_message_queue  : mp.Queue  = web_server_message_queue
+        self.action_message_queue : mp.Queue  = action_message_queue
         self.host = host
         self.port = port
         self.stdout_buffer = io.StringIO()
@@ -44,6 +44,7 @@ class LocalLLHAMA_WebService:
         )
         CORS(self.app)
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
+        self.socketio.start_background_task(self.monitor_messages)
         self.connected_clients = set()
         self.clients_lock = threading.Lock()
 
@@ -62,8 +63,6 @@ class LocalLLHAMA_WebService:
         self.socketio.on_event('connect', self.handle_connect)
         self.socketio.on_event('disconnect', self.handle_disconnect)
 
-        # Background log listener
-        self.socketio.start_background_task(self._log_listener)
 
     def _is_ip_allowed(self, ip):
         return any(ip.startswith(prefix) for prefix in self.ALLOWED_IP_PREFIXES)
@@ -74,6 +73,11 @@ class LocalLLHAMA_WebService:
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
+        
+    def emit_messages(self, message):
+        with self.clients_lock:
+            for sid in self.connected_clients:
+                self.socketio.emit('log_line', {'line': message}, room=sid)
 
     def handle_connect(self):
         ip = request.remote_addr
@@ -81,16 +85,13 @@ class LocalLLHAMA_WebService:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Denied connection from {ip}")
             return False  # Reject connection
 
-        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client connected: {request.sid}")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Client connected: {request.sid}")
         with self.clients_lock:
             self.connected_clients.add(request.sid)
 
-        # emit welcome message
-        self.socketio.emit(
-            'log_line',
-            {'line': 'Local_LLHAMA socket connected!'},
-            room=request.sid
-        )
+        self.emit_messages("Local_LLHAMA socket connected!")
+
+
 
     def handle_disconnect(self):
         print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client disconnected: {request.sid}")
@@ -98,47 +99,37 @@ class LocalLLHAMA_WebService:
             self.connected_clients.discard(request.sid)
 
     def send_ollama_command(self, text: str):
-        if hasattr(self, "message_queue") and self.message_queue:
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text}")
+        if self.action_message_queue:
             message = {
                 "type": "ollama_command",
                 "data": text
             }
-            self.message_queue.put(message)
+            self.action_message_queue.put(message)
         else:
             raise RuntimeError("Message queue not initialized.")
-
-    def _log_listener(self):
+        
+    def monitor_messages(self):
         while True:
             try:
-                message = self.message_queue.get(timeout=1)
-                log_line = None
+                message = self.web_server_message_queue.get(timeout=0.1)  # adjust timeout as needed
+                if isinstance(message, dict):
+                    msg_type = message.get("type")
+                    if msg_type == "web_ui_message":
+                        message_data = message.get("data")
+                        self.emit_messages(message_data)
 
-                if isinstance(message, dict) and message.get("type") == "console_output":
-                    log_line = message["data"]
-                elif isinstance(message, logging.LogRecord):
-                    log_line = f"{message.levelname} - {message.name} - {message.getMessage()}"
+                elif isinstance(message, str):
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message {message}")
                 else:
-                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Received unexpected message type: {type(message)}")
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type {type(message)}")
+            except Empty:
+                continue  # queue is empty, keep looping
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Message Queue Error! {repr(e)}")
 
-                if log_line:
-                    with self.app.app_context():
-                        for sid in list(self.connected_clients):
-                            self.socketio.emit(
-                                'log_line',
-                                {'line': log_line},
-                                room=sid,
-                                namespace='/'
-                            )
-                    self.socketio.sleep(0)
 
-            except queue.Empty:
-                self.socketio.sleep(0.1)
-                continue
 
-            except Exception:
-                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Exception in log_listener:\n{traceback.format_exc()}")
-                self.socketio.sleep(0.1)
-                continue
 
     def get_host_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -155,3 +146,4 @@ class LocalLLHAMA_WebService:
         if self.host == '0.0.0.0':
             self.host = self.get_host_ip()
         self.socketio.run(self.app, host=self.host, port=5001, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
+

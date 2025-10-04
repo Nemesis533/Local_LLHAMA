@@ -58,7 +58,8 @@ class LocalLLHamaSupervisor:
          
         self.system_controller = LocalLLHamaSystemController(self.base_path)
         
-        self.message_queue : mp.Queue = mp.Queue()
+        self.web_server_message_queue  : mp.Queue = mp.Queue()
+        self.action_message_queue  : mp.Queue = mp.Queue()
 
         self.initialize_system()
         
@@ -74,13 +75,13 @@ class LocalLLHamaSupervisor:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Resolved base path: {resolved}")
         return resolved
 
-    def start_local_web_service_process(self, message_queue, loader):
+    def start_local_web_service_process(self, action_message_queue,web_server_message_queue, loader):
         """
         Start the local web dashboard in a separate process.
         """
 
         def run_service():
-            webservice = LocalLLHAMA_WebService(message_queue=message_queue)
+            webservice = LocalLLHAMA_WebService(action_message_queue=action_message_queue,web_server_message_queue=web_server_message_queue)
             webservice.settings_data = loader.data
             webservice.settings_file = loader.settings_file
             webservice.run()
@@ -111,13 +112,12 @@ class LocalLLHamaSupervisor:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing Local LLHAMA Supervisor")
 
         # Setup message queue for inter-process communication
-        self.system_controller.message_queue = self.message_queue
+        self.system_controller.action_message_queue = self.action_message_queue
+        self.system_controller.web_server_message_queue = self.web_server_message_queue
 
         # Load settings
         self.system_controller.setup_settings()
 
-        # Start local web service process
-        self.start_local_web_service_process(self.system_controller.message_queue, self.system_controller.loader)
 
         # Measure settings load time
         self.log_duration("Settings loaded", self.system_controller.loader.load)
@@ -133,6 +133,9 @@ class LocalLLHamaSupervisor:
         # Start the system
         self.system_controller.start_system()
         self.system_controller.state_machine.transition(State.LISTENING)
+
+        # Start local web service process
+        self.start_local_web_service_process(self.action_message_queue,self.web_server_message_queue, self.system_controller.loader)
 
         # Continuous monitoring loop
         while True:

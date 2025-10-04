@@ -22,7 +22,7 @@ LEVEL_MAP = {
 }
 
 # Global dev mode flag
-DEV_MODE = os.environ.get("PRESSURE_NN_DEV_MODE") == "1"
+DEV_MODE = os.environ.get("LLHAMA_DEV_MODE") == "1"
 
 class AsyncQueueLogger:
     COLOR_MAP = {
@@ -134,6 +134,9 @@ class AsyncQueueLogger:
         # Override if message contains [Supervisor]
         if "[Supervisor]" in message and not "[CRITICAL]" in message:
             color = Fore.MAGENTA  # purple
+
+        if message in ["[LLM Reply]","[User Prompt]"] and not "[CRITICAL]" in message:
+            color = Fore.CYAN  # purple
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:

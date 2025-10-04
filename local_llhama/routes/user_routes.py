@@ -13,9 +13,9 @@ def from_user_text():
         return jsonify({"error": "No text provided"}), 400
 
     user_text = data['text']
-    print("Received user text:", user_text)
 
-    service = current_app.config["SERVICE_INSTANCE"]
-    service.send_ollama_command(text=user_text)
+    with current_app.app_context():
+        service = current_app.config["SERVICE_INSTANCE"]
+        service.send_ollama_command(text=user_text)
 
     return jsonify({"success": True})

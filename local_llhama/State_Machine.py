@@ -1,16 +1,17 @@
 # === System Imports ===
 import threading
-from threading import Thread, Event
+from threading import  Event
 from queue import Queue, Empty
 import time
 from enum import Enum
 import time
-import logging
+import multiprocessing as mp
 
 # === Custom Imports ===
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
 from .LLM_Handler import LLM_Class, OllamaClient
 from .Home_Assistant_Interface import HomeAssistantClient
+from .Shared_Logger import LogLevel
 
 class State(Enum):
     """
@@ -32,7 +33,7 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm, device, ha_client, base_path=None ):
+    def __init__(self, command_llm, device, ha_client, base_path=None, action_message_queue=None,web_server_message_queue=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
@@ -42,14 +43,19 @@ class StateMachineInstance:
         self.device = device
         self.noise_floor = 0
         self.base_path = base_path
+
+        self.web_server_message_queue  : mp.Queue  = web_server_message_queue
+        self.action_message_queue : mp.Queue  = action_message_queue
+
+        # Prefix for all log messages
+        self.class_prefix_message = "[State Machine]"
+
         # State and synchronization primitives
         self.state: State = State.LOADING
         self.lock = threading.Lock()
-        self.sm_logger = logging.getLogger("Local LLHAMA")
 
         # Initialize queues and threads
         self.load_queues()
-
 
         self.stop_event = threading.Event()
 
@@ -71,12 +77,9 @@ class StateMachineInstance:
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
 
-
- 
-
         self._last_printed_message = None
 
-        self.sm_logger.info("State machine init completed")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine init completed")
 
     # ===============================
     # Queue Management
@@ -131,7 +134,7 @@ class StateMachineInstance:
         """
         Cleanly stop all background threads and prepare for shutdown or reset.
         """
-        self.sm_logger.info("Shutting down state machine...")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Shutting down state machine...")
         self.stop_event.set()
 
         # Unblock any threads waiting on queues
@@ -142,7 +145,7 @@ class StateMachineInstance:
         for name, thread in self.threads.items():
             if thread.is_alive():
                 thread.join(timeout=3)
-                self.sm_logger.info(f"{name} thread stopped.")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {name} thread stopped.")
 
         # Clean up GPU-related or heavy resources
         for attr in ("awaker", "transcriptor", "speaker"):
@@ -150,13 +153,12 @@ class StateMachineInstance:
                 delattr(self, attr)
                 setattr(self, attr, None)
 
-        self.sm_logger.info("State machine stopped.")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine stopped.")
 
     def print_once(self, message, end='\n'):
         if message != self._last_printed_message:
-            self.sm_logger.info(message)
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {message}", end=end)
             self._last_printed_message = message
-        # Else do nothing, avoid printing duplicate lines
 
     # ----------------------------------------
     # Restart logic
@@ -165,7 +167,7 @@ class StateMachineInstance:
         """
         Stop all components and restart the state machine cleanly.
         """
-        self.sm_logger.info("Restarting state machine...")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Restarting state machine...")
 
         # Stop existing threads and clear resources
         self.stop()
@@ -175,11 +177,11 @@ class StateMachineInstance:
         self.load_queues()
         self.load_threads()
 
-    # Join threads
+        # Join threads
         for name, thread in self.threads.items():
             if thread.is_alive():
                 thread.join(timeout=3)
-                self.sm_logger.info(f"{name} thread stopped.")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {name} thread stopped.")
 
         # Delete or reset GPU-heavy components
         for attr in ("awaker", "transcriptor", "speaker"):
@@ -187,7 +189,7 @@ class StateMachineInstance:
                 delattr(self, attr)
                 setattr(self, attr, None)
 
-        self.sm_logger.info("State machine stopped.")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine stopped.")
 
     def command_worker(self):
         """
@@ -199,9 +201,12 @@ class StateMachineInstance:
         if current_state == State.PARSING_VOICE:
             try:
                 transcription = self.transcription_queue.get(timeout=2)
-                self.sm_logger.info(f"[Main] Got transcription: {transcription}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Got transcription: {transcription}")
+                message = f"{self.class_prefix_message} [User Prompt]: {transcription}"
+                self.send_messages(message)
+
             except Empty:
-                self.sm_logger.info("Transcription queue was empty, retrying later...")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription queue was empty, retrying later...")
                 self.transition(State.LISTENING)
                 return
             
@@ -212,21 +217,23 @@ class StateMachineInstance:
 
             if structured_output:
                 if structured_output.get("commands"):
-                    self.sm_logger.info("Structured Commands:", structured_output)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Structured Commands: {structured_output}")
                     self.command_queue.put(structured_output, timeout=1)
-                    self.sm_logger.info("Successfully put command into queue")
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put command into queue")
                     self.transition(State.SEND_COMMANDS)
 
                 elif structured_output.get("nl_response"):
                     nl_message = structured_output.get("nl_response")
-                    self.sm_logger.info(f"[Main] NL Response: {nl_message}")
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] NL Response: {nl_message}")
                     self.speech_queue.put(nl_message)
-                    self.sm_logger.info("Successfully put NL response into speech queue")
+                    message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
+                    self.send_messages(message)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
                     self.transition(State.SPEAKING)
 
                 else:
                     message_to_speak = "No valid commands or responses extracted, Please try again."
-                    self.sm_logger.info("No valid commands or responses extracted.")
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] No valid commands or responses extracted.")
                     self.speech_queue.put(message_to_speak)
                     self.transition(State.SPEAKING)
 
@@ -239,7 +246,7 @@ class StateMachineInstance:
                 sound_action = self.sound_action_queue.get(timeout=1)
                 if sound_action is None:
                     continue
-                print(f"Playing sound: {sound_action}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Playing sound: {sound_action}")
                 self.sound_player.play(sound_action)
             except Empty:
                 continue
@@ -258,12 +265,12 @@ class StateMachineInstance:
         """
         if self.lock.acquire(timeout=2):
             try:
-                self.sm_logger.info(f"Transitioning from {self.state} to {new_state}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transitioning from {self.state} to {new_state}")
                 self.state = new_state
             finally:
                 self.lock.release()
         else:
-            self.sm_logger.info(f"Could not acquire lock to transition from {self.state} to {new_state}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Could not acquire lock to transition from {self.state} to {new_state}")
 
     def start_recording(self):
         """
@@ -273,14 +280,14 @@ class StateMachineInstance:
             current_state = self.state
 
         if current_state == State.RECORDING:
-            self.sm_logger.info("Recording...")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording...")
             transcription = self.recorder.record_audio(self.transcriptor, self.noise_floor)
             transcription_words = len(str.split(transcription, " "))
             if transcription_words > 4:
                 self.transcription_queue.put(transcription)
                 self.transition(State.PARSING_VOICE)
             else:
-                self.sm_logger.info(f"Transcription only had {transcription_words} words, returning to listening")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription only had {transcription_words} words, returning to listening")
                 self.transition(State.LISTENING)
 
     def speak(self):
@@ -291,7 +298,7 @@ class StateMachineInstance:
             current_state = self.state
 
         if current_state == State.SPEAKING:
-            self.sm_logger.info("Speaking response...")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Speaking response...")
             transcription = self.speech_queue.get()
             self.speaker.speak(transcription)
             time.sleep(0.3) #delay for more natural interactions
@@ -307,15 +314,48 @@ class StateMachineInstance:
             current_state = self.state
 
         if current_state != State.ERROR:
-            self.sm_logger.info("An error occurred.")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] An error occurred.")
             self.transition(State.ERROR)
             self.sound_player.play(SoundActions.system_error)
             time.sleep(2)
             self.transition(State.LISTENING)
 
+    def monitor_messages(self):
+        try:
+            message = self.action_message_queue.get(timeout=0.01)  # mp.Queue
+            if isinstance(message, dict):
+                msg_type = message.get("type")
+                if msg_type == "ollama_command":
+                    command_data = message.get("data")
+                    self.transcription_queue.put(command_data)
+                    self.transition(State.PARSING_VOICE)
+
+            elif isinstance(message, str):
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message {message}")
+
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type {type(message)}")
+
+        except Empty:
+            # Queue empty, safe to ignore
+            return
+
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Message Queue Error! {repr(e)}")
+            self.transition(State.ERROR)
+
+    def send_messages(self, message):
+        message = {
+                "type": "web_ui_message",
+                "data": message
+            }
+        self.web_server_message_queue.put(message)
+
     def run(self):
         
             time.sleep(0.1)  # Avoid busy waiting, reduce CPU load
+
+            self.monitor_messages()
 
             # Process wake word detection results
             if not self.result_queue.empty():
