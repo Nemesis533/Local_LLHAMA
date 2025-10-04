@@ -45,7 +45,7 @@ openwakeword \
 pyaudio \
 sounddevice \
 pygame \
-TTS \
+piper-tts \
 
 # Install required Python packages
 echo "Installing required packages: torch, transformers, accelerate, flask, flask-cors, psutil, requests, TTS"

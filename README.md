@@ -9,11 +9,12 @@
 - Whisper-based speech-to-text conversion
 - LLaMA 3.1 (8B) LLM for command parsing and entity resolution
 - Optional PromptGuard safety layer (LLaMA 3.2 3B fine-tuned model)
-- Multilingual support: English, French, Spanish, Italian, German, Russian
+- Multilingual support: English, French, Spanish, Italian, German, Russian (and more)
   This allows you to call the command in any of the supported languages and not have to worry about it - you can say "la lumière du salon" for "living room light"
 - Fuzzy device/entity matching using dynamic Home Assistant entity list; for optmization purposes, a manual list of devices can also be assigned instead of filtering the full list from HA.
   This solves the problem of having to call devices by the exact name that they are saved under - you can now say "light above the desk" to call the "desk light".
 - Execute multiple commands in a single sentence
+- NEW! Thanks to Integration with Ollama, natual language responses will be returned when no device is present.
 - Basic web interface for output monitoring and connection status (expansion and system control planned)
 - Ability to integrate non-Home Assistant devices and commands with the same pipeline as the one used for Home Assistant.
 
@@ -74,7 +75,7 @@ a class and add the class and the variable name/value/type to the file like so:
  
  You can get more details on how the file is used inside the SettingsLoader.py class.
  
-
+ 
 ## How It Works
 
 1. **Wake Word Detection**  
@@ -102,8 +103,9 @@ a class and add the class and the variable name/value/type to the file like so:
 	 The actions will be matched via reflection to a function named the same as the action, and then executed via the command_queue
 
 6. **Feedback and Output**  
-   - A TTS engine provides spoken confirmation or failure.
+   - The piper-tts engine provides spoken confirmation or failure
    - Output and logs are also available through a simple web UI for basic monitoring.
+   - The langiuage is returned along with the reponse by the LLM
   
 7. **FSM Diagram**
 
@@ -135,7 +137,7 @@ Lowest supported python version is 3.10, but 3.12 is recommended.
 - `torch`, `transformers` (LLaMA model support)
 - `whisper` (OpenAI's STT)
 - `openwakeword` (wake word detection)
-- `TTS` (Coqui TTS engine)
+- `TTS` (Piper TTS engine)
 - `pygame` (audio playback)
 - `librosa`, `wave` (audio processing)
 - `flask` (basic web UI)
