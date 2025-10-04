@@ -174,10 +174,10 @@ class TextToSpeech:
 
         # Synthesis configuration for natural voice
         syn_config = SynthesisConfig(
-            volume=0.5,          # half as loud
-            length_scale=1.0,    # slower, more natural
-            noise_scale=1.0,     # natural variation
-            noise_w_scale=1.0,   # more speaking variation
+            volume=0.5,         
+            length_scale=1.0,   
+            noise_scale=1.0,     
+            noise_w_scale=1.0,  
             normalize_audio=False
         )
 

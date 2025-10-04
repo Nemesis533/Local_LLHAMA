@@ -13,22 +13,19 @@ The system has been refactored for improved performance, maintainability, and mo
 
 ## Features
 
-- **Wake word detection** using `OpenWakeWord`
-- **Voice recording** with adaptive noise floor detection
-- **Whisper-based STT** for accurate speech-to-text conversion
-- **Dual LLM support**: Use local models (LLaMA 3.1 8B) or Ollama server for command parsing
-- **Natural language queries** in addition to HA commands
-- **Optional PromptGuard** safety layer (LLaMA Guard 3 based on 3.1-8B)
-- **Multilingual support**: English, French, Spanish, Italian, German, Russian
-  - Say "la lumière du salon" instead of "living room light"
-- **Fuzzy entity matching**: No need for exact device names
-  - Say "light above the desk" to control "desk light"
-- **Multiple commands per sentence**
-- **Web search integration**: News, Wikipedia, weather information
-- **Mixed commands**: Combine HA actions with queries ("turn on lights and tell me the weather")
-- **Web interface**: Settings control, text interaction, system monitoring, connection status
-- **Custom command integration**: Non-HA devices via JSON schema and reflection
-- **Modular architecture**: Separated audio input/output, improved maintainability
+- Wake word detection using `OpenWakeWord`
+- Voice recording with adaptive noise floor detection
+- Whisper-based speech-to-text conversion
+- LLaMA 3.1 (8B) LLM for command parsing and entity resolution
+- Optional PromptGuard safety layer (LLaMA 3.2 3B fine-tuned model)
+- Multilingual support: English, French, Spanish, Italian, German, Russian (and more)
+  This allows you to call the command in any of the supported languages and not have to worry about it - you can say "la lumière du salon" for "living room light"
+- Fuzzy device/entity matching using dynamic Home Assistant entity list; for optmization purposes, a manual list of devices can also be assigned instead of filtering the full list from HA.
+  This solves the problem of having to call devices by the exact name that they are saved under - you can now say "light above the desk" to call the "desk light".
+- Execute multiple commands in a single sentence
+- NEW! Thanks to Integration with Ollama, natual language responses will be returned when no device is present.
+- Basic web interface for output monitoring and connection status (expansion and system control planned)
+- Ability to integrate non-Home Assistant devices and commands with the same pipeline as the one used for Home Assistant.
 
 ## System Requirements
 
@@ -108,7 +105,7 @@ Contains LLM paths, model settings, and other non-sensitive configuration. Modif
 
 Configures web information sources (news, Wikipedia, etc.) with allowed websites, max results, and timeout settings.
  
-
+ 
 ## How It Works
 
 1. **Wake Word Detection**  
@@ -132,11 +129,11 @@ Configures web information sources (news, Wikipedia, etc.) with allowed websites
    - Non-HA actions matched via `command_schema.txt` using reflection
    - Failed queries reported to user
 
-6. **Feedback**  
-   - Piper TTS provides spoken confirmation/error messages
-   - Multilingual output with automatic language detection
-   - Logs and output available in web UI
-
+6. **Feedback and Output**  
+   - The piper-tts engine provides spoken confirmation or failure
+   - Output and logs are also available through a simple web UI for basic monitoring.
+   - The langiuage is returned along with the reponse by the LLM
+  
 7. **FSM Diagram**
 
    ![FSM Diagram](https://github.com/Nemesis533/Local_LLHAMA/blob/main/FSM_diagram_0.png)
@@ -162,21 +159,19 @@ Features demonstrated:
 
 ## Dependencies
 
-**Python 3.10+ required, 3.12 recommended**
+Key libraries used in this project include:
 
-Core libraries:
-- `torch`, `transformers`, `accelerate` — LLaMA model support
-- `whisper` — OpenAI STT
-- `openwakeword` — Wake word detection
-- `TTS` — Piper TTS engine
-- `pygame` — Audio playback
-- `pyaudio`, `sounddevice` — Audio I/O
-- `flask`, `flask-cors`, `flask-socketio` — Web UI and API
-- `requests`, `beautifulsoup4` — Web search/scraping
-- `python-dotenv` — Environment variables
-- `psutil` — System monitoring
+Lowest supported python version is 3.10, but 3.12 is recommended.
 
-See `requirements.txt` for complete list.
+- `torch`, `transformers` (LLaMA model support)
+- `whisper` (OpenAI's STT)
+- `openwakeword` (wake word detection)
+- `TTS` (Piper TTS engine)
+- `pygame` (audio playback)
+- `librosa`, `wave` (audio processing)
+- `flask` (basic web UI)
+
+All dependencies are listed in `requirements.txt`.
 
 ## Project Structure
 
