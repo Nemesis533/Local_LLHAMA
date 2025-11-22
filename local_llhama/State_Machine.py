@@ -87,6 +87,7 @@ class StateMachineInstance:
         self.ha_client: HomeAssistantClient = ha_client
 
         self._last_printed_message = None
+        self.last_transcription = None  # Store the last user query for context
 
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine init completed")
 
@@ -234,6 +235,7 @@ class StateMachineInstance:
         if current_state == State.PARSING_VOICE:
             try:
                 transcription = self.transcription_queue.get(timeout=2)
+                self.last_transcription = transcription  # Store for later use
                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Got transcription: {transcription}")
                 message = f"{self.class_prefix_message} [User Prompt]: {transcription}"
                 self.send_messages(message)
@@ -508,8 +510,9 @@ class StateMachineInstance:
                                 
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function result(s) received: {simple_function_results}")
                                 
-                                # Send only simple function results for natural language conversion
-                                llm_input = f"Convert these function results into a natural language response in {language} language: {simple_function_results}"
+                                # Send only simple function results for natural language conversion with original query for context
+                                user_query_context = f"\n\nOriginal user query: {self.last_transcription}" if self.last_transcription else ""
+                                llm_input = f"Convert these function results into a natural language response in {language} language: {simple_function_results}{user_query_context}"
                                 
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sending to LLM for NL conversion")
                                 nl_output = self.command_llm.send_message(llm_input, message_type="response")
