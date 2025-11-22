@@ -2,7 +2,11 @@
 import requests
 import json
 import os
+import time
 from dotenv import load_dotenv
+
+# === Custom Imports ===
+from .Shared_Logger import LogLevel
 
 class HomeAssistantClient:
     """
@@ -20,6 +24,8 @@ class HomeAssistantClient:
         """
         @brief Initialize the client, fetch domain actions and entity map.
         """
+
+        self.class_prefix_message = "[HomeAssistant]"
         # Load environment variables
         load_dotenv()
         
@@ -30,6 +36,12 @@ class HomeAssistantClient:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
+        
+        # Connection configuration
+        self.timeout = 10  # seconds
+        self.max_retries = 3
+        self.retry_delay = 2  # seconds
+        self.entity_map_cache = None  # Cache for fallback
 
         # Devices to exclude based on friendly name substrings
         self.exclusion_dict = {
@@ -47,6 +59,63 @@ class HomeAssistantClient:
             'climate.as25pbphra_pre',
         ]
 
+    def _retry_request(self, method, url, **kwargs):
+        """
+        @brief Execute HTTP request with retry logic and exponential backoff.
+        @param method HTTP method ('GET' or 'POST')
+        @param url The URL to request
+        @param kwargs Additional arguments for requests (json, headers, etc.)
+        @return Response object if successful
+        @raises requests.exceptions.RequestException after all retries fail
+        """
+        kwargs.setdefault('timeout', self.timeout)
+        
+        last_exception = None
+        for attempt in range(self.max_retries):
+            try:
+                if method.upper() == 'GET':
+                    response = requests.get(url, **kwargs)
+                elif method.upper() == 'POST':
+                    response = requests.post(url, **kwargs)
+                else:
+                    raise ValueError(f"Unsupported HTTP method: {method}")
+                
+                response.raise_for_status()
+                return response
+                
+            except requests.exceptions.Timeout as e:
+                last_exception = e
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Timeout on attempt {attempt + 1}/{self.max_retries}: {url}")
+                
+            except requests.exceptions.ConnectionError as e:
+                last_exception = e
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Connection error on attempt {attempt + 1}/{self.max_retries}: {e}")
+                
+            except requests.exceptions.HTTPError as e:
+                # Don't retry 4xx errors (client errors like auth failure)
+                if 400 <= e.response.status_code < 500:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client error {e.response.status_code}: {e}")
+                    raise
+                last_exception = e
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] HTTP error on attempt {attempt + 1}/{self.max_retries}: {e}")
+                
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Request error on attempt {attempt + 1}/{self.max_retries}: {e}")
+            
+            # Exponential backoff before retry
+            if attempt < self.max_retries - 1:
+                delay = self.retry_delay * (2 ** attempt)
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Retrying in {delay} seconds...")
+                time.sleep(delay)
+        
+        # All retries failed
+        error_msg = f"Failed to connect to Home Assistant at {self.base_url} after {self.max_retries} attempts"
+        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+        if last_exception:
+            raise requests.exceptions.RequestException(error_msg) from last_exception
+        raise requests.exceptions.RequestException(error_msg)
+
     def initialize_HA(self):
                 
         # Initialize simple functions handler with home location
@@ -62,7 +131,7 @@ class HomeAssistantClient:
         # Uncomment if you want to update entity map from a file
         # self.entity_map = self.update_entity_map_from_file(self.entity_map)
 
-        print(self.entity_map) 
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Entity map loaded with {len(self.entity_map)} entities") 
 
     def fetch_domain_actions(self) -> dict:
         """
@@ -78,8 +147,7 @@ class HomeAssistantClient:
         }
 
         try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
+            response = self._retry_request('GET', url, headers=self.headers)
             services = response.json()
 
             domain_to_actions = {}
@@ -88,20 +156,17 @@ class HomeAssistantClient:
                 actions = list(item['services'].keys())
                 domain_to_actions[domain] = actions
 
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully fetched {len(domain_to_actions)} domain actions")
             return domain_to_actions
 
-        except requests.exceptions.HTTPError as http_err:
-            return {"error": f"HTTP error occurred: {http_err}"}
-        except requests.exceptions.ConnectionError as conn_err:
-            return {"error": f"Connection error occurred: {conn_err}"}
-        except requests.exceptions.Timeout as timeout_err:
-            return {"error": f"Timeout error occurred: {timeout_err}"}
         except requests.exceptions.RequestException as req_err:
-            return {"error": f"An error occurred during the request: {req_err}"}
-        except ValueError as val_err:
-            return {"error": f"Error decoding JSON: {val_err}"}
-        except KeyError as key_err:
-            return {"error": f"Unexpected response format: missing key {key_err}"}
+            error_msg = f"Failed to fetch domain actions: {req_err}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            return {"error": error_msg}
+        except (ValueError, KeyError) as parse_err:
+            error_msg = f"Error parsing services response: {parse_err}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            return {"error": error_msg}
 
     def fetch_entity_map(
         self,
@@ -122,8 +187,7 @@ class HomeAssistantClient:
         """
         try:
             url = f"{self.base_url}/api/states"
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
+            response = self._retry_request('GET', url, headers=self.headers)
 
             entities = response.json()
 
@@ -162,10 +226,32 @@ class HomeAssistantClient:
                     'actions': actions,
                 }
 
+            # Cache the entity map for fallback
+            self.entity_map_cache = entity_map.copy()
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully fetched {len(entity_map)} entities")
             return entity_map
 
-        except Exception as e:
-            print(f"Error fetching entity map: {e}")
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Failed to fetch entity map: {e}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            
+            # Try to use cached entity map as fallback
+            if self.entity_map_cache:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Using cached entity map with {len(self.entity_map_cache)} entities")
+                return self.entity_map_cache
+            
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] No cached entity map available")
+            return {}
+            
+        except (ValueError, KeyError, TypeError) as e:
+            error_msg = f"Error parsing entity map response: {e}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            
+            # Try to use cached entity map as fallback
+            if self.entity_map_cache:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Using cached entity map with {len(self.entity_map_cache)} entities")
+                return self.entity_map_cache
+            
             return {}
 
     def send_commands(self, payload: dict, debug: bool = True):
@@ -185,7 +271,7 @@ class HomeAssistantClient:
             extra_data = command.get('data', {})
 
             if debug:
-                print(f"Processing command: action={action}, target={target}, data={extra_data}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing command: action={action}, target={target}, data={extra_data}")
 
             # Check if this command matches a simple function (non-HA)
             simple_action = self.simple_functions.find_matching_action(command_json=command)
@@ -240,8 +326,7 @@ class HomeAssistantClient:
                 payload_data = {"entity_id": entity_info['entity_id'], **extra_data}
 
                 try:
-                    response = requests.post(url, headers=self.headers, json=payload_data)
-                    response.raise_for_status()  # Raise for HTTP errors
+                    response = self._retry_request('POST', url, headers=self.headers, json=payload_data)
                     response_data = response.json() if response.content else {}
 
                     results.append({
@@ -251,28 +336,33 @@ class HomeAssistantClient:
                         "status": response.status_code,
                         "response": response_data,
                     })
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command executed: {action} on {target}")
 
                 except requests.exceptions.RequestException as e:
-                    # HTTP request failed
+                    # HTTP request failed after retries
+                    error_msg = f"Failed to execute command after retries: {e}"
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
                     results.append({
                         "target": target,
                         "action": action,
-                        "error": f"HTTP request failed: {e}",
+                        "error": error_msg,
                         "url": url,
                         "payload": payload_data,
                     })
 
                 except ValueError as e:  # JSON decoding error
+                    error_msg = f"Failed to parse response JSON: {e}"
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
                     results.append({
                         "target": target,
                         "action": action,
-                        "error": f"Failed to parse response JSON: {e}",
+                        "error": error_msg,
                         "status": response.status_code,
                         "raw_response": response.text,
                     })
 
                 if debug:
-                    print("Command Results:", results)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command Results: {results}")
 
                 return None
             
@@ -290,16 +380,19 @@ class HomeAssistantClient:
 
         @return Service info dict if found, else None.
         """
-        url = f"{self.base_url}/api/services"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
+        try:
+            url = f"{self.base_url}/api/services"
+            response = self._retry_request('GET', url, headers=self.headers)
+            services = response.json()
 
-        services = response.json()
-
-        for item in services:
-            if item['domain'] == domain:
-                return item['services'].get(action)
-        return None
+            for item in services:
+                if item['domain'] == domain:
+                    return item['services'].get(action)
+            return None
+            
+        except (requests.exceptions.RequestException, ValueError, KeyError) as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to get service info for {domain}.{action}: {e}")
+            return None
 
     def generate_devices_prompt_fragment(self):
         """
@@ -322,20 +415,27 @@ class HomeAssistantClient:
         """
         url = f"{self.base_url}/api/config"
         try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-
+            response = self._retry_request('GET', url, headers=self.headers)
             config = response.json()
             latitude = config.get('latitude')
             longitude = config.get('longitude')
 
             if latitude is not None and longitude is not None:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Retrieved home location: {latitude}, {longitude}")
                 return {"latitude": latitude, "longitude": longitude}
             else:
-                return {"error": "Latitude or longitude not found in the configuration"}
+                error_msg = "Latitude or longitude not found in the configuration"
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] {error_msg}")
+                return {"error": error_msg}
 
         except requests.exceptions.RequestException as e:
-            return {"error": f"Failed to fetch home location: {e}"}
+            error_msg = f"Failed to fetch home location: {e}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            return {"error": error_msg}
+        except (ValueError, KeyError) as e:
+            error_msg = f"Error parsing config response: {e}"
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
+            return {"error": error_msg}
 
 
 class SimpleFunctions:
@@ -370,9 +470,9 @@ class SimpleFunctions:
             if callable(method):
                 return method(*args, **kwargs)
             else:
-                print(f"{function_name} exists but is not callable.")
+                print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] {function_name} exists but is not callable.")
         else:
-            print(f"No function named {function_name} found.")
+            print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] No function named {function_name} found.")
 
     def load_command_schema_from_file(self) -> dict:
         """
@@ -385,11 +485,11 @@ class SimpleFunctions:
                 command_schema = json.load(file)
             return command_schema
         except FileNotFoundError:
-            print(f"Error: File not found: {self.filepath}")
+            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] File not found: {self.filepath}")
         except json.JSONDecodeError as e:
-            print(f"Error: Failed to parse JSON - {e}")
+            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Failed to parse JSON - {e}")
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Unexpected error: {e}")
 
         return {}
 
