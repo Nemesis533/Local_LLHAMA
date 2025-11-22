@@ -2,20 +2,24 @@
 
 **Local_LLAMA** is a local-first, multilingual, LLaMA-powered voice assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/). Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. Being an indipendent system that can run on base linux and interface with HA (or potentially other domotics systems) via API, it also bypasses many of the compatibility restrictions that running a similar system in HA have (such as smart-speaker compatibility).
 
+## UPDATE - The system is currently being overhauled to improve both performance, maintenability and features; current development branch is 'refactor'
+
 ## Features
 
 - Wake word detection using `OpenWakeWord`
 - Voice recording with adaptive noise floor detection
 - Whisper-based speech-to-text conversion
-- LLaMA 3.1 (8B) LLM for command parsing and entity resolution
+- NEW! Allows the use of either same-machine instanced model (tested using LLaMA 3.1 (8B) or using an Ollama server LLM for command parsing and entity resolution
+- NEW! Allows the user to perform NL queries in addition to just giving HA commands 
 - Optional PromptGuard safety layer (LLaMA 3.2 3B fine-tuned model)
-- Multilingual support: English, French, Spanish, Italian, German, Russian (and more)
+- Multilingual support: English, French, Spanish, Italian, German, Russian
   This allows you to call the command in any of the supported languages and not have to worry about it - you can say "la lumière du salon" for "living room light"
 - Fuzzy device/entity matching using dynamic Home Assistant entity list; for optmization purposes, a manual list of devices can also be assigned instead of filtering the full list from HA.
   This solves the problem of having to call devices by the exact name that they are saved under - you can now say "light above the desk" to call the "desk light".
 - Execute multiple commands in a single sentence
-- NEW! Thanks to Integration with Ollama, natual language responses will be returned when no device is present.
-- Basic web interface for output monitoring and connection status (expansion and system control planned)
+- NEW! Web search integration - ask for news, Wikipedia articles, weather information
+- NEW! Mixed command support - combine HA commands with information queries in a single request (e.g., "turn on the lights and tell me the weather")
+- NEW! Web interface for controlling settings, interacting with the system via text, output monitoring and connection status
 - Ability to integrate non-Home Assistant devices and commands with the same pipeline as the one used for Home Assistant.
 
 ## System Requirements
@@ -27,11 +31,13 @@
 | GPU      | NVIDIA RTX 4060 Ti or better (16GB+ VRAM) | for 12GB, see notes below.
 | OS       | Linux (tested on Ubuntu 24.04) | Shoudl work fine on 22.04 as well.
 
-- The system is GPU-accelerated; most of the computational load is handled on the GPU. The current setup uses about 14.5GB on the RTX 4060TI
+- The system is GPU-accelerated; most of the computational load is handled on the GPU. The current setup uses about 14.5GB on the RTX 4060TI with everything loaded locally.
+- When using an Ollama server, the core system uses about 6.5. GB of VRAM 
 - You can potentially get away with 12GB VRAM if you disable the guard model and use the small whisper model. Prompt guard tooglign currently not implemented.
 - CPU and RAM requirements are minimal as most of the work is done on the GPU.
 - The system was tested in an Ubutnu VM in Proxmox with GPU passthru.
-- Typical latency from command to execution: 1–4 seconds.
+- Typical latency from command to execution: 1–4 seconds with a single machine and the above HW.
+- Multi-machien system was tested with same CPUs but an RTX 2080ti for the main system and the RTX 4060ti for the Ollama server; command execution latency drops to about 1 second, NL queries depend on query lenght and response complexity.
 
 ## Installation
 
@@ -40,8 +46,8 @@
 2. Run the install script:
 
 ```bash
-chmod +x install.sh
-./install.sh
+chmod +x local_LLM_installer.sh
+./local_LLM_installer.sh
 ```
 
 This installs all dependencies listed in `requirements.txt` and prepares the environment.
@@ -78,7 +84,7 @@ See `.env.example` for a template.
 
 ### object_settings.json 
 
-This file contains JSON-stored values for non-sensitive configuration variables. When adding a user-settable variable, you'll have to create the variable in a class and add the class and the variable name/value/type to the file like so:
+This file contains json-stored values for non-sensitive configuration variables. When adding a user-settable variable, you'll have to create the variable in a class and add the class and the variable name/value/type to the file like so:
 
   "HomeAssistantClient": {
     "allowed_entities": {
@@ -100,9 +106,13 @@ This file contains JSON-stored values for non-sensitive configuration variables.
  
  **Note**: Sensitive values like API tokens and URLs are now stored in the `.env` file for security.
  
- You can get more details on how the file is used inside the SettingsLoader.py class.
+ You can get more details on how the file is used inside the Settings_Loader.py class.
  
+### web_search_config.json
+
+This file configures which websites can be accessed for information queries (news, Wikipedia, etc.). You can customize the allowed websites, maximum results, and timeout settings.
  
+
 ## How It Works
 
 1. **Wake Word Detection**  
@@ -119,20 +129,21 @@ This file contains JSON-stored values for non-sensitive configuration variables.
 4. **Command Parsing**  
    - If the guard model is used, the query will first be processed there, and only "safe" queries will be passed on. 
 	 The model is based on Llama Guard 3 is a Llama-3.1-8B fine tuned for the specific task in the supported languages.
-   - The transcribed text and a list of entities from Home Assistant are passed to a LLaMA 3.1 (8B) model. By default models are loaded in 8bit.
-   - Entities can be supplied manually or auto-fetched from Home Assistant (requires access token and URL configured in the `.env` file). You can also exclude devices from the entities list in the same manner.
-   - The model identifies the appropriate devices, actions, and parameters, then generates a Home Assistant-compatible JSON command.
+   - The transcribed text and a list of entities from Home Assistant are passed to the main LLM Model (wether local or an Ollama Server is irrelevant to the pipeline). By default same-machine models are loaded in 8bit.
+   - Entities can be supplied manually or auto-fetched from Home Assistant (requires access token and URL in the `.env` file). You can also exclude devices from the entities list in the same manner.
+   - The model identifies the appropriate devices, actions, and parameters, then generates a Home Assistant-compatible JSON command; if no entity can be identified, the model provide an NL response to the user query.
+   - For information queries (weather, news, Wikipedia), the system can fetch real-time data from the web and provide accurate responses.
 
 5. **Command Execution**  
    - If the generated JSON is valid, it is sent to Home Assistant via the API and executed.
-   - If no actionable command is detected, the system reports a failure.
+   - If no actionable command is detected, and the user query doesn't "make sense" to the LLM, the system reports a failure.
    - For actions not supported by Home Assistant directly, you can place them in JSON format in the "command_schema.txt"; 
 	 The actions will be matched via reflection to a function named the same as the action, and then executed via the command_queue
 
 6. **Feedback and Output**  
-   - The piper-tts engine provides spoken confirmation or failure
-   - Output and logs are also available through a simple web UI for basic monitoring.
-   - The langiuage is returned along with the reponse by the LLM
+   - The Coqui TTS engine provides spoken confirmation or failure text.
+   - Output and logs are also available through the web UI for monitoring.
+   - The language is automatically detected and returned by the LLM for multilingual support.
   
 7. **FSM Diagram**
 
@@ -148,12 +159,21 @@ Turn off the kitchen lights and turn on the living room lamp.
 Éteins la lumière du salon et allume la clim dans la chambre. (French)
 
 Apaga la luz de la cocina y enciende la lámpara del salón. (Spanish)
+
+Turn on the desk light and tell me the weather.
+
+What's in the news today?
+
+Tell me about the Eiffel Tower.
 ```
 
 - Natural, free-form commands
 - Multilingual input
 - No need for exact device names
 - Multiple commands per sentence
+- Mixed commands (HA actions + information queries)
+- NL queries on any topic
+- Real-time web information (news, weather, Wikipedia)
 
 ## Dependencies
 
@@ -161,13 +181,16 @@ Key libraries used in this project include:
 
 Lowest supported python version is 3.10, but 3.12 is recommended.
 
-- `torch`, `transformers` (LLaMA model support)
+- `torch`, `transformers`, `accelerate` (LLaMA model support)
 - `whisper` (OpenAI's STT)
 - `openwakeword` (wake word detection)
-- `TTS` (Piper TTS engine)
+- `TTS` (Coqui TTS engine)
 - `pygame` (audio playback)
 - `librosa`, `wave` (audio processing)
-- `flask` (basic web UI)
+- `flask`, `flask-cors` (web UI and API)
+- `requests`, `beautifulsoup4` (web search and scraping)
+- `python-dotenv` (environment variable management)
+- `psutil` (system monitoring)
 
 All dependencies are listed in `requirements.txt`.
 
@@ -176,33 +199,48 @@ All dependencies are listed in `requirements.txt`.
 ```
 .
 ├── dev/
-│   ├── run-dev.py            # script to run the project in dev mode, preparign to create the pip installer
-│   └── wikidoc_creator.py    # script for auto-generation of wiki-doc style docs from comments
-├── FSM_diagram_0.png         # FSR diagram 
+│   ├── run-dev.py            # Script to run the project in dev mode
+│   └── wikidoc_creator.py    # Script for auto-generation of wiki-doc style docs
 ├── local_llhama/
-│   ├── command_schema.txt    # Contains commands that are outside of Home Assistant scope
-│   ├── HA_Interfacer.py      # Home Assistant API communication
-│   ├── __init__.py           # 
-│   ├── LLM.py                # Class to handle LLAMA LLMs and inference logic
-│   ├── logger.py             # Used for logging across the system
-│   ├── Runtime.py            # Entry point
-│   ├── settings/             # Contains the .json settings files for the system, with object_settings.json beign the main one
-│   ├── SettingsLoader.py     # Class dedicated to loading settings and applying them using reflection
-│   ├── Sound_And_Speech.py   # Contains all the sound-related elements, such as STT, TTS, sound player, etc
-│   ├── sounds/               # Folder containing system sounds 
-│   ├── StateMachine.py       # SFM which handles state transition
-│   ├── static/               # Contains the webui elements
-│   └── WebService.py         # WebService for webui backend and other web services for the system
+│   ├── command_schema.txt    # Contains commands outside of Home Assistant scope
+│   ├── Home_Assistant_Interface.py  # Home Assistant API communication
+│   ├── __init__.py           # Package initialization
+│   ├── LLM_Handler.py        # Handles LLaMA LLMs and inference logic
+│   ├── Shared_Logger.py      # Logging system used across the project
+│   ├── Run_System.py         # Entry point for running the system
+│   ├── Runtime_Supervisor.py # Manages web service and system orchestration
+│   ├── System_Controller.py  # Main system controller and component orchestration
+│   ├── Settings_Loader.py    # Loads settings and applies them using reflection
+│   ├── Sound_And_Speech.py   # STT, TTS, wake word detection, audio playback
+│   ├── State_Machine.py      # FSM for handling state transitions
+│   ├── Web_Server.py         # Web service backend and API endpoints
+│   ├── routes/               # Web UI route handlers
+│   │   ├── __init__.py
+│   │   ├── llm_routes.py
+│   │   ├── main_routes.py
+│   │   ├── settings_routes.py
+│   │   ├── system_routes.py
+│   │   └── user_routes.py
+│   ├── settings/
+│   │   ├── object_settings.json     # Non-sensitive configuration
+│   │   └── web_search_config.json   # Web search configuration
+│   ├── sounds/               # System sound files
+│   └── static/               # Web UI assets (HTML, CSS, JS, images)
+├── piper_voices/             # TTS voice models
 ├── local_LLM_installer.sh    # Setup script
-├── README.md                 # Readme
-├── requirements.txt          # Dependency list
-└── wiki_docs/                # wiki-doc style documentation folder.
+├── .env.example              # Template for environment variables
+├── README.md                 # This file
+├── requirements.txt          # Python dependencies
+└── SECURITY_MIGRATION.md     # Guide for .env migration
 ```
 
 ## WebUI
 
-A basic webui has been implemented - it allows to the stdout of the system and loads the object_settings file values; these can eb adited manually and saved for easier access. 
-Currently there is no input control, ability to restart the system has been implemented.
+NEW! 
+
+A webui has been implemented - it allows you to view the stdout of the system and loads the object_settings file values; these can be edited manually and saved for easier access. 
+The newest version also allows for text-based interaction with the system, so you can send commands without using voice.
+
 
 ## License
 
@@ -238,11 +276,18 @@ For significant changes, please open a discussion before submitting a pull reque
 ## Future Work
 
 This is a basic implementation which I plan on expanding over time (when time permits) by adding:
-- Support for remote LLMs (passing commands to an LLM instanced elsewhere on the network)
-- Current WIP: Proper webUI with control (start/stop/etc) for the system - restart implemented.
-- Current WIP: Prompt Guard toogle.
-- Perfomance optimizations
-- Support for multiple LLMS (for instance one fine tuned on commands and another for NL responses).
+- ~~Support for remote LLMs (passing commands to an LLM instanced elsewhere on the network)~~ - DONE!
+- ~~Proper webUI with control (start/stop/etc) for the system~~ - DONE!
+- ~~Prompt Guard toggle~~ - DONE!
+- ~~Support for multiple LLMS (for instance one fine tuned on commands and another for NL responses)~~ - DONE!
+- ~~Web search integration (news, Wikipedia, weather)~~ - DONE!
+- Performance optimizations
+- Improving TTS performance and flexibility
+- Expanding web search capabilities
+- Adding agents for RAG
+- Simplify custom function integration
+- Dynamic failure message generation
+- Better error handling and recovery
 
 - We'll see what else comes to mind!
 
