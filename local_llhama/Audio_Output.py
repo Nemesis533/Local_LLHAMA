@@ -184,15 +184,104 @@ class TextToSpeech:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error scanning voice directory: {e}")
         
         # Initialize PyAudio with error handling
+        # Important: Initialize AFTER pygame to avoid device conflicts
+        # Multiple retries to handle race conditions with pygame
+        self.p = None
+        for init_attempt in range(3):
+            try:
+                if init_attempt > 0:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio init attempt {init_attempt + 1}/3...")
+                    time.sleep(0.3 * init_attempt)  # Progressive backoff
+                
+                self.p = pyaudio.PyAudio()
+                device_count = self.p.get_device_count()
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully ({device_count} devices found)")
+                
+                if device_count > 0:
+                    break  # Success!
+                else:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] PyAudio found 0 devices, retrying...")
+                    self.p.terminate()
+                    self.p = None
+            except Exception as init_err:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] PyAudio init attempt {init_attempt + 1} failed: {init_err}")
+                if self.p:
+                    try:
+                        self.p.terminate()
+                    except:
+                        pass
+                    self.p = None
+        
+        if self.p is None:
+            raise RuntimeError("Failed to initialize PyAudio after 3 attempts")
+        
+        device_count = self.p.get_device_count()
+        
+        # Get and validate default output device
         try:
-            self.p = pyaudio.PyAudio()
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
-        except OSError as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}")
-            raise RuntimeError(f"Audio device initialization failed: {e}")
-        except Exception as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing PyAudio: {type(e).__name__}: {e}")
-            raise
+            default_output_info = self.p.get_default_output_device_info()
+            self.output_device_index = default_output_info['index']
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Default output device: {default_output_info['name']} (index: {self.output_device_index})")
+        except (OSError, IOError) as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No default output device found: {e}")
+            # Try to find any working output device
+            self.output_device_index = None
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Searching {device_count} devices for output capability...")
+            for i in range(device_count):
+                try:
+                    dev_info = self.p.get_device_info_by_index(i)
+                    if dev_info['maxOutputChannels'] > 0:
+                        self.output_device_index = i
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using output device: {dev_info['name']} (index: {i}, channels: {dev_info['maxOutputChannels']})")
+                        break
+                except Exception as dev_err:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error checking device {i}: {dev_err}")
+                    continue
+            
+            if self.output_device_index is None:
+                raise RuntimeError("No output audio device available")
+        
+        # Test if we can actually open the device
+        try:
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Testing output device {self.output_device_index}...")
+            test_stream = self.p.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=22050,
+                output=True,
+                output_device_index=self.output_device_index,
+                frames_per_buffer=1024
+            )
+            test_stream.close()
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Output device test successful")
+        except (OSError, IOError) as test_err:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Output device test failed: {test_err}")
+            # Device exists but can't be opened - try to find another one
+            original_device = self.output_device_index
+            self.output_device_index = None
+            for i in range(device_count):
+                if i == original_device:
+                    continue
+                try:
+                    dev_info = self.p.get_device_info_by_index(i)
+                    if dev_info['maxOutputChannels'] > 0:
+                        test_stream = self.p.open(
+                            format=pyaudio.paInt16,
+                            channels=1,
+                            rate=22050,
+                            output=True,
+                            output_device_index=i,
+                            frames_per_buffer=1024
+                        )
+                        test_stream.close()
+                        self.output_device_index = i
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Found working alternative device: {dev_info['name']} (index: {i})")
+                        break
+                except:
+                    continue
+            
+            if self.output_device_index is None:
+                raise RuntimeError(f"All output devices failed to open. Original error: {test_err}")
         
         self.voice = None
         self.voice_cache = {}  # Cache loaded voices by language
@@ -312,17 +401,39 @@ class TextToSpeech:
                 while retry_count <= max_retries:
                     try:
                         if stream is None:
+                            # Verify PyAudio is still valid
+                            if self.p is None:
+                                raise RuntimeError("PyAudio instance is None")
+                            
+                            # Log what we're trying to use
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening audio stream: device={self.output_device_index}, rate={chunk.sample_rate}, channels={chunk.sample_channels}")
+                            
                             stream = self.p.open(
                                 format=self.p.get_format_from_width(chunk.sample_width),
                                 channels=chunk.sample_channels,
                                 rate=chunk.sample_rate,
                                 output=True,
+                                output_device_index=self.output_device_index,
                             )
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio stream opened successfully")
                         stream.write(chunk.audio_int16_bytes)
                         break  # Success, exit retry loop
                     except OSError as e:
                         retry_count += 1
                         print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio stream error (attempt {retry_count}/{max_retries + 1}): {e}")
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Device index: {self.output_device_index}, PyAudio valid: {self.p is not None}")
+                        
+                        # Try to diagnose the issue
+                        if self.p is not None:
+                            try:
+                                device_count = self.p.get_device_count()
+                                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] PyAudio currently sees {device_count} devices")
+                                if self.output_device_index < device_count:
+                                    dev_info = self.p.get_device_info_by_index(self.output_device_index)
+                                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Device {self.output_device_index} info: {dev_info['name']}, outputs: {dev_info['maxOutputChannels']}")
+                            except Exception as diag_err:
+                                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Diagnostic check failed: {diag_err}")
+                        
                         if stream:
                             try:
                                 stream.close()
@@ -336,11 +447,15 @@ class TextToSpeech:
             if stream:
                 stream.stop_stream()
                 stream.close()
+                # Allow time for device cleanup before other processes access it
+                time.sleep(0.3)
         except OSError as e:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Audio device error during speech: {e}")
             if stream:
                 try:
                     stream.close()
+                    # Allow time for device cleanup
+                    time.sleep(0.3)
                 except:
                     pass
         except Exception as e:
@@ -348,8 +463,12 @@ class TextToSpeech:
             if stream:
                 try:
                     stream.close()
+                    # Allow time for device cleanup
+                    time.sleep(0.3)
                 except:
                     pass
 
     def __del__(self):
-        self.p.terminate()
+        # Don't terminate PyAudio in destructor - it's a global shutdown
+        # that can break other PyAudio instances in the same process
+        pass

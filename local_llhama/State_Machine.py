@@ -71,6 +71,9 @@ class StateMachineInstance:
         self.transcriptor.init_model(device)
 
         self.sound_player = SoundPlayer(self.base_path)
+        # Small delay to allow pygame's audio system to fully initialize
+        # This prevents device conflicts between pygame and PyAudio
+        time.sleep(0.5)
         self.speaker = TextToSpeech(voice_dir=voice_dir)
 
         self.load_threads()
@@ -336,6 +339,9 @@ class StateMachineInstance:
 
         if current_state == State.RECORDING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording...")
+            # Pause wake word detection to free audio device
+            self.awaker.pause()
+            time.sleep(0.5)  # Allow time for wake word listener to cleanup
             try:
                 noise_floor_val = self.get_noise_floor()
                 transcription = self.recorder.record_audio(self.transcriptor, noise_floor_val)
@@ -363,6 +369,9 @@ class StateMachineInstance:
 
         if current_state == State.SPEAKING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Speaking response...")
+            # Pause wake word detection to free audio device
+            self.awaker.pause()
+            time.sleep(0.5)  # Allow time for wake word listener to cleanup
             try:
                 transcription = self.speech_queue.get(timeout=2)
                 self.speaker.speak(transcription[0], transcription[1])
@@ -464,6 +473,9 @@ class StateMachineInstance:
                 current_state = self.state
 
             if current_state == State.LISTENING:
+                # Ensure wake word detection is resumed in listening state
+                if not self.awaker.pause_event.is_set():
+                    self.awaker.resume()
                 self.print_once("Listening for input...", end="\r")
 
             elif current_state == State.RECORDING:

@@ -66,7 +66,7 @@ class AudioRecorderClass:
         self.channels = channels
         self.chunk_size = chunk_size
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
-        self.noise_floor_multiplier = 0.85
+        self.noise_floor_multiplier = 0.65
         self.noise_threshold = 0
         self.silence_window_seconds = 2
         self.max_chunks = int(self.sample_rate / self.chunk_size * self.silence_window_seconds)
@@ -101,13 +101,11 @@ class AudioRecorderClass:
                                 frames_per_buffer=self.chunk_size)
             except OSError as e:
                 print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open audio stream: {e}")
-                if p:
-                    p.terminate()
+                # Don't terminate - let garbage collector handle it
                 return "Failed to open microphone"
             except Exception as e:
                 print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error opening stream: {type(e).__name__}: {e}")
-                if p:
-                    p.terminate()
+                # Don't terminate - let garbage collector handle it
                 return "Microphone error"
             
             self.noise_threshold = noise_floor * self.noise_floor_multiplier
@@ -149,7 +147,11 @@ class AudioRecorderClass:
 
             stream.stop_stream()
             stream.close()
-            p.terminate()
+            # Don't terminate PyAudio - it's a global shutdown that breaks other instances
+            # Just let Python's garbage collector handle it
+            
+            # Allow time for device cleanup before other processes access it
+            time.sleep(0.3)
 
             # Check if we got any audio data
             if not frames:
@@ -181,11 +183,9 @@ class AudioRecorderClass:
                     stream.close()
                 except:
                     pass
-            if p:
-                try:
-                    p.terminate()
-                except:
-                    pass
+            # Don't terminate PyAudio - it's a global shutdown
+            # Just allow time for device cleanup
+            time.sleep(0.3)
 
 
 class NoiseFloorMonitor:
@@ -240,9 +240,26 @@ class WakeWordListener:
         self.wakeword_thr = 0.70
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
         self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.pause_event.set()  # Start unpaused
+
+    def pause(self):
+        """Pause wake word detection to free audio device."""
+        self.pause_event.clear()
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection paused")
+
+    def resume(self):
+        """Resume wake word detection."""
+        self.pause_event.set()
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection resumed")
 
     def listen_for_wake_word(self, result_queue):
         while not self.stop_event.is_set():
+            # Wait if paused
+            if not self.pause_event.is_set():
+                time.sleep(0.1)
+                continue
+            
             audio = None
             mic_stream = None
             
@@ -271,14 +288,12 @@ class WakeWordListener:
                                             frames_per_buffer=CHUNK)
                 except OSError as e:
                     print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}")
-                    if audio:
-                        audio.terminate()
+                    # Don't terminate - let garbage collector handle it
                     time.sleep(5)  # Wait before retry
                     continue
                 except Exception as e:
                     print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected stream error: {type(e).__name__}: {e}")
-                    if audio:
-                        audio.terminate()
+                    # Don't terminate - let garbage collector handle it
                     time.sleep(5)
                     continue
 
@@ -288,7 +303,7 @@ class WakeWordListener:
                 last_detection_time = 0
 
                 # Main detection loop with error handling
-                while not self.stop_event.is_set():
+                while not self.stop_event.is_set() and self.pause_event.is_set():
                     try:
                         audio_data = mic_stream.read(CHUNK, exception_on_overflow=False)
                         np_audio = np.frombuffer(audio_data, dtype=np.int16)
@@ -329,13 +344,11 @@ class WakeWordListener:
                         mic_stream.close()
                     except:
                         pass
-                if audio:
-                    try:
-                        audio.terminate()
-                    except:
-                        pass
+                # Don't terminate PyAudio - it's a global shutdown
+                # Allow time for device cleanup
+                time.sleep(0.3)
                 
-                # Wait before retry if not stopping
-                if not self.stop_event.is_set():
+                # Wait before retry if not stopping and not paused
+                if not self.stop_event.is_set() and self.pause_event.is_set():
                     print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Restarting wake word detection in 3 seconds...")
                     time.sleep(3)
