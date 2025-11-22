@@ -106,19 +106,69 @@ class SettingLoaderClass:
         @exception Raises ValueError if the file cannot be parsed.
         """
         try:
-            with open(f"{self.settings_file}", 'r') as f:
-                self.data = json.load(f)
-                print("Settings Loading Successful")
+            # Check if file exists
+            if not os.path.exists(self.settings_file):
+                raise FileNotFoundError(f"Settings file not found: {self.settings_file}")
+            
+            # Check if path is actually a file
+            if not os.path.isfile(self.settings_file):
+                raise ValueError(f"Settings path is not a file: {self.settings_file}")
+            
+            # Check file permissions
+            if not os.access(self.settings_file, os.R_OK):
+                raise PermissionError(f"No read permission for settings file: {self.settings_file}")
+            
+            # Check file size
+            file_size = os.path.getsize(self.settings_file)
+            if file_size == 0:
+                raise ValueError(f"Settings file is empty: {self.settings_file}")
+            elif file_size > 10 * 1024 * 1024:  # 10MB limit
+                print(f"[SettingsLoader] [WARNING] Settings file is very large ({file_size} bytes)")
+            
+            with open(self.settings_file, 'r', encoding='utf-8') as f:
+                try:
+                    self.data = json.load(f)
+                except json.JSONDecodeError as e:
+                    raise ValueError(
+                        f"Invalid JSON in settings file: {e}\n"
+                        f"Line {e.lineno}, column {e.colno}: {e.msg}"
+                    )
+            
+            # Validate structure
+            if not isinstance(self.data, dict):
+                raise ValueError(f"Settings file must contain a JSON object, got {type(self.data).__name__}")
+            
+            if len(self.data) == 0:
+                print("[SettingsLoader] [WARNING] Settings file is empty (no configuration found)")
+            
+            print(f"[SettingsLoader] [INFO] Settings loaded successfully from {self.settings_file}")
+            print(f"[SettingsLoader] [INFO] Loaded {len(self.data)} configuration section(s)")
+            
+        except FileNotFoundError as e:
+            print(f"[SettingsLoader] [CRITICAL] {e}")
+            print(f"[SettingsLoader] [INFO] Expected location: {self.settings_file}")
+            print(f"[SettingsLoader] [INFO] Base path: {self.base_path}")
+            raise
+        except PermissionError as e:
+            print(f"[SettingsLoader] [CRITICAL] {e}")
+            print(f"[SettingsLoader] [INFO] Check file permissions: ls -l {self.settings_file}")
+            raise
+        except ValueError as e:
+            print(f"[SettingsLoader] [CRITICAL] {e}")
+            raise
         except Exception as e:
-            raise ValueError(f"Failed to load JSON file: {e}")
+            print(f"[SettingsLoader] [CRITICAL] Unexpected error loading settings: {type(e).__name__}: {repr(e)}")
+            import traceback
+            traceback.print_exc()
+            raise ValueError(f"Failed to load JSON file: {repr(e)}") from e
         
     def load_llm_models(self, ha_client):
         """
         @brief Loads the command LLM model with given Home Assistant client.
 
         @param ha_client: An instance of HomeAssistantClient to integrate LLM with home automation.
-        @return: A loaded instance of LLM_Class.
-        @raises ValueError: If Ollama configuration is invalid when use_ollama is True.
+        @return: A loaded instance of LLM_Class or OllamaClient.
+        @raises ValueError: If configuration is invalid or model loading fails.
         """
         if self.use_ollama:
             # Load ollama_ip from environment variable if not set in JSON
@@ -129,25 +179,58 @@ class SettingLoaderClass:
                     "Ollama is enabled but OLLAMA_IP is not configured.\n"
                     "Please set OLLAMA_IP in your .env file (e.g., OLLAMA_IP=192.168.88.239:11434)"
                 )
+                print(f"[SettingsLoader] [CRITICAL] {error_msg}")
                 raise ValueError(error_msg)
             
             # Validate format (should contain colon for IP:PORT)
             if ':' not in ollama_ip:
                 print(f"[SettingsLoader] [WARNING] OLLAMA_IP ({ollama_ip}) doesn't contain port. Expected format: IP:PORT")
+                print(f"[SettingsLoader] [WARNING] Adding default port :11434")
+                ollama_ip = f"{ollama_ip}:11434"
             
-            print(f"[SettingsLoader] [INFO] Connecting to Ollama at {ollama_ip} with model {self.ollama_model}")
-            command_llm = OllamaClient(ha_client, host=ollama_ip, model=self.ollama_model)
+            # Validate model name
+            if not self.ollama_model or not self.ollama_model.strip():
+                print(f"[SettingsLoader] [WARNING] No Ollama model specified, using default")
+                self.ollama_model = "llama2"
+            
+            try:
+                print(f"[SettingsLoader] [INFO] Connecting to Ollama at {ollama_ip} with model {self.ollama_model}")
+                command_llm = OllamaClient(ha_client, host=ollama_ip, model=self.ollama_model)
+                print(f"[SettingsLoader] [INFO] Ollama client created successfully")
+            except Exception as e:
+                print(f"[SettingsLoader] [CRITICAL] Failed to create Ollama client: {repr(e)}")
+                raise ValueError(f"Ollama client initialization failed: {repr(e)}") from e
         else:
+            # Local LLM loading
+            if not self.command_llm_name or not self.command_llm_name.strip():
+                raise ValueError("Command LLM name not configured")
+            
+            if not self.base_model_path or not os.path.exists(self.base_model_path):
+                print(f"[SettingsLoader] [WARNING] Base model path may not exist: {self.base_model_path}")
+            
             command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
-            print(f"Loading command LLM model from {command_llm_path}")
-            command_llm = LLM_Class(
-                model_path=self.base_model_path,
-                model_name=self.command_llm_name,
-                device=self.device,
-                ha_client=ha_client,
-                prompt_guard_model_name=self.prompt_guard_model_name,
-                load_guard=self.use_guard_llm                       
-            )        
+            print(f"[SettingsLoader] [INFO] Loading command LLM model from {command_llm_path}")
+            
+            try:
+                command_llm = LLM_Class(
+                    model_path=self.base_model_path,
+                    model_name=self.command_llm_name,
+                    device=self.device,
+                    ha_client=ha_client,
+                    prompt_guard_model_name=self.prompt_guard_model_name,
+                    load_guard=self.use_guard_llm                       
+                )
+                
+                # Load the model
+                if not command_llm.load_model(use_int8=self.load_models_in_8_bit):
+                    raise ValueError("LLM model loading returned False")
+                    
+                print(f"[SettingsLoader] [INFO] Command LLM loaded successfully")
+                
+            except Exception as e:
+                print(f"[SettingsLoader] [CRITICAL] Failed to load command LLM: {repr(e)}")
+                raise ValueError(f"Command LLM loading failed: {repr(e)}") from e
+                
         return command_llm
 
     def apply(self, objects):
@@ -156,28 +239,64 @@ class SettingLoaderClass:
         Reflection-based: looks at each attribute in the class config
         and assigns it if the object has a matching attribute.
         """
+        if not isinstance(objects, list):
+            print(f"[SettingsLoader] [WARNING] apply() expects a list, got {type(objects).__name__}")
+            objects = [objects] if objects else []
+        
         all_objects = objects + [self]
+        applied_count = 0
+        error_count = 0
 
         for obj in all_objects:
+            if obj is None:
+                print(f"[SettingsLoader] [WARNING] Skipping None object in apply list")
+                continue
+            
             cls_name = obj.__class__.__name__
 
             # Skip if this object's class has no section in data
             if cls_name not in self.data:
                 continue
+            
+            class_config = self.data[cls_name]
+            if not isinstance(class_config, dict):
+                print(f"[SettingsLoader] [WARNING] Config for '{cls_name}' is not a dict, skipping")
+                continue
 
-            for attr, info in self.data[cls_name].items():
+            for attr, info in class_config.items():
+                if not isinstance(info, dict):
+                    print(f"[SettingsLoader] [WARNING] Config for '{cls_name}.{attr}' is not a dict, skipping")
+                    error_count += 1
+                    continue
+                
                 if not hasattr(obj, attr):
-                    print(f"[Warning] '{cls_name}' has no attribute '{attr}'")
+                    print(f"[SettingsLoader] [WARNING] '{cls_name}' has no attribute '{attr}'")
+                    error_count += 1
                     continue
 
                 raw_value = info.get("value")
                 expected_type = info.get("type")
+                
+                if expected_type is None:
+                    print(f"[SettingsLoader] [WARNING] No type specified for '{cls_name}.{attr}', skipping")
+                    error_count += 1
+                    continue
 
                 try:
                     converted_value = self.cast_value(raw_value, expected_type)
                     setattr(obj, attr, converted_value)  # reflection
+                    applied_count += 1
+                except ValueError as e:
+                    print(f"[SettingsLoader] [WARNING] Value error setting '{cls_name}.{attr}': {e}")
+                    error_count += 1
+                except TypeError as e:
+                    print(f"[SettingsLoader] [WARNING] Type error setting '{cls_name}.{attr}': {e}")
+                    error_count += 1
                 except Exception as e:
-                    print(f"[Error] Failed to set '{cls_name}.{attr}': {e}")
+                    print(f"[SettingsLoader] [WARNING] Failed to set '{cls_name}.{attr}': {repr(e)}")
+                    error_count += 1
+        
+        print(f"[SettingsLoader] [INFO] Applied {applied_count} setting(s), {error_count} error(s)")
 
     @staticmethod
     def cast_value(value, type_str):
@@ -189,23 +308,47 @@ class SettingLoaderClass:
         @return The value converted to the correct type.
         @exception Raises ValueError on unsupported or invalid conversion.
         """
-        if type_str == "int":
-            return int(value)
-        elif type_str == "float":
-            return float(value)
-        elif type_str == "bool":
-            if isinstance(value, str):
-                return value.lower() in ("true", "1", "yes")
-            return bool(value)
-        elif type_str == "str":
-            return str(value)
-        elif type_str == "list":
-            if isinstance(value, list):
-                return value
-            elif isinstance(value, str):
-                # Optional: allow comma-separated string to become list
-                return [item.strip() for item in value.split(',')]
+        if type_str is None or not isinstance(type_str, str):
+            raise ValueError(f"Invalid type specification: {type_str}")
+        
+        type_str = type_str.strip().lower()
+        
+        try:
+            if type_str == "int":
+                if value is None:
+                    raise ValueError("Cannot convert None to int")
+                return int(value)
+            elif type_str == "float":
+                if value is None:
+                    raise ValueError("Cannot convert None to float")
+                return float(value)
+            elif type_str == "bool":
+                if value is None:
+                    return False
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    return value.lower() in ("true", "1", "yes", "on")
+                return bool(value)
+            elif type_str == "str":
+                if value is None:
+                    return ""
+                return str(value)
+            elif type_str == "list":
+                if value is None:
+                    return []
+                if isinstance(value, list):
+                    return value
+                elif isinstance(value, str):
+                    # Allow comma-separated string to become list
+                    if not value.strip():
+                        return []
+                    return [item.strip() for item in value.split(',')]
+                else:
+                    raise ValueError(f"Cannot convert {type(value).__name__} to list")
             else:
-                raise ValueError(f"Cannot convert {value} to list")
-        else:
-            raise ValueError(f"Unsupported type: {type_str}")
+                raise ValueError(f"Unsupported type: {type_str}")
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Failed to convert '{value}' to {type_str}: {e}") from e
+        except Exception as e:
+            raise ValueError(f"Unexpected error converting '{value}' to {type_str}: {repr(e)}") from e

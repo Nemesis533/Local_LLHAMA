@@ -335,7 +335,7 @@ class LLM_Class():
                 outputs = self.model.generate(
                     input_ids=inputs["input_ids"],
                     attention_mask=inputs["attention_mask"],
-                    max_new_tokens=150,
+                    max_new_tokens=200,
                     pad_token_id=self.tokenizer.eos_token_id,
                     top_p=1.0,
                     do_sample=False,
@@ -456,25 +456,58 @@ class PromptGuard_Class:
         @param user_input Raw user input string to evaluate.
         @return True if input is considered safe, False if suspicious.
         """
+        # Validate model is loaded
+        if self.model is None or self.tokenizer is None:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model not loaded, defaulting to safe")
+            return True  # Fail-open for availability
+        
+        # Validate input
+        if not user_input or not user_input.strip():
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty input, treating as safe")
+            return True
+        
         # Prepare the prompt for classification
-        prompt = self.build_prompt(user_input)
+        try:
+            prompt = self.build_prompt(user_input)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to build prompt: {repr(e)}")
+            return True  # Fail-open
 
         # Tokenize the prompt with padding, truncation and move to correct device
-        inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=512).to(self.device)
+        try:
+            inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=512).to(self.device)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Tokenization failed: {repr(e)}")
+            return True  # Fail-open
 
         # Perform model inference without gradient calculation
-        with torch.no_grad():
-            logits = self.model(**inputs).logits
-            probs = softmax(logits, dim=-1)[0]  # Get probabilities for each class
+        try:
+            with torch.no_grad():
+                logits = self.model(**inputs).logits
+                probs = softmax(logits, dim=-1)[0]  # Get probabilities for each class
+        except torch.cuda.OutOfMemoryError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] CUDA OOM in safety check: {repr(e)}")
+            torch.cuda.empty_cache()
+            return True  # Fail-open
+        except RuntimeError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Runtime error in safety check: {repr(e)}")
+            return True  # Fail-open
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Safety inference failed: {repr(e)}")
+            return True  # Fail-open
 
-        unsafe_score = probs[0].item()  # Probability that input is unsafe
-        safe_score = probs[1].item()    # Probability that input is safe
-        is_safe = unsafe_score < self.threshold  # Compare with threshold
+        try:
+            unsafe_score = probs[0].item()  # Probability that input is unsafe
+            safe_score = probs[1].item()    # Probability that input is safe
+            is_safe = unsafe_score < self.threshold  # Compare with threshold
 
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Evaluating: {user_input[:50]}...")
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Safety check: unsafe={unsafe_score:.4f}, threshold={self.threshold}, safe={is_safe}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Evaluating: {user_input[:50]}...")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Safety check: unsafe={unsafe_score:.4f}, threshold={self.threshold}, safe={is_safe}")
 
-        return is_safe
+            return is_safe
+        except (IndexError, ValueError) as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to extract probabilities: {repr(e)}")
+            return True  # Fail-open
 
 class OllamaClient:
     """
@@ -528,7 +561,12 @@ class OllamaClient:
         self.system_prompt = prompt
     
     def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096):
-        url = f"http://{self.host}/api/generate"  
+        # Validate input
+        if not user_message or not user_message.strip():
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided")
+            return {"commands": []}
+        
+        url = f"http://{self.host}/api/generate"
 
         payload = {
             "model": self.model,
@@ -546,39 +584,62 @@ class OllamaClient:
         try:
             response = requests.post(url, json=payload, timeout=30)
             response.raise_for_status()
-            data = response.json()
         except requests.exceptions.Timeout:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request timeout connecting to Ollama at {self.host}")
             return {"commands": []}
         except requests.exceptions.ConnectionError as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Connection error to Ollama: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Connection error to Ollama: {repr(e)}")
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check if Ollama is running at {self.host}")
             return {"commands": []}
         except requests.exceptions.HTTPError as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] HTTP error from Ollama: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] HTTP error from Ollama: {repr(e)}")
+            if hasattr(e.response, 'status_code'):
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Status code: {e.response.status_code}")
             return {"commands": []}
-        except ValueError as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Invalid JSON from Ollama: {e}")
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response text: {response.text[:200]}")
+        except requests.exceptions.RequestException as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request error: {repr(e)}")
             return {"commands": []}
         except Exception as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error: {type(e).__name__}: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error during request: {type(e).__name__}: {repr(e)}")
+            return {"commands": []}
+        
+        # Parse response
+        try:
+            data = response.json()
+        except ValueError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Invalid JSON from Ollama: {repr(e)}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response text: {response.text[:200]}...")
+            return {"commands": []}
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse response: {repr(e)}")
             return {"commands": []}
 
-        # Ollama API usually returns a list of objects in 'output'
-        # Extract the text safely
-        output = ""
-        if "response" in data:
-            output = str(data["response"])
-        else:
+        # Extract response field
+        if "response" not in data:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No 'response' field in Ollama output")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response keys: {list(data.keys())}")
+            return {"commands": []}
+        
+        try:
+            output = str(data["response"])
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to extract response: {repr(e)}")
             return {"commands": []}
 
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Ollama response: {output[:100]}...")
 
+        # Parse JSON from output
         try:
-            return json.loads(output)
+            parsed = json.loads(output)
+            # Validate structure
+            if not isinstance(parsed, dict):
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Response is not a dict")
+                return {"commands": []}
+            return parsed
         except json.JSONDecodeError as e:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {repr(e)}")
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Raw output: {output[:200]}...")
+            return {"commands": []}
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error parsing output: {repr(e)}")
             return {"commands": []}

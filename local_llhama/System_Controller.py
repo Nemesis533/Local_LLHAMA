@@ -109,10 +109,35 @@ class LocalLLHamaSystemController:
         """
         Display current microphone volume using pactl (PulseAudio).
         """
-        result = subprocess.run(["pactl", "list", "sources"], capture_output=True, text=True)
-        for line in result.stdout.splitlines():
-            if "Volume" in line:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {line}")
+        try:
+            result = subprocess.run(
+                ["pactl", "list", "sources"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] pactl command failed with code {result.returncode}")
+                if result.stderr:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Error: {result.stderr[:100]}")
+                return
+            
+            volume_found = False
+            for line in result.stdout.splitlines():
+                if "Volume" in line:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {line}")
+                    volume_found = True
+            
+            if not volume_found:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No volume information found")
+                
+        except subprocess.TimeoutExpired:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] pactl command timed out after 5 seconds")
+        except FileNotFoundError:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] pactl command not found - PulseAudio may not be installed")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to check microphone volume: {repr(e)}")
 
     def setup_audio(self):
         """
@@ -120,11 +145,34 @@ class LocalLLHamaSystemController:
         """
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Setting up system audio")
         start = time.time()
-        subprocess.run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"])
+        
+        try:
+            result = subprocess.run(
+                ["pactl", "set-source-volume", "@DEFAULT_SOURCE@", "65535"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to set audio volume (code {result.returncode})")
+                if result.stderr:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Error: {result.stderr[:100]}")
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio volume set successfully")
+                
+        except subprocess.TimeoutExpired:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio setup command timed out")
+        except FileNotFoundError:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] pactl not found - PulseAudio may not be installed")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Continuing without audio volume configuration")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to setup audio: {repr(e)}")
+        
+        # Check volume regardless of setup success
         self.check_mic_volume()
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio setup done in {time.time() - start:.2f} seconds"
-        )
+        
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio setup done in {time.time() - start:.2f} seconds")
 
     # === Model Memory Management ===
 
@@ -133,10 +181,31 @@ class LocalLLHamaSystemController:
         """
         Unload a PyTorch model from memory and clear CUDA cache.
         """
-        if hasattr(model, "model"):
-            del model.model
-        torch.cuda.empty_cache()
-        gc.collect()
+        if model is None:
+            return
+        
+        try:
+            if hasattr(model, "model") and model.model is not None:
+                del model.model
+                model.model = None
+        except Exception as e:
+            print(f"[Controller] [{LogLevel.WARNING.name}] Failed to delete model: {repr(e)}")
+        
+        # Clear CUDA cache if available
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            except RuntimeError as e:
+                print(f"[Controller] [{LogLevel.WARNING.name}] CUDA cache clear failed: {repr(e)}")
+            except Exception as e:
+                print(f"[Controller] [{LogLevel.WARNING.name}] Unexpected error clearing CUDA: {repr(e)}")
+        
+        # Force garbage collection
+        try:
+            gc.collect()
+        except Exception as e:
+            print(f"[Controller] [{LogLevel.WARNING.name}] Garbage collection failed: {repr(e)}")
 
     # === Execution Methods ===
 
@@ -147,43 +216,97 @@ class LocalLLHamaSystemController:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] === Starting Local LLHAMA System ===")
 
         # 1. Reload settings
-        loader = self.setup_settings()
+        try:
+            loader = self.setup_settings()
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to load settings: {repr(e)}")
+            return False
 
         # 2. Initialize Home Assistant
-        ha_client = self.setup_home_assistant(loader)
+        try:
+            ha_client = self.setup_home_assistant(loader)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize Home Assistant: {repr(e)}")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Continuing without Home Assistant")
+            ha_client = None
 
         # 3. Cleanup existing models
         if self.command_llm:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Existing LLM detected, unloading...")
-            if getattr(self.command_llm, "prompt_guard", None):
-                self.unload_model(self.command_llm.prompt_guard)
-                del self.command_llm.prompt_guard
-                self.command_llm.prompt_guard = None
+            try:
+                if getattr(self.command_llm, "prompt_guard", None):
+                    try:
+                        self.unload_model(self.command_llm.prompt_guard)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to unload prompt guard: {repr(e)}")
+                    
+                    try:
+                        del self.command_llm.prompt_guard
+                        self.command_llm.prompt_guard = None
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to delete prompt guard reference: {repr(e)}")
 
-            self.unload_model(self.command_llm)
-            del self.command_llm
-            self.command_llm = None
+                self.unload_model(self.command_llm)
+                del self.command_llm
+                self.command_llm = None
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error during LLM cleanup: {repr(e)}")
+                self.command_llm = None
 
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using {'GPU' if loader.device == 'cuda' else 'CPU'} for model")
 
         # 4. Load LLM models
-        self.command_llm = self.load_llm_models(loader, ha_client)
+        try:
+            self.command_llm = self.load_llm_models(loader, ha_client)
+            if self.command_llm is None:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] LLM loading returned None")
+                return False
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to load LLM models: {repr(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
         # 5. Setup the state machine
         if self.state_machine is not None:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Stopping existing state machine")
-            self.state_machine.stop()
-            del self.state_machine
-            self.state_machine = None
+            try:
+                self.state_machine.stop()
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error stopping state machine: {repr(e)}")
+            
+            try:
+                del self.state_machine
+                self.state_machine = None
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error deleting state machine: {repr(e)}")
 
-        self.state_machine = self.setup_state_machine(loader, self.command_llm, ha_client)
+        try:
+            self.state_machine = self.setup_state_machine(loader, self.command_llm, ha_client)
+            if self.state_machine is None:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] State machine setup returned None")
+                return False
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to setup state machine: {repr(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
         # 6. Setup system audio
-        self.setup_audio()
+        try:
+            self.setup_audio()
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio setup failed: {repr(e)}")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Continuing without audio configuration")
 
         # 7. Apply runtime configuration
-        self.apply_additional_settings(loader, self.state_machine)
+        try:
+            self.apply_additional_settings(loader, self.state_machine)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to apply additional settings: {repr(e)}")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Continuing with default settings")
             
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] System Started")    
 
         self.started = True
+        return True
