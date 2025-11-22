@@ -701,6 +701,10 @@ class OllamaClient:
         self.ha_client : HomeAssistantClient = ha_client
         self.devices_context = self.ha_client.generate_devices_prompt_fragment()
         self.response_processor_prompt = RESPONSE_PROCESSOR_PROMPT
+        
+        # Context management - keep only last request and response
+        self.last_user_message = None
+        self.last_assistant_response = None
 
         self.languages = {
                 "English": "en",
@@ -818,11 +822,19 @@ class OllamaClient:
         else:
             system_prompt = self.system_prompt
         
+        # Build the prompt with context if available
+        prompt = user_message
+        if message_type == "command" and self.last_user_message and self.last_assistant_response:
+            # Include last conversation in context
+            context_prefix = f"Previous user message: {self.last_user_message}\nPrevious assistant response: {self.last_assistant_response}\n\nCurrent user message: "
+            prompt = context_prefix + user_message
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including previous context in prompt")
+        
         url = f"http://{self.host}/api/generate"
 
         payload = {
             "model": self.model,
-            "prompt": user_message,
+            "prompt": prompt,
             "system": system_prompt,
             "options": {
                 "temperature": temperature,
@@ -887,6 +899,14 @@ class OllamaClient:
             if not isinstance(parsed, dict):
                 print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Response is not a dict")
                 return {"commands": []}
+            
+            # Update context for command type messages only (not for response processing)
+            if message_type == "command":
+                # Store current exchange as the "last" exchange, replacing any previous one
+                self.last_user_message = user_message
+                self.last_assistant_response = output
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated context with current exchange")
+            
             return parsed
         except json.JSONDecodeError as e:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {repr(e)}")
