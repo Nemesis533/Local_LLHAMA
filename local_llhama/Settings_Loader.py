@@ -5,7 +5,8 @@ import os
 from dotenv import load_dotenv
 
 # === Custom Imports ===
-from .LLM_Handler import LLM_Class, OllamaClient
+from .LLM_Handler import LLM_Class
+from .Ollama_Client import OllamaClient
 
 class SettingLoaderClass:
     """

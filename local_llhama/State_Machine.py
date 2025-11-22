@@ -9,7 +9,8 @@ import multiprocessing as mp
 
 # === Custom Imports ===
 from .Sound_And_Speech import SoundPlayer, SoundActions, TextToSpeech, AudioRecorderClass, NoiseFloorMonitor, AudioTranscriptionClass, WakeWordListener
-from .LLM_Handler import LLM_Class, OllamaClient
+from .LLM_Handler import LLM_Class
+from .Ollama_Client import OllamaClient
 from .Home_Assistant_Interface import HomeAssistantClient
 from .Shared_Logger import LogLevel
 
