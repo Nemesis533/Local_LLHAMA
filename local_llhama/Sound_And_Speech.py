@@ -255,7 +255,7 @@ class AudioRecorderClass:
         self.channels = channels
         self.chunk_size = chunk_size
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
-        self.noise_floor_multiplier = 0.95
+        self.noise_floor_multiplier = 0.85
         self.noise_threshold = 0
         self.silence_window_seconds = 2
         self.max_chunks = int(self.sample_rate / self.chunk_size * self.silence_window_seconds)
@@ -295,7 +295,7 @@ class AudioRecorderClass:
             elapsed_time = time.time() - start_time
 
             if elapsed_time >= min_recording_duration:
-                if measured_rms < self.noise_threshold and len(self.rms_values) >= (self.max_chunks - 1):
+                if abs(measured_rms) < abs(self.noise_threshold) and len(self.rms_values) >= (self.max_chunks - 1):
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RMS ({measured_rms:.2f}) dropped below noise threshold ({self.noise_threshold:.2f}), stopping recording.")
                     break
 

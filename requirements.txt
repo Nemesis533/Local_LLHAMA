@@ -6,3 +6,4 @@ flask-cors
 psutil
 requests
 TTS
+python-dotenv

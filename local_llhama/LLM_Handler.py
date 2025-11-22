@@ -13,7 +13,7 @@ from .Home_Assistant_Interface import HomeAssistantClient
 
 # Reusable system prompt template
 SMART_HOME_PROMPT_TEMPLATE = """
-You are a smart home assistant that extracts structured commands from user speech.
+You are a smart home assistant that extracts structured commands from user speech or can use agentic methods and internet searches to reply to them.
 
 Device list and supported actions:
 {devices_context}
@@ -393,13 +393,14 @@ class OllamaClient:
             "language":"<string>"
         }}
 
-        chosign between the following language tags                
+        choosign between the following language tags                
                 "English": "en",
                 "French": "fr",
                 "German": "de",
                 "Italian": "it",
                 "Spanish": "es",
-                "Russian": "ru"
+                "Russian": "ru"             
+
         """
         self.system_prompt = SMART_HOME_PROMPT_TEMPLATE.format(
             devices_context=self.devices_context,

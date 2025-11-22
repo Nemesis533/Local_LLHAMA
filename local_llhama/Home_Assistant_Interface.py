@@ -1,6 +1,8 @@
 # === System Imports ===
 import requests
 import json
+import os
+from dotenv import load_dotenv
 
 class HomeAssistantClient:
     """
@@ -18,8 +20,12 @@ class HomeAssistantClient:
         """
         @brief Initialize the client, fetch domain actions and entity map.
         """
-        self.base_url = ""
-        self.token = ""  
+        # Load environment variables
+        load_dotenv()
+        
+        # Load sensitive configuration from environment variables
+        self.base_url = os.getenv('HA_BASE_URL', '')
+        self.token = os.getenv('HA_TOKEN', '')
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",

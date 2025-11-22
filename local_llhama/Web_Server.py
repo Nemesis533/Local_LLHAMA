@@ -8,6 +8,8 @@ import multiprocessing as mp
 from queue import Queue, Empty
 from pathlib import Path
 import psutil
+import os
+from dotenv import load_dotenv
 
 # Import blueprints from the routes package
 from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp
@@ -18,6 +20,9 @@ from .Shared_Logger import LogLevel
 
 class LocalLLHAMA_WebService:
     def __init__(self, host='0.0.0.0', port=5001, action_message_queue=None,web_server_message_queue=None):
+        # Load environment variables
+        load_dotenv()
+        
         self.web_server_message_queue  : mp.Queue  = web_server_message_queue
         self.action_message_queue : mp.Queue  = action_message_queue
         self.host = host
@@ -27,8 +32,9 @@ class LocalLLHAMA_WebService:
         # Class prefix for messages
         self.class_prefix_message = "[WebServer]"
 
-        # Allowed IPs
-        self.ALLOWED_IP_PREFIXES = ['192.168.88.', '127.0.0.1']
+        # Allowed IPs - load from environment variable
+        allowed_ips_str = os.getenv('ALLOWED_IP_PREFIXES', '192.168.88.,127.0.0.1')
+        self.ALLOWED_IP_PREFIXES = [ip.strip() for ip in allowed_ips_str.split(',')]
 
         # Paths
         self.base_path = Path(__file__).resolve().parent

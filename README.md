@@ -46,15 +46,41 @@ chmod +x install.sh
 
 This installs all dependencies listed in `requirements.txt` and prepares the environment.
 
-## object_settings.json 
+3. Configure environment variables:
 
-This file contains json-stored values for the variables that can be changed in the program. When adding a user-settable variable, you'll have to create the variable in 
-a class and add the class and the variable name/value/type to the file like so:
+Copy the example environment file and edit it with your credentials:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set the following variables:
+- `HA_BASE_URL`: Your Home Assistant URL (e.g., `http://homeassistant.local:8123`)
+- `HA_TOKEN`: Your Home Assistant Long-Lived Access Token (generate from Profile → Long-Lived Access Tokens)
+- `OLLAMA_IP`: Your Ollama server IP and port (if using Ollama)
+- `ALLOWED_IP_PREFIXES`: Comma-separated list of allowed IP prefixes for web UI access
+
+**Important**: Never commit your `.env` file to version control. It contains sensitive credentials.
+
+## Configuration
+
+### Environment Variables (.env)
+
+Security-sensitive configuration is stored in a `.env` file in the project root. This file should never be committed to version control.
+
+Required environment variables:
+- `HA_BASE_URL`: Your Home Assistant base URL
+- `HA_TOKEN`: Your Home Assistant Long-Lived Access Token
+- `OLLAMA_IP`: Ollama server IP and port (if using Ollama)
+- `ALLOWED_IP_PREFIXES`: Comma-separated IP prefixes allowed to access the web UI
+
+See `.env.example` for a template.
+
+### object_settings.json 
+
+This file contains JSON-stored values for non-sensitive configuration variables. When adding a user-settable variable, you'll have to create the variable in a class and add the class and the variable name/value/type to the file like so:
 
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
-    "token": {"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9[...]2RYjfAyJ3MxKo9VLQXlE",
-     "type": "str"},
     "allowed_entities": {
       "value": [
         "light.kitchen_light",
@@ -70,8 +96,9 @@ a class and add the class and the variable name/value/type to the file like so:
         "type": "list"}
   },
   
- In addition to Home Assistant related values, you'll also see the path where to fetch the LLM from (in my setup, they are on a path different from the standard huggingface one) 
- as well as settings for the webui and the wakeword sensitivity.
+ In addition to Home Assistant related values, you'll also see the path where to fetch the LLM from (in my setup, they are on a path different from the standard huggingface one) as well as settings for the LLM models and other non-sensitive configuration.
+ 
+ **Note**: Sensitive values like API tokens and URLs are now stored in the `.env` file for security.
  
  You can get more details on how the file is used inside the SettingsLoader.py class.
  
@@ -93,7 +120,7 @@ a class and add the class and the variable name/value/type to the file like so:
    - If the guard model is used, the query will first be processed there, and only "safe" queries will be passed on. 
 	 The model is based on Llama Guard 3 is a Llama-3.1-8B fine tuned for the specific task in the supported languages.
    - The transcribed text and a list of entities from Home Assistant are passed to a LLaMA 3.1 (8B) model. By default models are loaded in 8bit.
-   - Entities can be supplied manually or auto-fetched from Home Assistant (requires access token and URL in the settings file). You can also exclude devices from the entities list in the same manner.
+   - Entities can be supplied manually or auto-fetched from Home Assistant (requires access token and URL configured in the `.env` file). You can also exclude devices from the entities list in the same manner.
    - The model identifies the appropriate devices, actions, and parameters, then generates a Home Assistant-compatible JSON command.
 
 5. **Command Execution**  

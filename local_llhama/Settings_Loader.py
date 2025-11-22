@@ -1,6 +1,8 @@
 # === System Imports ===
 import json
 import torch
+import os
+from dotenv import load_dotenv
 
 # === Custom Imports ===
 from .LLM_Handler import LLM_Class, OllamaClient
@@ -26,6 +28,9 @@ class SettingLoaderClass:
         @brief Constructor for SettingLoader.
         @param json_path Path to the JSON file containing configuration data.
         """
+        # Load environment variables from .env file
+        load_dotenv()
+        
         self.json_path = json_path
         self.data = {}
         self.base_model_path = "/mnt/fast_storage/huggingface/hub/"
@@ -61,7 +66,9 @@ class SettingLoaderClass:
         @return: A loaded instance of LLM_Class.
         """
         if self.use_ollama:
-            command_llm = OllamaClient(ha_client,host=self.ollama_ip,model= self.ollama_model)
+            # Load ollama_ip from environment variable if not set in JSON
+            ollama_ip = self.ollama_ip or os.getenv('OLLAMA_IP', '192.168.88.239:11434')
+            command_llm = OllamaClient(ha_client, host=ollama_ip, model=self.ollama_model)
         else:
             command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
             print(f"Loading command LLM model from {command_llm_path}")
