@@ -159,6 +159,7 @@ Features demonstrated:
 - Multiple commands per sentence
 - Mixed HA actions + information queries
 - Web information retrieval
+- One turn Command Conversational context maintained (e.g., "turn them back on" after turning lights off)
 
 ## Dependencies
 
