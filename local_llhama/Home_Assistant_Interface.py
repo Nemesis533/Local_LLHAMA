@@ -466,12 +466,6 @@ class SimpleFunctions:
         self.home_location = home_location
         self.command_schema = self.load_command_schema_from_file()
         self.local_weather_url = "http://192.168.88.243:8000/weather-forecast"
-        self.web_search_config_path = os.path.join(
-            os.path.dirname(__file__), 
-            "settings", 
-            "web_search_config.json"
-        )
-        self.web_search_config = self.load_web_search_config()
         
         # Load API keys from environment
         self.newsdata_api_key = os.getenv("NEWSDATA_API_KEY", "YOUR_NEWSDATA_API_KEY")
@@ -510,116 +504,6 @@ class SimpleFunctions:
             print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Unexpected error: {e}")
 
         return {}
-
-    def load_web_search_config(self) -> dict:
-        """
-        @brief Load web search configuration from JSON file.
-
-        @return Dictionary with allowed websites config or default config.
-        """
-        try:
-            with open(self.web_search_config_path, 'r', encoding='utf-8') as file:
-                config = json.load(file)
-            print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Loaded web search config with {len(config.get('allowed_websites', []))} websites")
-            return config
-        except FileNotFoundError:
-            print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Web search config not found: {self.web_search_config_path}")
-            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
-        except json.JSONDecodeError as e:
-            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Failed to parse web search config - {e}")
-            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
-        except Exception as e:
-            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Unexpected error loading web search config: {e}")
-            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
-
-    def _clean_text(self, text: str) -> str:
-        """
-        @brief Clean and normalize text from web scraping.
-
-        @param text Raw text string.
-        @return Cleaned text string.
-        """
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'[^\w\s.,!?;:\-()]', '', text)
-        return text.strip()
-
-    def _extract_text_from_html(self, html_content: str, max_length: int = 500) -> str:
-        """
-        @brief Extract and summarize text content from HTML.
-
-        @param html_content Raw HTML string.
-        @param max_length Maximum character length for extracted text.
-        @return Cleaned and truncated text summary.
-        """
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
-            
-            main_content = soup.find('main') or soup.find('article') or soup.find('body')
-            
-            if main_content:
-                text = main_content.get_text(separator=' ', strip=True)
-            else:
-                text = soup.get_text(separator=' ', strip=True)
-            
-            text = self._clean_text(text)
-            
-            if len(text) > max_length:
-                text = text[:max_length] + "..."
-            
-            return text if text else "No readable content found."
-            
-        except Exception as e:
-            print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Error extracting text from HTML: {e}")
-            return "Error parsing web content."
-
-    def _search_website(self, url: str, query: str = None) -> dict:
-        """
-        @brief Fetch and parse content from a website.
-
-        @param url Website URL to search.
-        @param query Optional search query (for future enhancement).
-        @return Dictionary with status and content or error.
-        """
-        timeout = self.web_search_config.get('timeout', 10)
-        
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            response = requests.get(url, headers=headers, timeout=timeout)
-            response.raise_for_status()
-            
-            content = self._extract_text_from_html(response.text)
-            
-            return {
-                "success": True,
-                "url": url,
-                "content": content,
-                "status_code": response.status_code
-            }
-            
-        except requests.Timeout:
-            return {
-                "success": False,
-                "url": url,
-                "error": "Request timed out"
-            }
-        except requests.RequestException as e:
-            return {
-                "success": False,
-                "url": url,
-                "error": f"Failed to fetch: {str(e)}"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "url": url,
-                "error": f"Unexpected error: {str(e)}"
-            }
 
     def get_wikipedia_summary(self, topic=None):
         """
