@@ -4,6 +4,8 @@ import json
 import os
 import time
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+import re
 
 # === Custom Imports ===
 from .Shared_Logger import LogLevel
@@ -360,16 +362,22 @@ class HomeAssistantClient:
                         "status": response.status_code,
                         "raw_response": response.text,
                     })
-
-                if debug:
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command Results: {results}")
-
-                return None
             
             else:
                 # Call the simple function corresponding to the action
-                results = self.simple_functions.call_function_by_name(simple_action)
-                return results
+                # Pass any data parameters from the command
+                result = self.simple_functions.call_function_by_name(simple_action, **extra_data)
+                results.append({
+                    "target": target,
+                    "action": action,
+                    "success": True,
+                    "response": result
+                })
+                
+        if debug:
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command results: {results}")
+        
+        return results
 
     def get_service_info(self, domain, action):
         """
@@ -453,10 +461,16 @@ class SimpleFunctions:
         @param db_config Optional database configuration.
         """
         self.db_config = db_config
-        self.filepath = "command_schema.txt"  # Path to the command schema JSON file
+        self.filepath = os.path.join(os.path.dirname(__file__), "command_schema.txt")  # Path to the command schema JSON file
         self.home_location = home_location
         self.command_schema = self.load_command_schema_from_file()
         self.local_weather_url = "http://192.168.88.243:8000/weather-forecast"
+        self.web_search_config_path = os.path.join(
+            os.path.dirname(__file__), 
+            "settings", 
+            "web_search_config.json"
+        )
+        self.web_search_config = self.load_web_search_config()
 
     def call_function_by_name(self, function_name: str, *args, **kwargs):
         """
@@ -493,23 +507,170 @@ class SimpleFunctions:
 
         return {}
 
-    def convert_command_schema_to_entities(self, schema):
+    def load_web_search_config(self) -> dict:
         """
-        @brief Convert command schema to virtual entities format.
+        @brief Load web search configuration from JSON file.
 
-        @param schema Command schema dictionary.
-        @return Dictionary mapping virtual entity domains to actions.
+        @return Dictionary with allowed websites config or default config.
         """
-        virtual_entities = {}
+        try:
+            with open(self.web_search_config_path, 'r', encoding='utf-8') as file:
+                config = json.load(file)
+            print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Loaded web search config with {len(config.get('allowed_websites', []))} websites")
+            return config
+        except FileNotFoundError:
+            print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Web search config not found: {self.web_search_config_path}")
+            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
+        except json.JSONDecodeError as e:
+            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Failed to parse web search config - {e}")
+            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
+        except Exception as e:
+            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Unexpected error loading web search config: {e}")
+            return {"allowed_websites": [], "max_results": 3, "timeout": 10}
 
-        for domain, domain_info in schema.items():
-            actions = list(domain_info.get('actions', {}).keys())
-            virtual_entities[domain] = {
-                'entity_id': f'virtual.{domain}',  # Not a real HA entity
-                'actions': actions
+    def _clean_text(self, text: str) -> str:
+        """
+        @brief Clean and normalize text from web scraping.
+
+        @param text Raw text string.
+        @return Cleaned text string.
+        """
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[^\w\s.,!?;:\-()]', '', text)
+        return text.strip()
+
+    def _extract_text_from_html(self, html_content: str, max_length: int = 500) -> str:
+        """
+        @brief Extract and summarize text content from HTML.
+
+        @param html_content Raw HTML string.
+        @param max_length Maximum character length for extracted text.
+        @return Cleaned and truncated text summary.
+        """
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+            
+            main_content = soup.find('main') or soup.find('article') or soup.find('body')
+            
+            if main_content:
+                text = main_content.get_text(separator=' ', strip=True)
+            else:
+                text = soup.get_text(separator=' ', strip=True)
+            
+            text = self._clean_text(text)
+            
+            if len(text) > max_length:
+                text = text[:max_length] + "..."
+            
+            return text if text else "No readable content found."
+            
+        except Exception as e:
+            print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Error extracting text from HTML: {e}")
+            return "Error parsing web content."
+
+    def _search_website(self, url: str, query: str = None) -> dict:
+        """
+        @brief Fetch and parse content from a website.
+
+        @param url Website URL to search.
+        @param query Optional search query (for future enhancement).
+        @return Dictionary with status and content or error.
+        """
+        timeout = self.web_search_config.get('timeout', 10)
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            
+            content = self._extract_text_from_html(response.text)
+            
+            return {
+                "success": True,
+                "url": url,
+                "content": content,
+                "status_code": response.status_code
+            }
+            
+        except requests.Timeout:
+            return {
+                "success": False,
+                "url": url,
+                "error": "Request timed out"
+            }
+        except requests.RequestException as e:
+            return {
+                "success": False,
+                "url": url,
+                "error": f"Failed to fetch: {str(e)}"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "url": url,
+                "error": f"Unexpected error: {str(e)}"
             }
 
-        return virtual_entities
+    def web_search(self, query: str = None, website: str = None) -> str:
+        """
+        @brief Search allowed websites and return synthetic summary.
+
+        @param query Search query or topic.
+        @param website Optional specific website name to search.
+        @return Synthetic summary of search results.
+        """
+        print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Web search request - query: {query}, website: {website}")
+        
+        allowed_websites = self.web_search_config.get('allowed_websites', [])
+        
+        if not allowed_websites:
+            return "Web search is not configured. No allowed websites found."
+        
+        if website:
+            website_lower = website.lower()
+            allowed_websites = [
+                w for w in allowed_websites 
+                if website_lower in w.get('name', '').lower() or website_lower in w.get('url', '').lower()
+            ]
+            
+            if not allowed_websites:
+                return f"Website '{website}' is not in the allowed list."
+        
+        max_results = self.web_search_config.get('max_results', 3)
+        websites_to_search = allowed_websites[:max_results]
+        
+        results = []
+        for site in websites_to_search:
+            site_name = site.get('name', 'Unknown')
+            site_url = site.get('url', '')
+            
+            print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Searching {site_name}...")
+            
+            result = self._search_website(site_url, query)
+            
+            if result.get('success'):
+                results.append({
+                    'name': site_name,
+                    'content': result.get('content', '')
+                })
+            else:
+                print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Failed to search {site_name}: {result.get('error')}")
+        
+        if not results:
+            return "Unable to retrieve any results from the allowed websites at this time."
+        
+        summary_parts = [f"Web search results for '{query}'" if query else "Web search results:"]
+        
+        for idx, result in enumerate(results, 1):
+            summary_parts.append(f"\n{idx}. {result['name']}: {result['content']}")
+        
+        return "\n".join(summary_parts)
 
     def home_weather(self, place=None):
         """

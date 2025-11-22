@@ -19,8 +19,11 @@ You are a smart home assistant that extracts structured commands from user speec
 Device list and supported actions:
 {devices_context}
 
+{simple_functions_context}
+
 Your job:
 - Map user input (in any language) to the most likely **English** device name and action from the list above.
+- Use available simple functions when appropriate (e.g., for weather, web searches, etc.).
 - Do not make up device names or actions.
 - If the input is vague, infer the most appropriate valid command.
 - Extract one command per device only.
@@ -37,6 +40,22 @@ JSON response:
     {{
     "action": "home_weather",
     "target": "home_weather"
+    }}
+]
+}}
+
+User input:
+"Search for news about technology"
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "web_search",
+    "target": "web_search",
+    "data": {{
+        "query": "technology news"
+    }}
     }}
 ]
 }}
@@ -293,6 +312,47 @@ class LLM_Class():
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model loaded successfully on {self.device} using {'int8' if use_int8 else 'fp16'} mode")
         return True
 
+    def _generate_simple_functions_context(self):
+        """
+        @brief Generate description of available simple functions from command schema.
+        @return Formatted string describing available simple functions.
+        """
+        if not hasattr(self.ha_client, 'simple_functions') or not self.ha_client.simple_functions:
+            return "No additional simple functions available."
+        
+        command_schema = self.ha_client.simple_functions.command_schema
+        if not command_schema:
+            return "No additional simple functions available."
+        
+        functions_desc = ["Available Simple Functions:"]
+        
+        for entity_id, entity_info in command_schema.items():
+            actions = entity_info.get('actions', [])
+            if not actions:
+                continue
+            
+            # Get description from schema
+            description = entity_info.get('description', f'Available actions: {", ".join(actions)}')
+            functions_desc.append(f"- {entity_id}: {description}")
+            
+            # Get example from schema
+            example = entity_info.get('example')
+            if example:
+                functions_desc.append(f'  Example: {json.dumps(example)}')
+            else:
+                # Fallback example if not provided
+                functions_desc.append(f'  Example: {{"action": "{actions[0]}", "target": "{entity_id}"}}')
+            
+            # Add parameter information if available
+            parameters = entity_info.get('parameters', {})
+            if parameters:
+                optional_params = [name for name, info in parameters.items() if not info.get('required', False)]
+                if optional_params:
+                    param_desc = ', '.join([f'"{p}"' for p in optional_params])
+                    functions_desc.append(f'  Optional parameters: {param_desc}')
+        
+        return "\n".join(functions_desc) if len(functions_desc) > 1 else "No additional simple functions available."
+
     def build_prompt(self, transcription):
         """
         @brief Build the complete prompt including system instructions and user transcription.
@@ -301,9 +361,12 @@ class LLM_Class():
         """
         # Regenerate devices context if empty
         devices_context = self.devices_context or self.ha_client.generate_devices_prompt_fragment()
+        
+        # Generate simple functions context from command schema
+        simple_functions_context = self._generate_simple_functions_context()
 
         # Combine system instructions with user input
-        return f"{SMART_HOME_PROMPT_TEMPLATE.format(devices_context=devices_context).strip()}\n\nUser input:\n{transcription.strip()}\n\nJSON response:"
+        return f"{SMART_HOME_PROMPT_TEMPLATE.format(devices_context=devices_context, simple_functions_context=simple_functions_context).strip()}\n\nUser input:\n{transcription.strip()}\n\nJSON response:"
 
     def parse_with_llm(self, transcription):
         """
@@ -550,10 +613,56 @@ class OllamaClient:
                 "Russian": "ru"             
 
         """
+        
+        # Generate simple functions context from command schema
+        simple_functions_context = self._generate_simple_functions_context()
+        
         self.system_prompt = SMART_HOME_PROMPT_TEMPLATE.format(
             devices_context=self.devices_context,
+            simple_functions_context=simple_functions_context,
         )
         
+    def _generate_simple_functions_context(self):
+        """
+        @brief Generate description of available simple functions from command schema.
+        @return Formatted string describing available simple functions.
+        """
+        if not hasattr(self.ha_client, 'simple_functions') or not self.ha_client.simple_functions:
+            return "No additional simple functions available."
+        
+        command_schema = self.ha_client.simple_functions.command_schema
+        if not command_schema:
+            return "No additional simple functions available."
+        
+        functions_desc = ["Available Simple Functions:"]
+        
+        for entity_id, entity_info in command_schema.items():
+            actions = entity_info.get('actions', [])
+            if not actions:
+                continue
+            
+            # Get description from schema
+            description = entity_info.get('description', f'Available actions: {", ".join(actions)}')
+            functions_desc.append(f"- {entity_id}: {description}")
+            
+            # Get example from schema
+            example = entity_info.get('example')
+            if example:
+                functions_desc.append(f'  Example: {json.dumps(example)}')
+            else:
+                # Fallback example if not provided
+                functions_desc.append(f'  Example: {{"action": "{actions[0]}", "target": "{entity_id}"}}')
+            
+            # Add parameter information if available
+            parameters = entity_info.get('parameters', {})
+            if parameters:
+                optional_params = [name for name, info in parameters.items() if not info.get('required', False)]
+                if optional_params:
+                    param_desc = ', '.join([f'"{p}"' for p in optional_params])
+                    functions_desc.append(f'  Optional parameters: {param_desc}')
+        
+        return "\n".join(functions_desc) if len(functions_desc) > 1 else "No additional simple functions available."
+    
     def set_model(self, model_name: str):
         self.model = model_name
  

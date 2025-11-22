@@ -1,6 +1,28 @@
 {
   "home_weather": {
     "entity_id": "home_weather",
-    "actions": ["home_weather"]
+    "actions": ["home_weather"],
+    "description": "Get weather forecast for your home location",
+    "example": {"action": "home_weather", "target": "home_weather"},
+    "parameters": {}
+  },
+  "get_weather": {
+    "entity_id": "get_weather",
+    "actions": ["get_weather"],
+    "description": "Get current weather for any location in the world by place name",
+    "example": {"action": "get_weather", "target": "get_weather", "data": {"place": "New York"}},
+    "parameters": {
+      "place": {"required": true, "description": "Name of the location (city, country, etc.)"}
+    }
+  },
+  "web_search": {
+    "entity_id": "web_search",
+    "actions": ["web_search"],
+    "description": "Search allowed websites (Google News, Wikipedia) for general information",
+    "example": {"action": "web_search", "target": "web_search", "data": {"query": "your search query"}},
+    "parameters": {
+      "query": {"required": false, "description": "Search query or topic"},
+      "website": {"required": false, "description": "Specific website to search (e.g., 'Wikipedia', 'Google News')"}
+    }
   }
 }
