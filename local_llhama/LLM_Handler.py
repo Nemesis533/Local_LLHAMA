@@ -10,6 +10,7 @@ import requests
 
 # === Custom Imports ===
 from .Home_Assistant_Interface import HomeAssistantClient
+from .Shared_Logger import LogLevel
 
 # Reusable system prompt template
 SMART_HOME_PROMPT_TEMPLATE = """
@@ -112,6 +113,7 @@ class LLM_Class():
         @param base_prompt Optional system prompt to prepend before user input.
         @param reuse_devices Flag to reuse device context prompt or regenerate each time.
         """
+        self.class_prefix_message = "[LLM_Handler]"
         self.model_path = model_path
         self.model_name = model_name
         self.prompt_guard_model_name = prompt_guard_model_name
@@ -130,7 +132,8 @@ class LLM_Class():
             self.prompt_guard = PromptGuard_Class(self.model_path, self.prompt_guard_model_name, device=self.device)
             self.prompt_guard.load_model()
         else:
-            print(f"Guard model {self.prompt_guard_model_name} is set to not load")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Guard model disabled - skipping load")
+            self.prompt_guard = None
 
         # Context fragment containing device info for prompt
         self.devices_context = ""
@@ -145,51 +148,150 @@ class LLM_Class():
         @param use_int8 If True, load the model using 8-bit quantization.
         @return True if model loaded successfully, False otherwise.
         """
-        try:
-            full_path = os.path.join(self.model_path, self.model_name)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        full_path = os.path.join(self.model_path, self.model_name)
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting model load: {self.model_name}")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Target device: {self.device}")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Quantization: {'int8' if use_int8 else 'fp16'}")
+        
+        # Check if CUDA is available when requested
+        if self.device == "cuda" and not torch.cuda.is_available():
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] CUDA requested but not available")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Falling back to CPU")
+            self.device = "cpu"
+        
+        # Check CUDA memory if using GPU
+        if self.device == "cuda":
+            try:
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                gpu_memory_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] GPU memory: {gpu_memory:.2f}GB total, {gpu_memory_free:.2f}GB free")
+                
+                # Warn if free memory is low
+                if gpu_memory_free < 4.0:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Low GPU memory available, may encounter OOM errors")
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not check GPU memory: {e}")
 
-            model_kwargs = {
-                "low_cpu_mem_usage": True,
-                "device_map": device,
-                "trust_remote_code": True, 
-            }
+        model_kwargs = {
+            "low_cpu_mem_usage": True,
+            "device_map": self.device,
+            "trust_remote_code": True, 
+        }
 
-            # Use bitsandbytes config for int8 if specified
-            if use_int8:
+        # Setup quantization if requested
+        if use_int8:
+            try:
                 from transformers import BitsAndBytesConfig
                 quant_config = BitsAndBytesConfig(load_in_8bit=True)
                 model_kwargs["quantization_config"] = quant_config
-            else:
-                model_kwargs["torch_dtype"] = torch.float16  
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Configured 8-bit quantization")
+            except ImportError as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to import BitsAndBytesConfig: {e}")
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Install bitsandbytes: pip install bitsandbytes")
+                return False
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to configure quantization: {e}")
+                return False
+        else:
+            model_kwargs["torch_dtype"] = torch.float16
 
-            # Load model and tokenizer either from local cache or online
-            if os.path.exists(full_path):                
-                print(f"Model not found locally at {full_path}. Downloading model...")
+        # Try loading model
+        try:
+            # Check if model exists locally
+            if os.path.exists(full_path):
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading model from local path: {full_path}")
                 self.model = AutoModelForCausalLM.from_pretrained(full_path, **model_kwargs)
                 self.tokenizer = AutoTokenizer.from_pretrained(full_path)
             else:
-                print(f"Model found locally at {full_path}. Loading model...")
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model not found locally at {full_path}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Downloading model from HuggingFace...")
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.model_path, **model_kwargs)
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    full_path if os.path.exists(full_path) else self.model_name,
-                    cache_dir=self.model_path if not os.path.exists(full_path) else None,
-                )
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, cache_dir=self.model_path)
 
-            # Ensure tokenizer has pad token id set to eos token id for padding
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-
-            # Compile model if not using int8 quantization for faster inference
-            if not use_int8:
-                self.model = torch.compile(self.model, mode="reduce-overhead")
-                self.model.eval()
-
-            print(f"Model loaded successfully using {'int8' if use_int8 else 'fp16'} mode.")
-            return True
+        except torch.cuda.OutOfMemoryError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] CUDA Out of Memory error: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] GPU does not have enough memory for this model")
+            
+            # Attempt CPU fallback
+            if self.device == "cuda":
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Attempting to load on CPU instead...")
+                self.device = "cpu"
+                model_kwargs["device_map"] = "cpu"
+                
+                try:
+                    torch.cuda.empty_cache()
+                    if os.path.exists(full_path):
+                        self.model = AutoModelForCausalLM.from_pretrained(full_path, **model_kwargs)
+                        self.tokenizer = AutoTokenizer.from_pretrained(full_path)
+                    else:
+                        self.model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.model_path, **model_kwargs)
+                        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, cache_dir=self.model_path)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully loaded on CPU")
+                except Exception as cpu_error:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] CPU fallback also failed: {cpu_error}")
+                    return False
+            else:
+                return False
+                
+        except OSError as e:
+            if "No such file or directory" in str(e) or "does not appear to have a file named" in str(e):
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Model files not found: {e}")
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Ensure model is downloaded to: {full_path}")
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Or check HuggingFace model name: {self.model_name}")
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] File system error loading model: {e}")
+            return False
+            
+        except RuntimeError as e:
+            if "CUDA" in str(e) or "cuda" in str(e):
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] CUDA runtime error: {e}")
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check CUDA installation and GPU drivers")
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Runtime error loading model: {e}")
+            return False
+            
+        except ValueError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Invalid configuration: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check model configuration and parameters")
+            return False
+            
+        except ImportError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Missing dependency: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Install required packages: pip install transformers accelerate")
+            return False
 
         except Exception as e:
-            print(f"Failed to load model: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error loading model: {type(e).__name__}: {e}")
+            import traceback
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Traceback:")
+            traceback.print_exc()
             return False
+
+        # Verify model and tokenizer loaded
+        if self.model is None or self.tokenizer is None:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Model or tokenizer is None after loading")
+            return False
+
+        # Configure tokenizer
+        try:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Tokenizer configured successfully")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to configure tokenizer: {e}")
+
+        # Compile model for optimization (skip for int8)
+        if not use_int8:
+            try:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Compiling model for optimization...")
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                self.model.eval()
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model compiled successfully")
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model compilation failed (non-critical): {e}")
+                self.model.eval()
+
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model loaded successfully on {self.device} using {'int8' if use_int8 else 'fp16'} mode")
+        return True
 
     def build_prompt(self, transcription):
         """
@@ -253,14 +355,15 @@ class LLM_Class():
                     json_str = json_match.group(0).strip()
                     parsed_output = json.loads(json_str)
                 else:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No JSON found in model output")
                     parsed_output = {"commands": []}           
 
             except json.JSONDecodeError as e:
-                print(f"Failed to parse JSON from model output: {e}")
-                print("Raw model output:", result_text)
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse JSON from model output: {e}")
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Raw model output: {result_text[:200]}...")
                 parsed_output = {"commands": []}
 
-            print(parsed_output)
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Parsed output: {parsed_output}")
 
         else:
             # If input is not safe, return empty commands list
@@ -279,6 +382,7 @@ class PromptGuard_Class:
         @param device Device to run the model on (e.g., 'cuda' or 'cpu').
         @param threshold Probability threshold to classify prompt as safe.
         """
+        self.class_prefix_message = "[PromptGuard]"
         self.model_path = model_path
         self.model_name = prompt_guard_model_name
         self.device = device
@@ -296,7 +400,7 @@ class PromptGuard_Class:
             full_path = os.path.join(self.model_path, self.model_name)
             model_path_to_use = full_path if os.path.exists(full_path) else self.model_path
 
-            print(f"Loading PromptGuard model from {model_path_to_use}...")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading PromptGuard model from {model_path_to_use}...")
 
             # Load the sequence classification model for safety detection
             self.model = LlamaForSequenceClassification.from_pretrained(
@@ -314,18 +418,28 @@ class PromptGuard_Class:
                 use_fast=False,
             )
 
-            print("Tokenizer type:", type(self.tokenizer))
-
             # Fix missing pad token by setting it to eos token if necessary
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
             self.model.eval()  # Set model to evaluation mode
-            print("PromptGuard model loaded successfully.")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PromptGuard model loaded successfully")
             return True
 
+        except OSError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Model files not found: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check path: {model_path_to_use}")
+            return False
+            
+        except torch.cuda.OutOfMemoryError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] CUDA Out of Memory: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] PromptGuard model requires additional GPU memory")
+            return False
+            
         except Exception as e:
-            print(f"Error loading PromptGuard model: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error loading PromptGuard model: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def build_prompt(self, user_input):
@@ -357,8 +471,8 @@ class PromptGuard_Class:
         safe_score = probs[1].item()    # Probability that input is safe
         is_safe = unsafe_score < self.threshold  # Compare with threshold
 
-        print(f"Evaluating Prompt: {user_input}")
-        print(f"Suspicious score = {unsafe_score:.4f}, threshold = {self.threshold} → safe = {is_safe}")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Evaluating: {user_input[:50]}...")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Safety check: unsafe={unsafe_score:.4f}, threshold={self.threshold}, safe={is_safe}")
 
         return is_safe
 
@@ -370,6 +484,7 @@ class OllamaClient:
     def __init__(self,ha_client, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
         global SMART_HOME_PROMPT_TEMPLATE
         
+        self.class_prefix_message = "[OllamaClient]"
         self.host = host.rstrip('/')
         self.model = model
         self.ha_client : HomeAssistantClient = ha_client
@@ -429,18 +544,41 @@ class OllamaClient:
         }
 
         try:
-            response = requests.post(url, json=payload)
+            response = requests.post(url, json=payload, timeout=30)
+            response.raise_for_status()
             data = response.json()
-        except ValueError:
-            print("Server returned invalid JSON:", response.text)
-            data = {}
+        except requests.exceptions.Timeout:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request timeout connecting to Ollama at {self.host}")
+            return {"commands": []}
+        except requests.exceptions.ConnectionError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Connection error to Ollama: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check if Ollama is running at {self.host}")
+            return {"commands": []}
+        except requests.exceptions.HTTPError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] HTTP error from Ollama: {e}")
+            return {"commands": []}
+        except ValueError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Invalid JSON from Ollama: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response text: {response.text[:200]}")
+            return {"commands": []}
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error: {type(e).__name__}: {e}")
+            return {"commands": []}
 
         # Ollama API usually returns a list of objects in 'output'
         # Extract the text safely
         output = ""
         if "response" in data:
             output = str(data["response"])
+        else:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No 'response' field in Ollama output")
+            return {"commands": []}
 
-        print(output)
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Ollama response: {output[:100]}...")
 
-        return json.loads(output)
+        try:
+            return json.loads(output)
+        except json.JSONDecodeError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {e}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Raw output: {output[:200]}...")
+            return {"commands": []}
