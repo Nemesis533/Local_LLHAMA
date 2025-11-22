@@ -12,6 +12,37 @@ import requests
 from .Home_Assistant_Interface import HomeAssistantClient
 from .Shared_Logger import LogLevel
 
+# System prompt for processing simple function results into natural language
+RESPONSE_PROCESSOR_PROMPT = """
+You are a helpful assistant that converts technical function results into natural language responses.
+
+Your job:
+- Take the provided function result data and convert it into a friendly, conversational response
+- Detect the language of the original user query if provided
+- Respond in the same language as the user's original question
+- Be concise but informative
+- Format numbers and data in a user-friendly way
+
+Always respond with this JSON format:
+{{
+    "nl_response": "<your natural language response>",
+    "language": "<language code: en, fr, de, it, es, or ru>"
+}}
+
+Examples:
+
+Function result:
+{{
+    "response": "The weather in Paris is 18°C with wind speed 15 km/h."
+}}
+
+JSON response:
+{{
+    "nl_response": "The weather in Paris is currently 18 degrees Celsius with winds at 15 kilometers per hour.",
+    "language": "en"
+}}
+"""
+
 # Reusable system prompt template
 SMART_HOME_PROMPT_TEMPLATE = """
 You are a smart home assistant that extracts structured commands from user speech or can use agentic methods and internet searches to reply to them.
@@ -578,13 +609,14 @@ class OllamaClient:
     """
  
     def __init__(self,ha_client, host: str = 'http://your_ip:11434', model: str = 'qwen3-14b-gpu128', system_prompt: str = ''):
-        global SMART_HOME_PROMPT_TEMPLATE
+        global SMART_HOME_PROMPT_TEMPLATE, RESPONSE_PROCESSOR_PROMPT
         
         self.class_prefix_message = "[OllamaClient]"
         self.host = host.rstrip('/')
         self.model = model
         self.ha_client : HomeAssistantClient = ha_client
         self.devices_context = self.ha_client.generate_devices_prompt_fragment()
+        self.response_processor_prompt = RESPONSE_PROCESSOR_PROMPT
 
         self.languages = {
                 "English": "en",
@@ -669,18 +701,31 @@ class OllamaClient:
     def set_system_prompt(self, prompt: str):
         self.system_prompt = prompt
     
-    def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096):
+    def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096, message_type: str = "command"):
+        """
+        @brief Send message to Ollama for processing.
+        @param user_message The message to process.
+        @param message_type Either "command" for command parsing or "response" for processing function results.
+        @return Parsed JSON response.
+        """
         # Validate input
         if not user_message or not user_message.strip():
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided")
             return {"commands": []}
+        
+        # Choose system prompt based on message type
+        if message_type == "response":
+            system_prompt = self.response_processor_prompt
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing simple function response")
+        else:
+            system_prompt = self.system_prompt
         
         url = f"http://{self.host}/api/generate"
 
         payload = {
             "model": self.model,
             "prompt": user_message,
-            "system": self.system_prompt,
+            "system": system_prompt,
             "options": {
                 "temperature": temperature,
                 "top_p": top_p,

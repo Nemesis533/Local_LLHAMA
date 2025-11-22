@@ -174,31 +174,6 @@ class StateMachineInstance:
                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {message}", end=end)
                 self._last_printed_message = message
 
-    def is_simple_function_call(self, commands):
-        """
-        @brief Check if commands contain only simple function calls.
-        @param commands List of command dictionaries.
-        @return True if all commands are simple functions, False otherwise.
-        """
-        if not commands:
-            return False
-        
-        # Check if all commands are simple functions
-        for command in commands:
-            action = command.get('action', '')
-            target = command.get('target', '')
-            
-            # Check against simple functions in command_schema
-            if hasattr(self.ha_client, 'simple_functions'):
-                simple_action = self.ha_client.simple_functions.find_matching_action(command)
-                if simple_action is None:
-                    # This is not a simple function, it's an HA command
-                    return False
-            else:
-                return False
-        
-        return True
-
     def get_state(self):
         """Thread-safe method to get current state."""
         with self.lock:
@@ -274,33 +249,15 @@ class StateMachineInstance:
                 structured_output = self.command_llm.send_message(transcription)
 
             if structured_output:
-                # Check if response contains commands
                 if structured_output.get("commands"):
-                    commands = structured_output.get("commands")
-                    
-                    # Check if these are simple function calls
-                    if self.is_simple_function_call(commands):
-                        # Treat as nl_function_call - these should execute and return a response
-                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple Function Call detected: {structured_output}")
-                        # Convert to nl_function_call format
-                        structured_output["nl_function_call"] = structured_output.pop("commands")
-                        try:
-                            self.command_queue.put(structured_output, timeout=1)
-                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put simple function call into queue")
-                            self.transition(State.SEND_COMMANDS)
-                        except Exception as e:
-                            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue function call: {type(e).__name__}: {e}")
-                            self.transition(State.LISTENING)
-                    else:
-                        # Regular HA commands
-                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Structured Commands: {structured_output}")
-                        try:
-                            self.command_queue.put(structured_output, timeout=1)
-                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put command into queue")
-                            self.transition(State.SEND_COMMANDS)
-                        except Exception as e:
-                            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {type(e).__name__}: {e}")
-                            self.transition(State.LISTENING)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Structured Commands: {structured_output}")
+                    try:
+                        self.command_queue.put(structured_output, timeout=1)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put command into queue")
+                        self.transition(State.SEND_COMMANDS)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {type(e).__name__}: {e}")
+                        self.transition(State.LISTENING)
 
                 elif structured_output.get("nl_response"):
                     nl_message = structured_output.get("nl_response")
@@ -520,29 +477,76 @@ class StateMachineInstance:
             elif current_state == State.SEND_COMMANDS:
                 self.print_once("Sending commands to HA client.")
                 try:
-                    command_payload = self.command_queue.get_nowait()
-                    
-                    # Check if this is a simple function call (nl_function_call)
-                    if command_payload.get("nl_function_call"):
-                        # Convert nl_function_call back to commands format for processing
-                        command_payload_to_send = {"commands": command_payload["nl_function_call"]}
-                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing simple function call")
-                    else:
-                        command_payload_to_send = command_payload
-                    
-                    command_result = self.ha_client.send_commands(command_payload_to_send)
+                    command = self.command_queue.get_nowait()
+                    command_result = self.ha_client.send_commands(command)
                     
                     if command_result:
-                        self.print_once("Command result received.")
-                        try:
-                            self.speech_queue.put(command_result, timeout=1)
-                            message = f"{self.class_prefix_message} [Function Result]: {command_result}"
+                        # Check if this is a simple function result
+                        is_simple_function = any(result.get("type") == "simple_function" for result in command_result if isinstance(result, dict))
+                        
+                        if is_simple_function:
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function result received: {command_result}")
+                            
+                            # Send result to LLM for natural language processing
+                            if isinstance(self.command_llm, OllamaClient):
+                                # Extract the response from the result
+                                function_response = command_result[0].get('response', str(command_result)) if command_result else str(command_result)
+                                
+                                # Create a message for the LLM to process
+                                llm_input = f"Convert this function result into a natural language response: {function_response}"
+                                
+                                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sending to LLM for NL conversion")
+                                nl_output = self.command_llm.send_message(llm_input, message_type="response")
+                                
+                                if nl_output and nl_output.get("nl_response"):
+                                    nl_message = nl_output.get("nl_response")
+                                    lang = nl_output.get("language")
+                                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] LLM converted response: {nl_message}")
+                                    
+                                    self.speech_queue.put([nl_message, lang], timeout=1)
+                                    message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
+                                    self.send_messages(message)
+                                    
+                                    try:
+                                        self.speech_queue.put([nl_message, lang], timeout=1)
+                                        self.transition(State.SPEAKING)
+                                    except Exception as e:
+                                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue speech: {type(e).__name__}: {e}")
+                                        self.transition(State.LISTENING)
+                                else:
+                                    # Fallback: use raw response
+                                    message = f"{self.class_prefix_message} [Simple Function Result]: {function_response}"
+                                    self.send_messages(message)
+                                    try:
+                                        self.speech_queue.put([function_response, "en"], timeout=1)
+                                        self.transition(State.SPEAKING)
+                                    except Exception as e:
+                                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue result: {type(e).__name__}: {e}")
+                                        self.transition(State.LISTENING)
+                            else:
+                                # Non-Ollama client: use raw response
+                                message = f"{self.class_prefix_message} [Simple Function Result]: {command_result}"
+                                self.send_messages(message)
+                                try:
+                                    self.speech_queue.put(command_result, timeout=1)
+                                    self.transition(State.SPEAKING)
+                                except Exception as e:
+                                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue result: {type(e).__name__}: {e}")
+                                    self.transition(State.LISTENING)
+                        else:
+                            # Regular HA command result
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] HA command result received: {command_result}")
+                            message = f"{self.class_prefix_message} [HA Command Result]: {command_result}"
                             self.send_messages(message)
-                            self.transition(State.SPEAKING)
-                        except Exception as e:
-                            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command result: {type(e).__name__}: {e}")
-                            self.play_sound(SoundActions.system_awake)
-                            self.transition(State.LISTENING)
+                            
+                            self.print_once("Command result received.")
+                            try:
+                                self.speech_queue.put(command_result, timeout=1)
+                                self.transition(State.SPEAKING)
+                            except Exception as e:
+                                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command result: {type(e).__name__}: {e}")
+                                self.play_sound(SoundActions.system_awake)
+                                self.transition(State.LISTENING)
                     else:
                         self.play_sound(SoundActions.system_awake)
                         self.transition(State.LISTENING)

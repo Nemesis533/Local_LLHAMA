@@ -360,8 +360,13 @@ class HomeAssistantClient:
                         "action": action,
                         "error": error_msg,
                         "status": response.status_code,
-                        "raw_response": response.text,
+                        "response": response.text,
                     })
+
+                if debug:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command Results: {results}")
+
+                return None
             
             else:
                 # Call the simple function corresponding to the action
@@ -371,11 +376,12 @@ class HomeAssistantClient:
                     "target": target,
                     "action": action,
                     "success": True,
-                    "response": result
+                    "response": result,
+                    "type": "simple_function"  # Tag to identify simple function execution
                 })
                 
         if debug:
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command results: {results}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function results: {results}")
         
         return results
 
