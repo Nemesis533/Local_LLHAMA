@@ -38,9 +38,27 @@ class SoundPlayer:
         """
         self.class_prefix_message = "[SoundPlayer]"
         self.cleanup()
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)  # Init mixer with standard settings
-        pygame.mixer.set_num_channels(16)  # Allow up to 16 concurrent sounds
-
+        
+        # Initialize mixer with retry logic
+        mixer_initialized = False
+        for attempt in range(3):
+            try:
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+                pygame.mixer.set_num_channels(16)
+                mixer_initialized = True
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Pygame mixer initialized successfully")
+                break
+            except pygame.error as e:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to init mixer (attempt {attempt + 1}/3): {e}")
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing mixer: {type(e).__name__}: {e}")
+                break
+        
+        if not mixer_initialized:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize pygame mixer after 3 attempts - sounds will be disabled")
+        
+        self.mixer_available = mixer_initialized
         self.volume = 1.0  # Default max volume
         self.loaded_sounds = {}  # Cache loaded pygame Sound objects
         self.base_path = base_path
@@ -85,22 +103,31 @@ class SoundPlayer:
         @param volume Playback volume between 0.0 and 1.0.
         @param wait_for_finish Whether to block execution until sound playback completes.
         """
-        # Clamp volume between 0.0 and 1.0
-        self.volume = max(0.0, min(volume, 1.0))
+        # Check if mixer is available
+        if not self.mixer_available:
+            return  # Silently skip if mixer initialization failed
+        
+        try:
+            # Clamp volume between 0.0 and 1.0
+            self.volume = max(0.0, min(volume, 1.0))
 
-        # Load the sound object by name
-        sound = self.load_sound(sound_to_play.name)
-        if not sound:
-            return  # Loading failed, skip playback
+            # Load the sound object by name
+            sound = self.load_sound(sound_to_play.name)
+            if not sound:
+                return  # Loading failed, skip playback
 
-        # Set the volume and start playing the sound
-        sound.set_volume(self.volume)
-        channel = sound.play()
+            # Set the volume and start playing the sound
+            sound.set_volume(self.volume)
+            channel = sound.play()
 
-        # Optionally block until sound finishes playing
-        if wait_for_finish and channel:
-            while channel.get_busy():
-                pygame.time.Clock().tick(10)  # Sleep a bit to reduce CPU usage
+            # Optionally block until sound finishes playing
+            if wait_for_finish and channel:
+                while channel.get_busy():
+                    pygame.time.Clock().tick(10)  # Sleep a bit to reduce CPU usage
+        except pygame.error as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Playback error: {e}")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected playback error: {type(e).__name__}: {e}")
 
     def stop(self):
         """
@@ -145,7 +172,18 @@ class TextToSpeech:
         if not self.voice_dir.exists():
             raise FileNotFoundError(f"Voice directory not found: {voice_dir}")
         self.class_prefix_message = "[TextToSpeech]"
-        self.p = pyaudio.PyAudio()
+        
+        # Initialize PyAudio with error handling
+        try:
+            self.p = pyaudio.PyAudio()
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
+        except OSError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}")
+            raise RuntimeError(f"Audio device initialization failed: {e}")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing PyAudio: {type(e).__name__}: {e}")
+            raise
+        
         self.voice = None
 
     def preprocess_text(self, text: str) -> str:
@@ -168,9 +206,13 @@ class TextToSpeech:
     def speak(self, text: str, lang_tag: str):
         text = self.preprocess_text(text)
         if not text:
-            raise ValueError(f"{self.class_prefix_message} Empty or invalid text")
+            raise ValueError(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Empty or invalid text")
 
-        self.select_voice_by_lang(lang_tag)
+        try:
+            self.select_voice_by_lang(lang_tag)
+        except (ValueError, FileNotFoundError) as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice selection failed: {e}")
+            return
 
         # Synthesis configuration for natural voice
         syn_config = SynthesisConfig(
@@ -182,21 +224,53 @@ class TextToSpeech:
         )
 
         stream = None
+        retry_count = 0
+        max_retries = 2
 
-        # Stream audio in real-time
-        for i, chunk in enumerate(self.voice.synthesize(text, syn_config=syn_config)):
-            if stream is None:
-                stream = self.p.open(
-                    format=self.p.get_format_from_width(chunk.sample_width),
-                    channels=chunk.sample_channels,
-                    rate=chunk.sample_rate,
-                    output=True,
-                )
-            stream.write(chunk.audio_int16_bytes)
+        try:
+            # Stream audio in real-time with error recovery
+            for i, chunk in enumerate(self.voice.synthesize(text, syn_config=syn_config)):
+                while retry_count <= max_retries:
+                    try:
+                        if stream is None:
+                            stream = self.p.open(
+                                format=self.p.get_format_from_width(chunk.sample_width),
+                                channels=chunk.sample_channels,
+                                rate=chunk.sample_rate,
+                                output=True,
+                            )
+                        stream.write(chunk.audio_int16_bytes)
+                        break  # Success, exit retry loop
+                    except OSError as e:
+                        retry_count += 1
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio stream error (attempt {retry_count}/{max_retries + 1}): {e}")
+                        if stream:
+                            try:
+                                stream.close()
+                            except:
+                                pass
+                            stream = None
+                        if retry_count > max_retries:
+                            raise
+                        time.sleep(0.2)
 
-        if stream:
-            stream.stop_stream()
-            stream.close()
+            if stream:
+                stream.stop_stream()
+                stream.close()
+        except OSError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Audio device error during speech: {e}")
+            if stream:
+                try:
+                    stream.close()
+                except:
+                    pass
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error during speech: {type(e).__name__}: {e}")
+            if stream:
+                try:
+                    stream.close()
+                except:
+                    pass
 
     def __del__(self):
         self.p.terminate()
@@ -267,55 +341,114 @@ class AudioRecorderClass:
         return sum(self.rms_values) / len(self.rms_values)
 
     def record_audio(self, transcriptor: AudioTranscriptionClass, noise_floor):
-        p = pyaudio.PyAudio()
-
-        stream = p.open(format=pyaudio.paInt16,
-                        channels=self.channels,
-                        rate=self.sample_rate,
-                        input=True,
-                        frames_per_buffer=self.chunk_size)
+        p = None
+        stream = None
         
-        self.noise_threshold = noise_floor * self.noise_floor_multiplier
-        frames = []
+        try:
+            # Initialize PyAudio with error handling
+            try:
+                p = pyaudio.PyAudio()
+            except OSError as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}")
+                return "Audio device initialization failed"
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing PyAudio: {type(e).__name__}: {e}")
+                return "Audio initialization error"
 
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording started, listening for at least 3 seconds and up to {self.duration} seconds...")
+            # Open audio stream with error handling
+            try:
+                stream = p.open(format=pyaudio.paInt16,
+                                channels=self.channels,
+                                rate=self.sample_rate,
+                                input=True,
+                                frames_per_buffer=self.chunk_size)
+            except OSError as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open audio stream: {e}")
+                if p:
+                    p.terminate()
+                return "Failed to open microphone"
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error opening stream: {type(e).__name__}: {e}")
+                if p:
+                    p.terminate()
+                return "Microphone error"
+            
+            self.noise_threshold = noise_floor * self.noise_floor_multiplier
+            frames = []
 
-        start_time = time.time()
-        min_recording_duration = 2
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording started, listening for at least 3 seconds and up to {self.duration} seconds...")
 
-        while True:
-            data = stream.read(self.chunk_size)
-            frames.append(data)
+            start_time = time.time()
+            min_recording_duration = 2
 
-            current_rms = self.noise_floor_monitor.rms_to_dbfs(
-                self.noise_floor_monitor._calculate_rms(data)
-            )
-            self.rms_values.append(current_rms)
-            measured_rms = self.get_silence()
-            elapsed_time = time.time() - start_time
+            # Recording loop with error handling
+            while True:
+                try:
+                    data = stream.read(self.chunk_size, exception_on_overflow=False)
+                    frames.append(data)
 
-            if elapsed_time >= min_recording_duration:
-                if abs(measured_rms) < abs(self.noise_threshold) and len(self.rms_values) >= (self.max_chunks - 1):
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RMS ({measured_rms:.2f}) dropped below noise threshold ({self.noise_threshold:.2f}), stopping recording.")
+                    current_rms = self.noise_floor_monitor.rms_to_dbfs(
+                        self.noise_floor_monitor._calculate_rms(data)
+                    )
+                    self.rms_values.append(current_rms)
+                    measured_rms = self.get_silence()
+                    elapsed_time = time.time() - start_time
+
+                    if elapsed_time >= min_recording_duration:
+                        if abs(measured_rms) < abs(self.noise_threshold) and len(self.rms_values) >= (self.max_chunks - 1):
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RMS ({measured_rms:.2f}) dropped below noise threshold ({self.noise_threshold:.2f}), stopping recording.")
+                            break
+
+                    if elapsed_time > self.duration:
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording duration of {self.duration} seconds reached.")
+                        break
+                except OSError as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio read error: {e}")
+                    # If we have some frames, try to continue
+                    if len(frames) < 10:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Recording failed too early")
+                        raise
                     break
 
-            if elapsed_time > self.duration:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording duration of {self.duration} seconds reached.")
-                break
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
 
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+            # Check if we got any audio data
+            if not frames:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] No audio data recorded")
+                return "No audio captured"
 
-        filename = "temp_audio.wav"
-        with wave.open(filename, 'wb') as wf:
-            wf.setnchannels(self.channels)
-            wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(b''.join(frames))
+            filename = "temp_audio.wav"
+            try:
+                with wave.open(filename, 'wb') as wf:
+                    wf.setnchannels(self.channels)
+                    wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+                    wf.setframerate(self.sample_rate)
+                    wf.writeframes(b''.join(frames))
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to save audio file: {e}")
+                return "Failed to save recording"
 
-        transcription = transcriptor.transcribe_audio(filename)
-        return transcription
+            transcription = transcriptor.transcribe_audio(filename)
+            return transcription
+            
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Recording failed: {type(e).__name__}: {e}")
+            return "Recording error"
+        finally:
+            # Ensure cleanup
+            if stream:
+                try:
+                    stream.stop_stream()
+                    stream.close()
+                except:
+                    pass
+            if p:
+                try:
+                    p.terminate()
+                except:
+                    pass
 
 
 class NoiseFloorMonitor:
@@ -373,40 +506,99 @@ class WakeWordListener:
 
     def listen_for_wake_word(self, result_queue):
         while not self.stop_event.is_set():
-            owwModel = Model(inference_framework="tflite")
-            CHUNK = 1280
+            audio = None
+            mic_stream = None
+            
+            try:
+                owwModel = Model(inference_framework="tflite")
+                CHUNK = 1280
 
-            audio = pyaudio.PyAudio()
-            mic_stream = audio.open(format=pyaudio.paInt16,
-                                    channels=1,
-                                    rate=16000,
-                                    input=True,
-                                    frames_per_buffer=CHUNK)
+                # Initialize PyAudio with error handling
+                try:
+                    audio = pyaudio.PyAudio()
+                except OSError as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}")
+                    time.sleep(5)  # Wait before retry
+                    continue
+                except Exception as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected PyAudio error: {type(e).__name__}: {e}")
+                    time.sleep(5)
+                    continue
 
-            cooldown_time = 2
-            ignore_rms_window = 3
-            last_detection_time = 0
+                # Open microphone stream with error handling
+                try:
+                    mic_stream = audio.open(format=pyaudio.paInt16,
+                                            channels=1,
+                                            rate=16000,
+                                            input=True,
+                                            frames_per_buffer=CHUNK)
+                except OSError as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}")
+                    if audio:
+                        audio.terminate()
+                    time.sleep(5)  # Wait before retry
+                    continue
+                except Exception as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected stream error: {type(e).__name__}: {e}")
+                    if audio:
+                        audio.terminate()
+                    time.sleep(5)
+                    continue
 
-            while True:
-                audio_data = mic_stream.read(CHUNK)
-                np_audio = np.frombuffer(audio_data, dtype=np.int16)
-                prediction = owwModel.predict(np_audio)
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection started")
+                cooldown_time = 2
+                ignore_rms_window = 3
+                last_detection_time = 0
 
-                current_time = time.time()
+                # Main detection loop with error handling
+                while not self.stop_event.is_set():
+                    try:
+                        audio_data = mic_stream.read(CHUNK, exception_on_overflow=False)
+                        np_audio = np.frombuffer(audio_data, dtype=np.int16)
+                        prediction = owwModel.predict(np_audio)
 
-                if (current_time - last_detection_time) > ignore_rms_window:
-                    self.noise_floor_monitor.update_and_get_average_rms(audio_data)
+                        current_time = time.time()
 
-                for mdl in owwModel.prediction_buffer.keys():
-                    scores = list(owwModel.prediction_buffer[mdl])
-                    last_scores = scores[-5:]
-                    avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
+                        if (current_time - last_detection_time) > ignore_rms_window:
+                            self.noise_floor_monitor.update_and_get_average_rms(audio_data)
 
-                    if avg_score >= self.wakeword_thr and (current_time - last_detection_time) > cooldown_time:
-                        last_detection_time = current_time
-                        while not result_queue.empty():
-                            result_queue.get()
-                        noise_floor = self.noise_floor_monitor.get_noise_floor()
-                        result_queue.put(noise_floor)
-                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue.")
-                        break
+                        for mdl in owwModel.prediction_buffer.keys():
+                            scores = list(owwModel.prediction_buffer[mdl])
+                            last_scores = scores[-5:]
+                            avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
+
+                            if avg_score >= self.wakeword_thr and (current_time - last_detection_time) > cooldown_time:
+                                last_detection_time = current_time
+                                while not result_queue.empty():
+                                    result_queue.get()
+                                noise_floor = self.noise_floor_monitor.get_noise_floor()
+                                result_queue.put(noise_floor)
+                                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue.")
+                                break
+                    except OSError as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio read error in wake word detection: {e}")
+                        break  # Exit inner loop to reinitialize
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error in wake word detection: {type(e).__name__}: {e}")
+                        break  # Exit inner loop to reinitialize
+            
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Wake word listener error: {type(e).__name__}: {e}")
+            finally:
+                # Cleanup
+                if mic_stream:
+                    try:
+                        mic_stream.stop_stream()
+                        mic_stream.close()
+                    except:
+                        pass
+                if audio:
+                    try:
+                        audio.terminate()
+                    except:
+                        pass
+                
+                # Wait before retry if not stopping
+                if not self.stop_event.is_set():
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Restarting wake word detection in 3 seconds...")
+                    time.sleep(3)
