@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Piper voices
+.piper_voices/piper_voices/*.onnx
+piper_voices/*.onnx
+piper_voices/*.onnx

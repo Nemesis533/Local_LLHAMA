@@ -76,17 +76,19 @@ socket.on('log_line', (data) => {
     // Default log style
     div.classList.add('log-line');
 
-    if (trimmed.includes('[Main]')) {
-      div.classList.add('main-line'); // cyan
-    } else if (/warning/i.test(trimmed)) {
-      div.classList.add('log-warning');
-    } else if (/error/i.test(trimmed)) {
-      div.classList.add('log-error');
-    } else if (/info/i.test(trimmed)) {
-      div.classList.add('log-info');
-    } else if (isHttpMessage(trimmed)) {
-      div.classList.add('http-message');
-    }
+  if (trimmed.includes('[Main]') || trimmed.includes('[LLM Reply]') || trimmed.includes('[User Prompt]')) {
+    div.classList.add('main-line'); // cyan
+  } else if (trimmed.includes('[Supervisor]')) {
+    div.classList.add('supervisor-line'); // magenta
+  } else if (/warning/i.test(trimmed)) {
+    div.classList.add('log-warning'); // yellow
+  } else if (/critical|error/i.test(trimmed)) {
+    div.classList.add('log-critical'); // red
+  } else if (/info/i.test(trimmed)) {
+    div.classList.add('log-info'); // green
+  } else if (isHttpMessage(trimmed)) {
+    div.classList.add('http-message'); // optional styling
+  }
   }
 
   outputEl.appendChild(div);

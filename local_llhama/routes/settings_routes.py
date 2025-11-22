@@ -1,0 +1,26 @@
+# settings_routes.py
+import json
+from flask import Blueprint, jsonify, request, current_app
+
+settings_bp = Blueprint("settings", __name__)
+
+@settings_bp.route('/settings', methods=['GET'])
+def get_settings():
+    """
+    Returns the current settings JSON.
+    """
+    service = current_app.config["SERVICE_INSTANCE"]
+    return service.settings_data
+
+@settings_bp.route('/settings', methods=['POST'])
+def save_settings():
+    """
+    Saves incoming settings JSON to a file.
+    """
+    data = request.get_json()
+    service = current_app.config["SERVICE_INSTANCE"]
+
+    with open(service.settings_file, 'w') as f:
+        json.dump(data, f, indent=2)
+
+    return jsonify({"status": "ok"})

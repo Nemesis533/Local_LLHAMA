@@ -16,7 +16,7 @@ import sys
 
 # Add the Local_LLHAMA project root to sys.path for local imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+os.environ["LLHAMA_DEV_MODE"] = "1"
 # === Import Main App Entrypoint ===
 from local_llhama import main as run_main
 
@@ -28,15 +28,9 @@ def main():
     when running from a dev environment.
     """
     print("Starting Local LLHAMA in development mode...")  
-    
-    # Determine the full path to the local_llhama directory
-    project_root = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))),
-        "local_llhama"
-    )
 
     # Start the main application logic with the project root path
-    run_main(project_root)
+    run_main()
 
 if __name__ == "__main__":
     main()

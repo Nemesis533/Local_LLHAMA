@@ -1,8 +1,5 @@
 {
   "HomeAssistantClient": {
-    "base_url": {"value": "http://homeassistant.local:8123", "type": "str"},
-    "token": {"value": "eyJhbGc[...]XVCJ9.[...]0kKCC1X2w2bjPhk[...]PXIU_qsHstuY",
-     "type": "str"},
     "allowed_entities": {
       "value": [
         "light.kitchen_light",
@@ -16,9 +13,6 @@
     "ALLOWED_DOMAINS":{
        "value": ["light", "climate", "switch", "fan", "media_player", "thermostat"],
         "type": "list"}
-  },
-  "LocalLLMChecker": {
-    "ALLOWED_IP_PREFIXES": {"value": ["192.168.1.", "127.0.0.1"], "type": "list"}
   },
   "SettingLoaderClass": {
     "base_model_path": {
@@ -45,12 +39,8 @@
       "value": "True",
       "type": "bool"
     },
-      "ollama_ip": {
-      "value": "192.168.xx.xxx:11434",
-      "type": "str"
-    },
       "ollama_model": {
-      "value": "qwen3-14b-gpu128",
+      "value": "gpt-oss:20b",
       "type": "str"
     }
   }

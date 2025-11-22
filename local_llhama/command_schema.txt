@@ -1,6 +1,36 @@
 {
   "home_weather": {
     "entity_id": "home_weather",
-    "actions": ["home_weather"]
+    "actions": ["home_weather"],
+    "description": "Get weather forecast for your home location",
+    "example": {"action": "home_weather", "target": "home_weather"},
+    "parameters": {}
+  },
+  "get_weather": {
+    "entity_id": "get_weather",
+    "actions": ["get_weather"],
+    "description": "Get current weather for any location in the world by place name",
+    "example": {"action": "get_weather", "target": "get_weather", "data": {"place": "New York"}},
+    "parameters": {
+      "place": {"required": true, "description": "Name of the location (city, country, etc.)"}
+    }
+  },
+  "get_wikipedia_summary": {
+    "entity_id": "get_wikipedia_summary",
+    "actions": ["get_wikipedia_summary"],
+    "description": "Get information from Wikipedia about any topic",
+    "example": {"action": "get_wikipedia_summary", "target": "get_wikipedia_summary", "data": {"topic": "Python programming"}},
+    "parameters": {
+      "topic": {"required": true, "description": "Topic or subject to look up on Wikipedia"}
+    }
+  },
+  "get_news_summary": {
+    "entity_id": "get_news_summary",
+    "actions": ["get_news_summary"],
+    "description": "Get latest news headlines about a specific topic",
+    "example": {"action": "get_news_summary", "target": "get_news_summary", "data": {"query": "technology"}},
+    "parameters": {
+      "query": {"required": true, "description": "News topic or search query"}
+    }
   }
 }
