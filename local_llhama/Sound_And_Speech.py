@@ -169,9 +169,26 @@ class TextToSpeech:
 
     def __init__(self, voice_dir: str):
         self.voice_dir = Path(voice_dir)
-        if not self.voice_dir.exists():
-            raise FileNotFoundError(f"Voice directory not found: {voice_dir}")
         self.class_prefix_message = "[TextToSpeech]"
+        
+        # Validate voice directory
+        if not self.voice_dir.exists():
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice directory not found: {voice_dir}")
+            raise FileNotFoundError(f"Voice directory not found: {voice_dir}")
+        
+        if not self.voice_dir.is_dir():
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice path is not a directory: {voice_dir}")
+            raise NotADirectoryError(f"Voice path is not a directory: {voice_dir}")
+        
+        # Check for readable voice files
+        try:
+            voice_files = list(self.voice_dir.glob("*.onnx"))
+            if not voice_files:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No .onnx voice files found in {voice_dir}")
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Found {len(voice_files)} voice file(s) in {voice_dir}")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error scanning voice directory: {e}")
         
         # Initialize PyAudio with error handling
         try:
@@ -185,23 +202,92 @@ class TextToSpeech:
             raise
         
         self.voice = None
+        self.voice_cache = {}  # Cache loaded voices by language
+        self.current_lang = None
 
     def preprocess_text(self, text: str) -> str:
         return text.strip()
 
     def select_voice_by_lang(self, lang_tag: str):
+        """Select and load a voice for the specified language with caching and error handling."""
+        
+        # Check if already loaded
+        if lang_tag == self.current_lang and self.voice is not None:
+            return  # Voice already loaded
+        
+        # Check if voice is in cache
+        if lang_tag in self.voice_cache:
+            self.voice = self.voice_cache[lang_tag]
+            self.current_lang = lang_tag
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using cached voice for language: {lang_tag}")
+            return
+        
+        # Validate language tag
         if lang_tag not in self.LANG_VOICE_INITIALS:
-            raise ValueError(f"Unsupported language tag: {lang_tag}")
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unsupported language tag: {lang_tag}")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Supported languages: {list(self.LANG_VOICE_INITIALS.keys())}")
+            raise ValueError(f"Unsupported language tag: {lang_tag}. Supported: {list(self.LANG_VOICE_INITIALS.keys())}")
 
         prefix = self.LANG_VOICE_INITIALS[lang_tag]
-        matching_files = list(self.voice_dir.glob(f"{prefix}_*.onnx"))
+        
+        # Search for voice files with error handling
+        try:
+            matching_files = list(self.voice_dir.glob(f"{prefix}_*.onnx"))
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error searching for voice files: {type(e).__name__}: {e}")
+            raise RuntimeError(f"Failed to search voice directory: {e}")
 
         if not matching_files:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] No voice found for language '{lang_tag}' (prefix: {prefix})")
+            # List available voice files to help debugging
+            try:
+                all_voices = list(self.voice_dir.glob("*.onnx"))
+                if all_voices:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Available voices: {[v.name for v in all_voices]}")
+                else:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No .onnx files found in {self.voice_dir}")
+            except Exception:
+                pass
             raise FileNotFoundError(f"No voice found for language '{lang_tag}' in {self.voice_dir}")
 
         voice_file = matching_files[0]
-        self.voice = PiperVoice.load(voice_file)
-        print(f"{self.class_prefix_message} Loaded voice: {voice_file.name}")
+        
+        # Validate voice file
+        if not voice_file.exists():
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice file does not exist: {voice_file}")
+            raise FileNotFoundError(f"Voice file not found: {voice_file}")
+        
+        if not voice_file.is_file():
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice path is not a file: {voice_file}")
+            raise ValueError(f"Voice path is not a file: {voice_file}")
+        
+        # Check file size
+        try:
+            file_size = voice_file.stat().st_size
+            if file_size == 0:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice file is empty: {voice_file}")
+                raise ValueError(f"Voice file is empty: {voice_file}")
+            if file_size < 1000:  # Less than 1KB is suspicious
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Voice file suspiciously small ({file_size} bytes): {voice_file}")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not check voice file size: {e}")
+        
+        # Load voice with error handling
+        try:
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading voice file: {voice_file.name}")
+            self.voice = PiperVoice.load(voice_file)
+            self.voice_cache[lang_tag] = self.voice
+            self.current_lang = lang_tag
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully loaded voice: {voice_file.name}")
+        except FileNotFoundError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Voice file not found during load: {e}")
+            raise
+        except PermissionError as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Permission denied reading voice file: {e}")
+            raise RuntimeError(f"Cannot read voice file (permission denied): {voice_file}")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to load voice file: {type(e).__name__}: {e}")
+            raise RuntimeError(f"Voice loading failed for {voice_file}: {e}")
 
     def speak(self, text: str, lang_tag: str):
         text = self.preprocess_text(text)
