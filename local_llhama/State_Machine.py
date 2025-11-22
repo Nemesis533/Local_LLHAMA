@@ -210,7 +210,11 @@ class StateMachineInstance:
                 self.send_messages(message)
 
             except Empty:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription queue was empty, retrying later...")
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Transcription queue timeout after 2s, returning to LISTENING")
+                self.transition(State.LISTENING)
+                return
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to get transcription from queue: {type(e).__name__}: {e}")
                 self.transition(State.LISTENING)
                 return
             
@@ -222,25 +226,37 @@ class StateMachineInstance:
             if structured_output:
                 if structured_output.get("commands"):
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Structured Commands: {structured_output}")
-                    self.command_queue.put(structured_output, timeout=1)
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put command into queue")
-                    self.transition(State.SEND_COMMANDS)
+                    try:
+                        self.command_queue.put(structured_output, timeout=1)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put command into queue")
+                        self.transition(State.SEND_COMMANDS)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {type(e).__name__}: {e}")
+                        self.transition(State.LISTENING)
 
                 elif structured_output.get("nl_response"):
                     nl_message = structured_output.get("nl_response")
                     lang = structured_output.get("language")
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] NL Response: {nl_message}")
-                    self.speech_queue.put([nl_message,lang])
-                    message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
-                    self.send_messages(message)
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
-                    self.transition(State.SPEAKING)
+                    try:
+                        self.speech_queue.put([nl_message, lang], timeout=1)
+                        message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
+                        self.send_messages(message)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
+                        self.transition(State.SPEAKING)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue speech: {type(e).__name__}: {e}")
+                        self.transition(State.LISTENING)
 
                 else:
                     message_to_speak = "No valid commands or responses extracted, Please try again."
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] No valid commands or responses extracted.")
-                    self.speech_queue.put(message_to_speak)
-                    self.transition(State.SPEAKING)
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No valid commands or responses extracted.")
+                    try:
+                        self.speech_queue.put([message_to_speak, "en"], timeout=1)
+                        self.transition(State.SPEAKING)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue error message: {type(e).__name__}: {e}")
+                        self.transition(State.LISTENING)
 
     def sound_player_worker(self):
         """
@@ -255,13 +271,19 @@ class StateMachineInstance:
                 self.sound_player.play(sound_action)
             except Empty:
                 continue
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Sound player worker error: {type(e).__name__}: {e}")
+                time.sleep(0.5)  # Brief delay before retry to avoid tight error loop
 
     def play_sound(self, sound_action):
         """
         @brief Enqueue a sound action to be played asynchronously by the sound thread.
         @param sound_action The SoundActions enum member to play.
         """
-        self.sound_action_queue.put(sound_action)
+        try:
+            self.sound_action_queue.put(sound_action, timeout=1)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to queue sound action: {type(e).__name__}: {e}")
 
     def transition(self, new_state: State):
         """
@@ -286,13 +308,21 @@ class StateMachineInstance:
 
         if current_state == State.RECORDING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording...")
-            transcription = self.recorder.record_audio(self.transcriptor, self.noise_floor)
-            transcription_words = len(str.split(transcription, " "))
-            if transcription_words > 4:
-                self.transcription_queue.put(transcription)
-                self.transition(State.PARSING_VOICE)
-            else:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription only had {transcription_words} words, returning to listening")
+            try:
+                transcription = self.recorder.record_audio(self.transcriptor, self.noise_floor)
+                transcription_words = len(str.split(transcription, " "))
+                if transcription_words > 4:
+                    try:
+                        self.transcription_queue.put(transcription, timeout=1)
+                        self.transition(State.PARSING_VOICE)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue transcription: {type(e).__name__}: {e}")
+                        self.transition(State.LISTENING)
+                else:
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription only had {transcription_words} words, returning to listening")
+                    self.transition(State.LISTENING)
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Recording failed: {type(e).__name__}: {e}")
                 self.transition(State.LISTENING)
 
     def speak(self):
@@ -304,12 +334,19 @@ class StateMachineInstance:
 
         if current_state == State.SPEAKING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Speaking response...")
-            transcription = self.speech_queue.get()
-            self.speaker.speak(transcription[0],transcription[1])
-            time.sleep(0.3) #delay for more natural interactions
-            if not isinstance(self.command_llm, OllamaClient):
-                self.sound_player.play(SoundActions.action_closing)
-            self.transition(State.LISTENING)
+            try:
+                transcription = self.speech_queue.get(timeout=2)
+                self.speaker.speak(transcription[0], transcription[1])
+                time.sleep(0.3)  # delay for more natural interactions
+                if not isinstance(self.command_llm, OllamaClient):
+                    self.sound_player.play(SoundActions.action_closing)
+                self.transition(State.LISTENING)
+            except Empty:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Speech queue timeout after 2s, returning to LISTENING")
+                self.transition(State.LISTENING)
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Speaking failed: {type(e).__name__}: {e}")
+                self.transition(State.LISTENING)
 
     def handle_error(self):
         """
@@ -350,11 +387,14 @@ class StateMachineInstance:
             self.transition(State.ERROR)
 
     def send_messages(self, message):
-        message = {
+        try:
+            message_dict = {
                 "type": "web_ui_message",
                 "data": message
             }
-        self.web_server_message_queue.put(message)
+            self.web_server_message_queue.put(message_dict, timeout=1)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send message to web server: {type(e).__name__}: {e}")
 
     def run(self):
         
@@ -364,19 +404,29 @@ class StateMachineInstance:
 
             # Process wake word detection results
             if not self.result_queue.empty():
-                wakeword_data = self.result_queue.get()
+                try:
+                    wakeword_data = self.result_queue.get(timeout=0.5)
 
-                with self.lock:
-                    current_state = self.state
+                    with self.lock:
+                        current_state = self.state
 
-                if current_state == State.LISTENING and wakeword_data:
-                    self.print_once(f"Wakeword detected! Transitioning to RECORDING. Noise Floor is {wakeword_data}")
-                    self.noise_floor = wakeword_data
-                    # Clear any remaining wake word events to avoid stale data
-                    while not self.result_queue.empty():
-                        self.result_queue.get()
+                    if current_state == State.LISTENING and wakeword_data:
+                        self.print_once(f"Wakeword detected! Transitioning to RECORDING. Noise Floor is {wakeword_data}")
+                        self.noise_floor = wakeword_data
+                        # Clear any remaining wake word events to avoid stale data
+                        try:
+                            while not self.result_queue.empty():
+                                self.result_queue.get_nowait()
+                        except Empty:
+                            pass
+                        except Exception as e:
+                            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error clearing wake word queue: {type(e).__name__}: {e}")
 
-                    self.transition(State.RECORDING)
+                        self.transition(State.RECORDING)
+                except Empty:
+                    pass  # Queue became empty between check and get, safe to ignore
+                except Exception as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to process wake word: {type(e).__name__}: {e}")
 
             with self.lock:
                 current_state = self.state
@@ -398,15 +448,24 @@ class StateMachineInstance:
                 try:
                     command = self.command_queue.get_nowait()
                     command_result = self.ha_client.send_commands(command)
+                    
+                    if command_result:
+                        self.print_once("Command result received.")
+                        try:
+                            self.speech_queue.put(command_result, timeout=1)
+                            self.transition(State.SPEAKING)
+                        except Exception as e:
+                            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command result: {type(e).__name__}: {e}")
+                            self.play_sound(SoundActions.system_awake)
+                            self.transition(State.LISTENING)
+                    else:
+                        self.play_sound(SoundActions.system_awake)
+                        self.transition(State.LISTENING)
                 except Empty:
-                    command_result = None
-
-                if command_result:
-                    self.print_once("Command result received.")
-                    self.speech_queue.put(command_result)
-                    self.transition(State.SPEAKING)
-                else:
-                    self.play_sound(SoundActions.system_awake)
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Command queue empty when expected, returning to LISTENING")
+                    self.transition(State.LISTENING)
+                except Exception as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to send command: {type(e).__name__}: {e}")
                     self.transition(State.LISTENING)
 
             elif current_state == State.NO_COMMANDS:
