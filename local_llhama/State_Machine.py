@@ -496,7 +496,7 @@ class StateMachineInstance:
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function result(s) received: {simple_function_results}")
                                 
                                 # Send only simple function results for natural language conversion
-                                llm_input = f"Convert these function results into a natural language response: {simple_function_results}"
+                                llm_input = f"Convert these function results into a natural language response in {language} language: {simple_function_results}"
                                 
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sending to LLM for NL conversion")
                                 nl_output = self.command_llm.send_message(llm_input, message_type="response")
