@@ -31,6 +31,9 @@ class SettingLoaderClass:
         # Load environment variables from .env file
         load_dotenv()
         
+        # Validate required environment variables
+        self._validate_environment_variables()
+        
         self.json_path = json_path
         self.data = {}
         self.base_model_path = "/mnt/fast_storage/huggingface/hub/"
@@ -45,6 +48,57 @@ class SettingLoaderClass:
         self.settings_file = f"{self.base_path}{self.json_path}"
         # Use CUDA if available, else fall back to CPU
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    def _validate_environment_variables(self):
+        """
+        @brief Validate that required environment variables are set.
+        @raises EnvironmentError if critical environment variables are missing or invalid.
+        """
+        missing_vars = []
+        warnings = []
+        
+        # Check for Home Assistant credentials (critical for HA integration)
+        ha_base_url = os.getenv('HA_BASE_URL', '').strip()
+        ha_token = os.getenv('HA_TOKEN', '').strip()
+        
+        if not ha_base_url:
+            missing_vars.append('HA_BASE_URL')
+        elif not ha_base_url.startswith(('http://', 'https://')):
+            warnings.append(f"HA_BASE_URL should start with http:// or https:// (got: {ha_base_url})")
+            
+        if not ha_token:
+            missing_vars.append('HA_TOKEN')
+        elif len(ha_token) < 20:
+            warnings.append("HA_TOKEN seems too short - verify it's a valid Long-Lived Access Token")
+        
+        # Check for Ollama IP (warning only, since it may not be used)
+        ollama_ip = os.getenv('OLLAMA_IP', '').strip()
+        if not ollama_ip:
+            warnings.append("OLLAMA_IP not set - Ollama integration will use default or may fail")
+        
+        # Check for allowed IP prefixes
+        allowed_ips = os.getenv('ALLOWED_IP_PREFIXES', '').strip()
+        if not allowed_ips:
+            warnings.append("ALLOWED_IP_PREFIXES not set - web UI will use default (may be insecure)")
+        
+        # Print warnings
+        if warnings:
+            print("[SettingsLoader] [WARNING] Environment variable warnings:")
+            for warning in warnings:
+                print(f"  - {warning}")
+        
+        # Raise error if critical variables are missing
+        if missing_vars:
+            error_msg = (
+                f"Critical environment variables missing: {', '.join(missing_vars)}\n"
+                f"Please ensure you have a .env file with the required variables.\n"
+                f"You can copy .env.example to .env and fill in your credentials:\n"
+                f"  cp .env.example .env\n"
+                f"Then edit .env with your Home Assistant URL and token."
+            )
+            raise EnvironmentError(error_msg)
+        
+        print("[SettingsLoader] [INFO] Environment variable validation passed")
 
     def load(self):
         """
@@ -64,10 +118,24 @@ class SettingLoaderClass:
 
         @param ha_client: An instance of HomeAssistantClient to integrate LLM with home automation.
         @return: A loaded instance of LLM_Class.
+        @raises ValueError: If Ollama configuration is invalid when use_ollama is True.
         """
         if self.use_ollama:
             # Load ollama_ip from environment variable if not set in JSON
-            ollama_ip = self.ollama_ip or os.getenv('OLLAMA_IP', '192.168.88.239:11434')
+            ollama_ip = self.ollama_ip or os.getenv('OLLAMA_IP', '').strip()
+            
+            if not ollama_ip:
+                error_msg = (
+                    "Ollama is enabled but OLLAMA_IP is not configured.\n"
+                    "Please set OLLAMA_IP in your .env file (e.g., OLLAMA_IP=192.168.88.239:11434)"
+                )
+                raise ValueError(error_msg)
+            
+            # Validate format (should contain colon for IP:PORT)
+            if ':' not in ollama_ip:
+                print(f"[SettingsLoader] [WARNING] OLLAMA_IP ({ollama_ip}) doesn't contain port. Expected format: IP:PORT")
+            
+            print(f"[SettingsLoader] [INFO] Connecting to Ollama at {ollama_ip} with model {self.ollama_model}")
             command_llm = OllamaClient(ha_client, host=ollama_ip, model=self.ollama_model)
         else:
             command_llm_path = f"{self.base_model_path}{self.command_llm_name}"
