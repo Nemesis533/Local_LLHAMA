@@ -81,9 +81,23 @@ class LocalLLHAMA_WebService:
             return False
         
     def emit_messages(self, message):
+        if not message:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Attempted to emit empty message")
+            return
+        
         with self.clients_lock:
+            clients_to_remove = []
             for sid in self.connected_clients:
-                self.socketio.emit('log_line', {'line': message}, room=sid)
+                try:
+                    self.socketio.emit('log_line', {'line': message}, room=sid)
+                except Exception as e:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit to client {sid}: {repr(e)}")
+                    clients_to_remove.append(sid)
+            
+            # Remove failed clients
+            for sid in clients_to_remove:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Removing disconnected client {sid}")
+                self.connected_clients.discard(sid)
 
     def handle_connect(self):
         ip = request.remote_addr
@@ -95,7 +109,10 @@ class LocalLLHAMA_WebService:
         with self.clients_lock:
             self.connected_clients.add(request.sid)
 
-        self.emit_messages("Local_LLHAMA socket connected!")
+        try:
+            self.emit_messages("Local_LLHAMA socket connected!")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send welcome message: {repr(e)}")
 
 
 
@@ -106,33 +123,64 @@ class LocalLLHAMA_WebService:
 
     def send_ollama_command(self, text: str):
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text}")
-        if self.action_message_queue:
-            message = {
-                "type": "ollama_command",
-                "data": text
-            }
-            self.action_message_queue.put(message)
-        else:
+        if not self.action_message_queue:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Action message queue not initialized")
             raise RuntimeError("Message queue not initialized.")
         
+        message = {
+            "type": "ollama_command",
+            "data": text
+        }
+        
+        try:
+            self.action_message_queue.put(message, timeout=2.0)
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command queued successfully")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {repr(e)}")
+            raise RuntimeError(f"Failed to queue command: {repr(e)}")
+        
     def monitor_messages(self):
+        if not self.web_server_message_queue:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Web server message queue not initialized")
+            return
+        
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting message monitor")
+        
         while True:
             try:
-                message = self.web_server_message_queue.get(timeout=0.1)  # adjust timeout as needed
+                message = self.web_server_message_queue.get(timeout=1.0)
+                
                 if isinstance(message, dict):
                     msg_type = message.get("type")
                     if msg_type == "web_ui_message":
                         message_data = message.get("data")
-                        self.emit_messages(message_data)
-
+                        if message_data:
+                            try:
+                                self.emit_messages(message_data)
+                            except Exception as e:
+                                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to emit message: {repr(e)}")
+                        else:
+                            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received web_ui_message with no data")
+                    else:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message type: {msg_type}")
+                
                 elif isinstance(message, str):
-                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message {message}")
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received string message: {message}")
                 else:
-                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type {type(message)}")
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type: {type(message).__name__}")
+                    
             except Empty:
-                continue  # queue is empty, keep looping
+                # Queue empty, yield to allow other Socket.IO tasks
+                self.socketio.sleep(0.05)
+                continue
+            except AttributeError as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Queue attribute error: {repr(e)}")
+                self.socketio.sleep(1.0)
+                continue
             except Exception as e:
-                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Message Queue Error! {repr(e)}")
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Message queue error: {repr(e)}")
+                self.socketio.sleep(0.5)
+                continue
 
 
 
