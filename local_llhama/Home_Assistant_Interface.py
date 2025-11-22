@@ -633,43 +633,51 @@ class SimpleFunctions:
         if not topic:
             return "Please specify a topic."
 
-        # Use Wikimedia Core REST API to get HTML content
-        # Format: https://api.wikimedia.org/core/v1/wikipedia/{language}/page/{title}/html
-        # Replace spaces with underscores for the URL
-        topic_formatted = topic.replace(" ", "_")
-        url = f"https://api.wikimedia.org/core/v1/wikipedia/en/page/{topic_formatted}/html"
+        headers = {
+            'User-Agent': 'LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)'
+        }
+
+        # Normalize topic for initial request
+        topic_formatted = "_".join(topic.strip().split())
 
         try:
-            headers = {
-                'User-Agent': 'LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)'
-            }
-            
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            # Extract text from HTML response
-            html_content = response.text
+            # Step 1: Get canonical page title from summary endpoint
+            summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{topic_formatted}"
+            summary_resp = requests.get(summary_url, headers=headers, timeout=10)
+            summary_resp.raise_for_status()
+            summary_data = summary_resp.json()
+            canonical_title = summary_data.get("title").replace(" ", "_")
+
+            if not canonical_title:
+                return f"No Wikipedia page found for: {topic}"
+
+            # Step 2: Fetch HTML using canonical title
+            html_url = f"https://api.wikimedia.org/core/v1/wikipedia/en/page/{canonical_title}/html"
+            html_resp = requests.get(html_url, headers=headers, timeout=10)
+            html_resp.raise_for_status()
+
+            html_content = html_resp.text
             soup = BeautifulSoup(html_content, 'html.parser')
-            
+
             # Remove unwanted elements
             for element in soup(['script', 'style', 'nav', 'footer', 'header', 'table', 'figure']):
                 element.decompose()
-            
+
             # Get the first few paragraphs (introduction)
             paragraphs = soup.find_all('p', limit=3)
             text_parts = []
-            
+
             for p in paragraphs:
                 text = p.get_text(separator=' ', strip=True)
                 if text and len(text) > 20:  # Skip very short paragraphs
                     text_parts.append(text)
-            
+
             if text_parts:
-                summary = ' '.join(text_parts)
+                summary_text = ' '.join(text_parts)
                 # Limit to reasonable length
-                if len(summary) > 500:
-                    summary = summary[:497] + "..."
-                return summary
+                if len(summary_text) > 500:
+                    summary_text = summary_text[:497] + "..."
+                return summary_text
             else:
                 return f"No summary found for: {topic}"
 
