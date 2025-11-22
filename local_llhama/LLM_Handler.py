@@ -54,7 +54,7 @@ Device list and supported actions:
 
 Your job:
 - Map user input (in any language) to the most likely **English** device name and action from the list above.
-- Use available simple functions when appropriate (e.g., for weather, web searches, etc.).
+- Use available simple functions when appropriate (e.g., for weather information, Wikipedia lookups, news searches).
 - Do not make up device names or actions.
 - If the input is vague, infer the most appropriate valid command.
 - Extract one command per device only.
@@ -76,16 +76,32 @@ JSON response:
 }}
 
 User input:
-"Search for news about technology"
+"Tell me about Python programming"
 
 JSON response:
 {{
 "commands": [
     {{
-    "action": "web_search",
-    "target": "web_search",
+    "action": "get_wikipedia_summary",
+    "target": "get_wikipedia_summary",
     "data": {{
-        "query": "technology news"
+        "topic": "Python programming"
+    }}
+    }}
+]
+}}
+
+User input:
+"What's the latest news about technology?"
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "get_news_summary",
+    "target": "get_news_summary",
+    "data": {{
+        "query": "technology"
     }}
     }}
 ]

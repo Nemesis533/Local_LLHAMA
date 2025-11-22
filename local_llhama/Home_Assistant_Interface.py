@@ -477,6 +477,9 @@ class SimpleFunctions:
             "web_search_config.json"
         )
         self.web_search_config = self.load_web_search_config()
+        
+        # Load API keys from environment
+        self.newsdata_api_key = os.getenv("NEWSDATA_API_KEY", "YOUR_NEWSDATA_API_KEY")
 
     def call_function_by_name(self, function_name: str, *args, **kwargs):
         """
@@ -623,60 +626,103 @@ class SimpleFunctions:
                 "error": f"Unexpected error: {str(e)}"
             }
 
-    def web_search(self, query: str = None, website: str = None) -> str:
+    def get_wikipedia_summary(self, topic=None):
         """
-        @brief Search allowed websites and return synthetic summary.
+        @brief Fetch a short introductory summary from Wikipedia for a given topic.
 
-        @param query Search query or topic.
-        @param website Optional specific website name to search.
-        @return Synthetic summary of search results.
+        @param topic Topic/article name as a string.
+        @return Summary string or error message.
         """
-        print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Web search request - query: {query}, website: {website}")
-        
-        allowed_websites = self.web_search_config.get('allowed_websites', [])
-        
-        if not allowed_websites:
-            return "Web search is not configured. No allowed websites found."
-        
-        if website:
-            website_lower = website.lower()
-            allowed_websites = [
-                w for w in allowed_websites 
-                if website_lower in w.get('name', '').lower() or website_lower in w.get('url', '').lower()
-            ]
+        error_message = "Wikipedia information not available at the moment, please try later."
+
+        if not topic:
+            return "Please specify a topic."
+
+        # Use Wikimedia Core REST API to get HTML content
+        # Format: https://api.wikimedia.org/core/v1/wikipedia/{language}/page/{title}/html
+        # Replace spaces with underscores for the URL
+        topic_formatted = topic.replace(" ", "_")
+        url = f"https://api.wikimedia.org/core/v1/wikipedia/en/page/{topic_formatted}/html"
+
+        try:
+            headers = {
+                'User-Agent': 'LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)'
+            }
             
-            if not allowed_websites:
-                return f"Website '{website}' is not in the allowed list."
-        
-        max_results = self.web_search_config.get('max_results', 3)
-        websites_to_search = allowed_websites[:max_results]
-        
-        results = []
-        for site in websites_to_search:
-            site_name = site.get('name', 'Unknown')
-            site_url = site.get('url', '')
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
             
-            print(f"[SimpleFunctions] [{LogLevel.INFO.name}] Searching {site_name}...")
+            # Extract text from HTML response
+            html_content = response.text
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            result = self._search_website(site_url, query)
+            # Remove unwanted elements
+            for element in soup(['script', 'style', 'nav', 'footer', 'header', 'table', 'figure']):
+                element.decompose()
             
-            if result.get('success'):
-                results.append({
-                    'name': site_name,
-                    'content': result.get('content', '')
-                })
+            # Get the first few paragraphs (introduction)
+            paragraphs = soup.find_all('p', limit=3)
+            text_parts = []
+            
+            for p in paragraphs:
+                text = p.get_text(separator=' ', strip=True)
+                if text and len(text) > 20:  # Skip very short paragraphs
+                    text_parts.append(text)
+            
+            if text_parts:
+                summary = ' '.join(text_parts)
+                # Limit to reasonable length
+                if len(summary) > 500:
+                    summary = summary[:497] + "..."
+                return summary
             else:
-                print(f"[SimpleFunctions] [{LogLevel.WARNING.name}] Failed to search {site_name}: {result.get('error')}")
-        
-        if not results:
-            return "Unable to retrieve any results from the allowed websites at this time."
-        
-        summary_parts = [f"Web search results for '{query}'" if query else "Web search results:"]
-        
-        for idx, result in enumerate(results, 1):
-            summary_parts.append(f"\n{idx}. {result['name']}: {result['content']}")
-        
-        return "\n".join(summary_parts)
+                return f"No summary found for: {topic}"
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                return f"No Wikipedia page found for: {topic}"
+            return error_message
+        except Exception:
+            return error_message
+
+    def get_news_summary(self, query=None):
+        """
+        @brief Fetch a summary of the latest global news related to a query.
+
+        @param query Search term string.
+        @return Summary of top news articles or error message.
+        """
+        error_message = "News data not available at the moment, please try later."
+
+        if not query:
+            return "Please specify a news topic."
+
+        url = "https://newsdata.io/api/1/news"
+        params = {
+            "apikey": self.newsdata_api_key,
+            "q": query,
+            "language": "en"
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+
+            articles = data.get("results", [])
+            if not articles:
+                return f"No recent news found for: {query}"
+
+            # Build a short summary from the top 3 headlines
+            summaries = []
+            for article in articles[:3]:
+                title = article.get("title", "")
+                desc = article.get("description", "")
+                summaries.append(f"- {title}\n  {desc}")
+
+            return "\n\n".join(summaries)
+
+        except Exception:
+            return error_message
 
     def home_weather(self, place=None):
         """

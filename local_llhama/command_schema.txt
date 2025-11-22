@@ -15,14 +15,22 @@
       "place": {"required": true, "description": "Name of the location (city, country, etc.)"}
     }
   },
-  "web_search": {
-    "entity_id": "web_search",
-    "actions": ["web_search"],
-    "description": "Search allowed websites (Google News, Wikipedia) for general information",
-    "example": {"action": "web_search", "target": "web_search", "data": {"query": "your search query"}},
+  "get_wikipedia_summary": {
+    "entity_id": "get_wikipedia_summary",
+    "actions": ["get_wikipedia_summary"],
+    "description": "Get information from Wikipedia about any topic",
+    "example": {"action": "get_wikipedia_summary", "target": "get_wikipedia_summary", "data": {"topic": "Python programming"}},
     "parameters": {
-      "query": {"required": false, "description": "Search query or topic"},
-      "website": {"required": false, "description": "Specific website to search (e.g., 'Wikipedia', 'Google News')"}
+      "topic": {"required": true, "description": "Topic or subject to look up on Wikipedia"}
+    }
+  },
+  "get_news_summary": {
+    "entity_id": "get_news_summary",
+    "actions": ["get_news_summary"],
+    "description": "Get latest news headlines about a specific topic",
+    "example": {"action": "get_news_summary", "target": "get_news_summary", "data": {"query": "technology"}},
+    "parameters": {
+      "query": {"required": true, "description": "News topic or search query"}
     }
   }
 }

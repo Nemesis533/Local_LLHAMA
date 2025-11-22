@@ -135,8 +135,11 @@ class AsyncQueueLogger:
         if "[Supervisor]" in message and not "[CRITICAL]" in message:
             color = Fore.MAGENTA  # purple
 
-        if message in ["[LLM Reply]","[User Prompt]"] and not "[CRITICAL]" in message:
-            color = Fore.CYAN  # purple
+        if "[User Prompt]" in message and not "[CRITICAL]" in message:
+            color = Fore.CYAN  # cyan
+        
+        if "[LLM Reply]" in message and not "[CRITICAL]" in message:
+            color = Fore.BLUE  # blue
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
