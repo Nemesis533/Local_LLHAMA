@@ -21,7 +21,7 @@ class AudioTranscriptionClass:
 
     def __init__(self):
         self.class_prefix_message = "[AudioTranscriptionClass]"
-        self.model_name = "medium"  # Name of the Whisper model to use
+        self.model_name = "turbo"  # Name of the Whisper model to use
         self.model = None           # Will hold the loaded Whisper model
 
     def init_model(self, device):
@@ -66,7 +66,7 @@ class AudioRecorderClass:
         self.channels = channels
         self.chunk_size = chunk_size
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
-        self.noise_floor_multiplier = 0.60
+        self.noise_floor_multiplier = 0.65
         self.noise_threshold = 0
         self.silence_window_seconds = 2
         self.max_chunks = int(self.sample_rate / self.chunk_size * self.silence_window_seconds)

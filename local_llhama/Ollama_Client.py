@@ -178,6 +178,11 @@ class OllamaClient:
         
         url = f"http://{self.host}/api/generate"
 
+        # Use higher temperature for response processing to make it more creative
+        if message_type == "response":
+            temperature = 0.8  # More creative for processing Wikipedia/news responses
+            top_p = 0.95
+
         payload = {
             "model": self.model,
             "prompt": prompt,
