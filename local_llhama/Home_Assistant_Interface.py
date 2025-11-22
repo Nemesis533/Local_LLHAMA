@@ -363,11 +363,6 @@ class HomeAssistantClient:
                         "response": response.text,
                     })
 
-                if debug:
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command Results: {results}")
-
-                return None
-            
             else:
                 # Call the simple function corresponding to the action
                 # Pass any data parameters from the command
@@ -379,11 +374,11 @@ class HomeAssistantClient:
                     "response": result,
                     "type": "simple_function"  # Tag to identify simple function execution
                 })
-                
-        if debug:
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function results: {results}")
         
-        return results
+        if debug:
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] All command results: {results}")
+        
+        return results if results else None
 
     def get_service_info(self, domain, action):
         """

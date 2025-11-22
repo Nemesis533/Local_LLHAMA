@@ -18,6 +18,7 @@ You are a helpful assistant that converts technical function results into natura
 
 Your job:
 - Take the provided function result data and convert it into a friendly, conversational response
+- Focus on the actual information in the "response" field
 - Detect the language of the original user query if provided
 - Respond in the same language as the user's original question
 - Be concise but informative
@@ -39,6 +40,17 @@ Function result:
 JSON response:
 {{
     "nl_response": "The weather in Paris is currently 18 degrees Celsius with winds at 15 kilometers per hour.",
+    "language": "en"
+}}
+
+Weather function result:
+[
+    {{"target": "home_weather", "action": "home_weather", "success": true, "response": "The weather at the location is scattered clouds with a temperature of 6.8 degrees.", "type": "simple_function"}}
+]
+
+JSON response:
+{{
+    "nl_response": "The weather is currently scattered clouds with a temperature of 6.8 degrees.",
     "language": "en"
 }}
 """

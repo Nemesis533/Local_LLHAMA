@@ -484,30 +484,29 @@ class StateMachineInstance:
                     command_result = self.ha_client.send_commands(command)
                     
                     if command_result:
-                        # Check if this is a simple function result
-                        is_simple_function = any(result.get("type") == "simple_function" for result in command_result if isinstance(result, dict))
+                        # Check if any results are simple functions
+                        has_simple_function = any(result.get("type") == "simple_function" for result in command_result if isinstance(result, dict))
                         
-                        if is_simple_function:
-                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function result received: {command_result}")
-                            
-                            # Send result to LLM for natural language processing
+                        if has_simple_function:
+                            # Simple functions present: send only simple function results to LLM
                             if isinstance(self.command_llm, OllamaClient):
-                                # Extract the response from the result
-                                function_response = command_result[0].get('response', str(command_result)) if command_result else str(command_result)
+                                # Extract only simple function results
+                                simple_function_results = [r for r in command_result if isinstance(r, dict) and r.get("type") == "simple_function"]
                                 
-                                # Create a message for the LLM to process
-                                llm_input = f"Convert this function result into a natural language response: {function_response} - reply in {language}"
+                                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Simple function result(s) received: {simple_function_results}")
+                                
+                                # Send only simple function results for natural language conversion
+                                llm_input = f"Convert these function results into a natural language response: {simple_function_results}"
                                 
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sending to LLM for NL conversion")
                                 nl_output = self.command_llm.send_message(llm_input, message_type="response")
                                 
                                 if nl_output and nl_output.get("nl_response"):
                                     nl_message = nl_output.get("nl_response")
-                                    lang = nl_output.get("language")
+                                    lang = nl_output.get("language", language)  # Fallback to original language
                                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] LLM converted response: {nl_message}")
                                     message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
-                                    self.send_messages(message)                                    
-                                    self.speech_queue.put([nl_message, lang], timeout=1)                                    
+                                    self.send_messages(message)
                                     try:
                                         self.speech_queue.put([nl_message, lang], timeout=1)
                                         self.transition(State.SPEAKING)
@@ -516,38 +515,32 @@ class StateMachineInstance:
                                         self.transition(State.LISTENING)
                                 else:
                                     # Fallback: use raw response
-                                    message = f"{self.class_prefix_message} [Simple Function Result]: {function_response}"
+                                    fallback_msg = str(simple_function_results)
+                                    message = f"{self.class_prefix_message} [Command Result]: {fallback_msg}"
                                     self.send_messages(message)
                                     try:
-                                        self.speech_queue.put([function_response, "en"], timeout=1)
+                                        self.speech_queue.put([fallback_msg, language], timeout=1)
                                         self.transition(State.SPEAKING)
                                     except Exception as e:
                                         print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue result: {type(e).__name__}: {e}")
                                         self.transition(State.LISTENING)
                             else:
                                 # Non-Ollama client: use raw response
-                                message = f"{self.class_prefix_message} [Simple Function Result]: {command_result}"
+                                message = f"{self.class_prefix_message} [Command Result]: {command_result}"
                                 self.send_messages(message)
                                 try:
-                                    self.speech_queue.put(command_result, timeout=1)
+                                    self.speech_queue.put([str(command_result), language], timeout=1)
                                     self.transition(State.SPEAKING)
                                 except Exception as e:
                                     print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue result: {type(e).__name__}: {e}")
                                     self.transition(State.LISTENING)
                         else:
-                            # Regular HA command result
-                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] HA command result received: {command_result}")
+                            # Pure HA commands: just play success sound, no verbal feedback
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] HA command(s) executed successfully: {command_result}")
                             message = f"{self.class_prefix_message} [HA Command Result]: {command_result}"
                             self.send_messages(message)
-                            
-                            self.print_once("Command result received.")
-                            try:
-                                self.speech_queue.put(command_result, timeout=1)
-                                self.transition(State.SPEAKING)
-                            except Exception as e:
-                                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command result: {type(e).__name__}: {e}")
-                                self.play_sound(SoundActions.system_awake)
-                                self.transition(State.LISTENING)
+                            self.play_sound(SoundActions.system_awake)
+                            self.transition(State.LISTENING)
                     else:
                         self.play_sound(SoundActions.system_awake)
                         self.transition(State.LISTENING)
