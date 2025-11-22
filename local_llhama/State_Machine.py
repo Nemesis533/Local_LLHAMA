@@ -53,7 +53,8 @@ class StateMachineInstance:
 
         # State and synchronization primitives
         self.state: State = State.LOADING
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()  # RLock allows reentrant locking from same thread
+        self._print_lock = threading.Lock()  # Separate lock for print_once to avoid deadlock
 
         # Initialize queues and threads
         self.load_queues()
@@ -137,13 +138,21 @@ class StateMachineInstance:
     def stop(self):
         """
         Cleanly stop all background threads and prepare for shutdown or reset.
+        Thread-safe: Uses stop_event and sentinel values to signal threads.
         """
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Shutting down state machine...")
         self.stop_event.set()
 
-        # Unblock any threads waiting on queues
-        self.sound_action_queue.put(None)
-        self.result_queue.put(None)
+        # Unblock any threads waiting on queues with sentinel values
+        try:
+            self.sound_action_queue.put(None, timeout=1)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send stop signal to sound queue: {e}")
+        
+        try:
+            self.result_queue.put(None, timeout=1)
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send stop signal to result queue: {e}")
 
         # Join threads if running
         for name, thread in self.threads.items():
@@ -160,9 +169,25 @@ class StateMachineInstance:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine stopped.")
 
     def print_once(self, message, end='\n'):
-        if message != self._last_printed_message:
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {message}", end=end)
-            self._last_printed_message = message
+        with self._print_lock:
+            if message != self._last_printed_message:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {message}", end=end)
+                self._last_printed_message = message
+
+    def get_state(self):
+        """Thread-safe method to get current state."""
+        with self.lock:
+            return self.state
+
+    def set_noise_floor(self, value):
+        """Thread-safe method to set noise floor."""
+        with self.lock:
+            self.noise_floor = value
+
+    def get_noise_floor(self):
+        """Thread-safe method to get noise floor."""
+        with self.lock:
+            return self.noise_floor
 
     # ----------------------------------------
     # Restart logic
@@ -292,12 +317,14 @@ class StateMachineInstance:
         """
         if self.lock.acquire(timeout=2):
             try:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transitioning from {self.state} to {new_state}")
+                old_state = self.state
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transitioning from {old_state} to {new_state}")
                 self.state = new_state
             finally:
                 self.lock.release()
         else:
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Could not acquire lock to transition from {self.state} to {new_state}")
+            # Could not acquire lock - log with current state read (unsafe but informational)
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Lock timeout: failed to transition to {new_state} (lock held for >2s)")
 
     def start_recording(self):
         """
@@ -309,7 +336,8 @@ class StateMachineInstance:
         if current_state == State.RECORDING:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Recording...")
             try:
-                transcription = self.recorder.record_audio(self.transcriptor, self.noise_floor)
+                noise_floor_val = self.get_noise_floor()
+                transcription = self.recorder.record_audio(self.transcriptor, noise_floor_val)
                 transcription_words = len(str.split(transcription, " "))
                 if transcription_words > 4:
                     try:
@@ -369,8 +397,11 @@ class StateMachineInstance:
                 msg_type = message.get("type")
                 if msg_type == "ollama_command":
                     command_data = message.get("data")
-                    self.transcription_queue.put(command_data)
-                    self.transition(State.PARSING_VOICE)
+                    try:
+                        self.transcription_queue.put(command_data, timeout=1)
+                        self.transition(State.PARSING_VOICE)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to queue command from web: {type(e).__name__}: {e}")
 
             elif isinstance(message, str):
                 print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message {message}")
@@ -412,7 +443,7 @@ class StateMachineInstance:
 
                     if current_state == State.LISTENING and wakeword_data:
                         self.print_once(f"Wakeword detected! Transitioning to RECORDING. Noise Floor is {wakeword_data}")
-                        self.noise_floor = wakeword_data
+                        self.set_noise_floor(wakeword_data)
                         # Clear any remaining wake word events to avoid stale data
                         try:
                             while not self.result_queue.empty():
