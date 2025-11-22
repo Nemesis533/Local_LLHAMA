@@ -55,10 +55,19 @@ Device list and supported actions:
 Your job:
 - Map user input (in any language) to the most likely **English** device name and action from the list above.
 - Use available simple functions when appropriate (e.g., for weather information, Wikipedia lookups, news searches).
+- **IMPORTANT**: If the user asks about current events, recent news, specific facts, or topics you're uncertain about, use get_wikipedia_summary or get_news_summary instead of making up information.
+- When uncertain or when the query requires up-to-date information, prefer calling a simple function over generating an nl_response.
 - Do not make up device names or actions.
 - If the input is vague, infer the most appropriate valid command.
 - Extract one command per device only.
 - Always respond with a single valid JSON object matching the format below, and nothing else.
+
+Decision Guidelines:
+- Questions about general knowledge, facts, or explanations → Use get_wikipedia_summary
+- Questions about current/recent news or events → Use get_news_summary
+- Questions about weather → Use home_weather or get_weather
+- Conversational queries that don't need external data → Use nl_response
+- Device control requests → Use commands
 
 Examples:
 
@@ -72,7 +81,8 @@ JSON response:
     "action": "home_weather",
     "target": "home_weather"
     }}
-]
+],
+"language": "en"
 }}
 
 User input:
@@ -88,7 +98,8 @@ JSON response:
         "topic": "Python programming"
     }}
     }}
-]
+],
+"language": "en"
 }}
 
 User input:
@@ -104,7 +115,42 @@ JSON response:
         "query": "technology"
     }}
     }}
-]
+],
+"language": "en"
+}}
+
+User input:
+"What happened with AI recently?"
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "get_news_summary",
+    "target": "get_news_summary",
+    "data": {{
+        "query": "artificial intelligence"
+    }}
+    }}
+],
+"language": "en"
+}}
+
+User input:
+"Who was Albert Einstein?"
+
+JSON response:
+{{
+"commands": [
+    {{
+    "action": "get_wikipedia_summary",
+    "target": "get_wikipedia_summary",
+    "data": {{
+        "topic": "Albert Einstein"
+    }}
+    }}
+],
+"language": "en"
 }}
 
 User input:
@@ -117,25 +163,35 @@ JSON response:
     "action": "turn off",
     "target": "wall-e alarm"
     }}
-]
+],
+"language": "en"
 }}
 
 User input:
 "Play some music"
 
 JSON response:
-{{"commands": []}}
+{{"commands": [], "language": "en"}}
 
 Respond in this format exactly:
 {{
 "commands": [
     {{"action": "turn on", "target": "living room AC"}},
     {{"action": "increase temperature", "target": "bedroom thermostat", "value": "20°C"}}
-]
+],
+"language": "<language_code>"
 }}
 
+Always include the detected language code:
+- "en" for English
+- "fr" for French  
+- "de" for German
+- "it" for Italian
+- "es" for Spanish
+- "ru" for Russian
+
 If nothing matches, respond with:
-{{"commands": []}}
+{{"commands": [], "language": "<detected_language>"}}
 """
 
 
@@ -644,15 +700,29 @@ class OllamaClient:
             }
 
         SMART_HOME_PROMPT_TEMPLATE += """
-        If you cannot respond with a command, try to provide a natural language response and the language you are providing it in 
-        to the user in this JSON format:
+        IMPORTANT DECISION MAKING:
+        
+        1. If the user asks about factual information, current events, or topics requiring external knowledge:
+           - Use get_wikipedia_summary for general knowledge and facts
+           - Use get_news_summary for recent events and news
+           - DO NOT make up information in an nl_response
+        
+        2. Only use nl_response for:
+           - Simple conversational replies (greetings, thanks, clarifications)
+           - Acknowledgments or confirmations
+           - Questions you can answer with absolute certainty
+           - General chitchat that doesn't require facts
+        
+        3. When in doubt about a topic, ALWAYS prefer calling a function over generating an nl_response.
+        
+        If you cannot respond with a command and the query doesn't need external information, provide a natural language response in this JSON format:
 
         {{
             "nl_response": "<string>",
             "language":"<string>"
         }}
 
-        choosign between the following language tags                
+        choosing between the following language tags:
                 "English": "en",
                 "French": "fr",
                 "German": "de",

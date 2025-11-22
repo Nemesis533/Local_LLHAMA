@@ -478,6 +478,9 @@ class StateMachineInstance:
                 self.print_once("Sending commands to HA client.")
                 try:
                     command = self.command_queue.get_nowait()
+                    # Extract language from command
+                    language = command.get("language", "en")
+                    
                     command_result = self.ha_client.send_commands(command)
                     
                     if command_result:
@@ -493,7 +496,7 @@ class StateMachineInstance:
                                 function_response = command_result[0].get('response', str(command_result)) if command_result else str(command_result)
                                 
                                 # Create a message for the LLM to process
-                                llm_input = f"Convert this function result into a natural language response: {function_response}"
+                                llm_input = f"Convert this function result into a natural language response: {function_response} - reply in {language}"
                                 
                                 print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sending to LLM for NL conversion")
                                 nl_output = self.command_llm.send_message(llm_input, message_type="response")
@@ -502,11 +505,9 @@ class StateMachineInstance:
                                     nl_message = nl_output.get("nl_response")
                                     lang = nl_output.get("language")
                                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] LLM converted response: {nl_message}")
-                                    
-                                    self.speech_queue.put([nl_message, lang], timeout=1)
                                     message = f"{self.class_prefix_message} [LLM Reply]: {nl_message}"
-                                    self.send_messages(message)
-                                    
+                                    self.send_messages(message)                                    
+                                    self.speech_queue.put([nl_message, lang], timeout=1)                                    
                                     try:
                                         self.speech_queue.put([nl_message, lang], timeout=1)
                                         self.transition(State.SPEAKING)
