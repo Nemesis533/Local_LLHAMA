@@ -99,7 +99,7 @@ class LocalLLHamaSystemController:
         Apply runtime configuration to state machine components.
         """
         start = time.time()
-        loader.apply([state_machine.awaker])
+        loader.apply([state_machine.audio_manager.awaker])
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Settings applied to vitality and awaker in {time.time() - start:.2f} seconds"
         )
