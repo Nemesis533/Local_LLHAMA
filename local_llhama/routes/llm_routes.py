@@ -2,10 +2,12 @@
 import time
 import psutil
 from flask import Blueprint, jsonify, request, abort, current_app
+from flask_login import login_required
 
 llm_bp = Blueprint("llm", __name__)
 
 @llm_bp.route('/check-local-llm')
+@login_required
 def check_local_llm():
     """
     Checks if a process named 'local_llm' is currently running.
@@ -27,6 +29,7 @@ def check_local_llm():
 
 
 @llm_bp.route('/llm_status/<host>', methods=['GET'])
+@login_required
 def llm_status(host):
     """
     Returns the online/offline status of a given LLM host.

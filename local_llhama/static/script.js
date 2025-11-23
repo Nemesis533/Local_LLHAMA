@@ -5,6 +5,25 @@ const socket = io();
 
 let lastLines = new Set();
 
+// Logout functionality
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  try {
+    const response = await fetch('/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      window.location.href = '/login';
+    } else {
+      alert('Logout failed. Please try again.');
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+    alert('Logout error. Please try again.');
+  }
+});
+
 socket.onAny((event, ...args) => {
   console.log('Received event:', event, args);
 });

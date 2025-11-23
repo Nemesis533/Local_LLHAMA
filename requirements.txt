@@ -2,7 +2,11 @@ torch
 transformers
 accelerate
 flask
+flask-login
+flask-socketio
 flask-cors
+python-socketio
+eventlet
 psutil
 requests
 beautifulsoup4

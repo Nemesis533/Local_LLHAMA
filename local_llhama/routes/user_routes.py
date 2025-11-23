@@ -1,9 +1,11 @@
 # user_routes.py
 from flask import Blueprint, jsonify, request, current_app
+from flask_login import login_required
 
 user_bp = Blueprint("user", __name__)
 
 @user_bp.route('/from_user_text', methods=['POST'])
+@login_required
 def from_user_text():
     """
     Receives user text from the frontend and processes it.
