@@ -14,7 +14,7 @@ import secrets
 from dotenv import load_dotenv
 
 # Import blueprints from the routes package
-from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp, auth_bp
+from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp, auth_bp, calendar_bp
 
 # Import authentication
 from .auth import AuthManager
@@ -69,6 +69,7 @@ class LocalLLHAMA_WebService:
         # Put service instance + paths into app config
         self.app.config["SERVICE_INSTANCE"] = self
         self.app.config["STATIC_PATH"] = self.static_path
+        self.app.config["SYSTEM_CONTROLLER"] = None  # Will be set later
 
         # Register blueprints
         self.app.register_blueprint(auth_bp)  # Auth routes first
@@ -77,6 +78,7 @@ class LocalLLHAMA_WebService:
         self.app.register_blueprint(llm_bp)
         self.app.register_blueprint(system_bp)
         self.app.register_blueprint(user_bp)
+        self.app.register_blueprint(calendar_bp)
 
         # Socket.IO handlers
         self.socketio.on_event('connect', self.handle_connect)
@@ -124,6 +126,11 @@ class LocalLLHAMA_WebService:
             return self.auth_manager.get_user_by_id(int(user_id))
         
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Authentication system initialized")
+
+    def set_system_controller(self, system_controller):
+        """Set the system controller reference for routes that need it."""
+        self.app.config['SYSTEM_CONTROLLER'] = system_controller
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] System controller registered")
 
 
     def _is_ip_allowed(self, ip):
@@ -173,7 +180,7 @@ class LocalLLHAMA_WebService:
 
 
     def handle_disconnect(self):
-        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client disconnected: {request.sid}")
+        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Client disconnected: {request.sid}")
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
 

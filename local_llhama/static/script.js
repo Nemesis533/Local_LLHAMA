@@ -273,3 +273,106 @@ document.getElementById('send-prompt-btn').addEventListener('click', async () =>
 outputEl.innerHTML = '';
 
 fetchSettings();
+fetchCalendarEvents();
+
+// Fetch and display calendar events
+function fetchCalendarEvents() {
+  fetch('/calendar/events')
+    .then(response => response.json())
+    .then(data => {
+      const calendarEl = document.getElementById('calendar-events');
+      
+      if (!data.success || data.events.length === 0) {
+        calendarEl.innerHTML = '<p class="no-events">No upcoming reminders or alarms</p>';
+        return;
+      }
+      
+      // Group events by type
+      const reminders = data.events.filter(e => e.type === 'reminder');
+      const alarms = data.events.filter(e => e.type === 'alarm');
+      const appointments = data.events.filter(e => e.type === 'appointment');
+      
+      let html = '';
+      
+      if (reminders.length > 0) {
+        html += '<div class="event-group"><h4>⏰ Reminders</h4>';
+        reminders.forEach(event => {
+          html += formatEventHTML(event);
+        });
+        html += '</div>';
+      }
+      
+      if (alarms.length > 0) {
+        html += '<div class="event-group"><h4>🔔 Alarms</h4>';
+        alarms.forEach(event => {
+          html += formatEventHTML(event);
+        });
+        html += '</div>';
+      }
+      
+      if (appointments.length > 0) {
+        html += '<div class="event-group"><h4>📅 Appointments</h4>';
+        appointments.forEach(event => {
+          html += formatEventHTML(event);
+        });
+        html += '</div>';
+      }
+      
+      calendarEl.innerHTML = html;
+      
+      // Add delete button listeners
+      document.querySelectorAll('.delete-event-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const eventId = e.target.dataset.eventId;
+          deleteCalendarEvent(eventId);
+        });
+      });
+    })
+    .catch(err => {
+      console.error('Error fetching calendar events:', err);
+      document.getElementById('calendar-events').innerHTML = '<p class="error">Failed to load events</p>';
+    });
+}
+
+function formatEventHTML(event) {
+  const repeatBadge = event.repeat !== 'none' ? `<span class="repeat-badge">${event.repeat}</span>` : '';
+  const description = event.description ? `<p class="event-desc">${event.description}</p>` : '';
+  
+  return `
+    <div class="calendar-event">
+      <div class="event-header">
+        <span class="event-title">${event.title}</span>
+        <button class="delete-event-btn" data-event-id="${event.id}" title="Delete">✕</button>
+      </div>
+      <div class="event-time">${event.due_display} ${repeatBadge}</div>
+      ${description}
+    </div>
+  `;
+}
+
+function deleteCalendarEvent(eventId) {
+  if (!confirm('Are you sure you want to delete this event?')) {
+    return;
+  }
+  
+  fetch(`/calendar/delete/${eventId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        fetchCalendarEvents(); // Refresh the list
+      } else {
+        alert('Failed to delete event: ' + data.message);
+      }
+    })
+    .catch(err => {
+      console.error('Error deleting event:', err);
+      alert('Error deleting event');
+    });
+}
+
+// Refresh calendar events every 30 seconds
+setInterval(fetchCalendarEvents, 30000);
+
