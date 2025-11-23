@@ -34,12 +34,13 @@ class StateMachineInstance:
     @brief Core state machine managing voice assistant states, audio input/output, command processing, and interactions.
     """
 
-    def __init__(self, command_llm, device, ha_client, base_path=None, action_message_queue=None,web_server_message_queue=None):
+    def __init__(self, command_llm, device, ha_client, base_path=None, action_message_queue=None,web_server_message_queue=None, system_controller=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
         @param device The computation device (e.g., "cuda" or "cpu").
         @param ha_client The Home Assistant client interface.
+        @param system_controller Reference to the system controller for restart coordination.
         """
         self.device = device
         self.noise_floor = 0
@@ -48,6 +49,7 @@ class StateMachineInstance:
 
         self.web_server_message_queue  : mp.Queue  = web_server_message_queue
         self.action_message_queue : mp.Queue  = action_message_queue
+        self.system_controller = system_controller
 
         # Prefix for all log messages
         self.class_prefix_message = "[State Machine]"
@@ -412,9 +414,30 @@ class StateMachineInstance:
                         self.transition(State.PARSING_VOICE)
                     except Exception as e:
                         print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to queue command from web: {type(e).__name__}: {e}")
+                
+                elif msg_type == "restart_system":
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Restart system request received from web UI")
+                    if self.system_controller:
+                        try:
+                            # Signal the supervisor to restart by setting the stop event
+                            self.system_controller._should_stop.set()
+                            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Restart signal sent to system controller")
+                            message = f"{self.class_prefix_message} [System]: Restarting system..."
+                            self.send_messages(message)
+                        except Exception as e:
+                            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to trigger restart: {type(e).__name__}: {e}")
+                            message = f"{self.class_prefix_message} [System Error]: Failed to restart system: {e}"
+                            self.send_messages(message)
+                    else:
+                        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Cannot restart: system_controller reference not set")
+                        message = f"{self.class_prefix_message} [System Error]: Restart not available (no controller reference)"
+                        self.send_messages(message)
+                
+                else:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message type: {msg_type}")
 
             elif isinstance(message, str):
-                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message {message}")
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received legacy string message: {message}")
 
             else:
                 print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type {type(message)}")

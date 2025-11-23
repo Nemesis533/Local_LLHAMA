@@ -13,7 +13,11 @@ def restart_system():
         service = current_app.config["SERVICE_INSTANCE"]
 
         if data and data.get("action") == "restart":
-            service.message_queue.put("restart_llm")
+            message = {
+                "type": "restart_system",
+                "data": None
+            }
+            service.action_message_queue.put(message, timeout=2.0)
             return jsonify({"success": True})
         else:
             return jsonify({"success": False, "error": "Invalid action"}), 400
