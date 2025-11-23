@@ -290,7 +290,45 @@ class TextToSpeech:
         self.current_lang = None
 
     def preprocess_text(self, text: str) -> str:
-        return text.strip()
+        """Preprocess text for better TTS pronunciation."""
+        text = text.strip()
+        
+        # Fix common pronunciation issues
+        replacements = [
+            # Handle interjections and onomatopoeia - use phonetic spellings
+            ('Brrr', 'Burr,'),  
+            ('brrr', 'burr,'),
+            ('Hmm', 'Hm,'),
+            ('hmm', 'hm,'),
+            ('Ahh', 'Ah,'),
+            ('ahh', 'ah,'),
+            ('Ohh', 'Oh,'),
+            ('ohh', 'oh,'),
+            ('Phew', 'Few,'),  # Phonetic pronunciation
+            ('phew', 'few,'),
+            ('Ugh', 'Uh,'),
+            ('ugh', 'uh,'),
+            ('Yay', 'Yay,'), 
+            ('yay', 'yay,'),
+            ('Wow', 'Wow,'),
+            ('wow', 'wow,'),
+            
+            # Fix common abbreviations
+            ('etc.', 'etcetera'),
+            ('vs.', 'versus'),
+            ('e.g.', 'for example'),
+            ('i.e.', 'that is'),
+        ]
+        
+        for old, new in replacements:
+            text = text.replace(old, new)
+        
+        # Handle repeated punctuation for emphasis (e.g., "!!!") -> add pause
+        import re
+        text = re.sub(r'!{2,}', '!', text)
+        text = re.sub(r'\?{2,}', '?', text)
+        
+        return text
 
     def select_voice_by_lang(self, lang_tag: str):
         """Select and load a voice for the specified language with caching and error handling."""
