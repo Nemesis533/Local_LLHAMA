@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from local_llhama.Home_Assistant_Interface import HomeAssistantClient
+from local_llhama.Simple_Functions import SimpleFunctions
 
 def test_dynamic_functions():
     """Test that simple functions are loaded dynamically"""
@@ -24,7 +25,6 @@ def test_dynamic_functions():
     
     # Initialize just the simple functions part
     home_location = {"latitude": 40.7128, "longitude": -74.0060}
-    from local_llhama.Home_Assistant_Interface import SimpleFunctions
     ha_client.simple_functions = SimpleFunctions(home_location)
     
     print("\n[TEST 1] Check command schema loaded:")
