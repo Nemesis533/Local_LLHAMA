@@ -39,6 +39,10 @@
       "value": "True",
       "type": "bool"
     },
+    "allow_internet_searches": {
+      "value": "True",
+      "type": "bool"
+    },
       "ollama_model": {
       "value": "gpt-oss:20b",
       "type": "str"

@@ -87,7 +87,8 @@ class LocalLLHamaSystemController:
                                    ha_client, 
                                    base_path=self.base_path,
                                      action_message_queue=self.action_message_queue,
-                                     web_server_message_queue=self.web_server_message_queue)
+                                     web_server_message_queue=self.web_server_message_queue,
+                                     system_controller=self)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine initialized in {time.time() - start:.2f} seconds"
         )
