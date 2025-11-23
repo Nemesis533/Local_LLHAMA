@@ -295,7 +295,7 @@ function fetchCalendarEvents() {
       let html = '';
       
       if (reminders.length > 0) {
-        html += '<div class="event-group"><h4>⏰ Reminders</h4>';
+        html += '<div class="event-group"><h4>Reminders</h4>';
         reminders.forEach(event => {
           html += formatEventHTML(event);
         });
@@ -303,7 +303,7 @@ function fetchCalendarEvents() {
       }
       
       if (alarms.length > 0) {
-        html += '<div class="event-group"><h4>🔔 Alarms</h4>';
+        html += '<div class="event-group"><h4>Alarms</h4>';
         alarms.forEach(event => {
           html += formatEventHTML(event);
         });
@@ -311,7 +311,7 @@ function fetchCalendarEvents() {
       }
       
       if (appointments.length > 0) {
-        html += '<div class="event-group"><h4>📅 Appointments</h4>';
+        html += '<div class="event-group"><h4>Appointments</h4>';
         appointments.forEach(event => {
           html += formatEventHTML(event);
         });

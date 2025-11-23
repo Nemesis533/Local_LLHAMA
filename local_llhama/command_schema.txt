@@ -101,6 +101,15 @@
       "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
     }
   },
+  "list_calendar": {
+    "entity_id": "list_calendar",
+    "actions": ["list_calendar"],
+    "description": "List all calendar entries in an organized format - shows reminders, appointments, and alarms grouped by type. Simple and comprehensive calendar view.",
+    "example": {"action": "list_calendar", "target": "list_calendar", "data": {"days": 7}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
+    }
+  },
   "complete_reminder": {
     "entity_id": "complete_reminder",
     "actions": ["complete_reminder"],
