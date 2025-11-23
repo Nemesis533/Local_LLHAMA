@@ -2,12 +2,12 @@
 import requests
 import json
 import os
-import time
 from dotenv import load_dotenv
 
 # === Custom Imports ===
 from .Shared_Logger import LogLevel
 from .Simple_Functions import SimpleFunctions
+from .HA_Utils import HARequestHandler, HAEntityFilter, HADataFormatter, HAServiceValidator
 
 class HomeAssistantClient:
     """
@@ -33,16 +33,21 @@ class HomeAssistantClient:
         # Load sensitive configuration from environment variables
         self.base_url = os.getenv('HA_BASE_URL', '')
         self.token = os.getenv('HA_TOKEN', '')
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
         
         # Connection configuration
         self.timeout = 10  # seconds
         self.max_retries = 3
         self.retry_delay = 2  # seconds
         self.entity_map_cache = None  # Cache for fallback
+        
+        # Initialize request handler
+        self.request_handler = HARequestHandler(
+            self.base_url, 
+            self.token, 
+            self.timeout, 
+            self.max_retries, 
+            self.retry_delay
+        )
 
         # Devices to exclude based on friendly name substrings
         self.exclusion_dict = {
@@ -59,63 +64,6 @@ class HomeAssistantClient:
             'climate.as35pbphra_pre',
             'climate.as25pbphra_pre',
         ]
-
-    def _retry_request(self, method, url, **kwargs):
-        """
-        @brief Execute HTTP request with retry logic and exponential backoff.
-        @param method HTTP method ('GET' or 'POST')
-        @param url The URL to request
-        @param kwargs Additional arguments for requests (json, headers, etc.)
-        @return Response object if successful
-        @raises requests.exceptions.RequestException after all retries fail
-        """
-        kwargs.setdefault('timeout', self.timeout)
-        
-        last_exception = None
-        for attempt in range(self.max_retries):
-            try:
-                if method.upper() == 'GET':
-                    response = requests.get(url, **kwargs)
-                elif method.upper() == 'POST':
-                    response = requests.post(url, **kwargs)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
-                
-                response.raise_for_status()
-                return response
-                
-            except requests.exceptions.Timeout as e:
-                last_exception = e
-                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Timeout on attempt {attempt + 1}/{self.max_retries}: {url}")
-                
-            except requests.exceptions.ConnectionError as e:
-                last_exception = e
-                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Connection error on attempt {attempt + 1}/{self.max_retries}: {e}")
-                
-            except requests.exceptions.HTTPError as e:
-                # Don't retry 4xx errors (client errors like auth failure)
-                if 400 <= e.response.status_code < 500:
-                    print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Client error {e.response.status_code}: {e}")
-                    raise
-                last_exception = e
-                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] HTTP error on attempt {attempt + 1}/{self.max_retries}: {e}")
-                
-            except requests.exceptions.RequestException as e:
-                last_exception = e
-                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Request error on attempt {attempt + 1}/{self.max_retries}: {e}")
-            
-            # Exponential backoff before retry
-            if attempt < self.max_retries - 1:
-                delay = self.retry_delay * (2 ** attempt)
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Retrying in {delay} seconds...")
-                time.sleep(delay)
-        
-        # All retries failed
-        error_msg = f"Failed to connect to Home Assistant at {self.base_url} after {self.max_retries} attempts"
-        print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
-        if last_exception:
-            raise requests.exceptions.RequestException(error_msg) from last_exception
-        raise requests.exceptions.RequestException(error_msg)
 
     def initialize_HA(self, allow_internet_searches=True):
                 
@@ -145,13 +93,9 @@ class HomeAssistantClient:
                 or an error message in case of failure.
         """
         url = f"{self.base_url}/api/services"
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
 
         try:
-            response = self._retry_request('GET', url, headers=self.headers)
+            response = self.request_handler.retry_request('GET', url, headers=self.request_handler.headers)
             services = response.json()
 
             domain_to_actions = {}
@@ -191,7 +135,7 @@ class HomeAssistantClient:
         """
         try:
             url = f"{self.base_url}/api/states"
-            response = self._retry_request('GET', url, headers=self.headers)
+            response = self.request_handler.retry_request('GET', url, headers=self.request_handler.headers)
 
             entities = response.json()
 
@@ -203,23 +147,18 @@ class HomeAssistantClient:
             for entity in entities:
                 domain, _ = entity['entity_id'].split('.', 1)
 
-                # Filtering logic based on filter_mode
-                if filter_mode == 'domain':
-                    if domain not in self.ALLOWED_DOMAINS:
-                        continue
-                elif filter_mode == 'entity':
-                    if entity['entity_id'] not in allowed_entities:
-                        continue
-                elif filter_mode == 'none':
-                    pass  # No filtering applied
-                else:
-                    raise ValueError(f"Invalid filter_mode: {filter_mode}")
+                # Filtering logic using utility class
+                if not HAEntityFilter.should_include_entity(
+                    entity['entity_id'], domain, filter_mode, 
+                    self.ALLOWED_DOMAINS, allowed_entities
+                ):
+                    continue
 
                 # Get friendly_name if available, fallback to entity_id (lowercase)
                 friendly_name = entity['attributes'].get('friendly_name', entity['entity_id']).lower()
 
-                # Exclude entities if their friendly_name contains any excluded substrings
-                if any(excluded_name.lower() in friendly_name for excluded_name in exclusion_dict.values()):
+                # Exclude entities using utility class
+                if HAEntityFilter.should_exclude_entity(friendly_name, exclusion_dict):
                     continue
 
                 # Get supported actions for the domain
@@ -286,43 +225,31 @@ class HomeAssistantClient:
 
                 if not entity_info:
                     # Unknown target error
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "error": f"Unknown target: {target}"
-                    })
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, error=f"Unknown target: {target}"
+                    ))
                     continue
 
-                # Check if action supported by the entity's domain
-                if action not in entity_info['actions']:
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "error": f"Action '{action}' not supported for target '{target}'"
-                    })
+                # Validate action using utility class
+                is_valid, error_msg = HAServiceValidator.validate_action_for_entity(action, entity_info)
+                if not is_valid:
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, error=error_msg
+                    ))
                     continue
 
                 domain = entity_info['entity_id'].split('.')[0]
 
                 # Get service info to validate required fields
                 service_info = self.get_service_info(domain, action)
-                missing_fields = []
-
-                if service_info:
-                    required_fields = service_info.get('fields', {}).keys()
-                    for field in required_fields:
-                        if field == 'entity_id':
-                            continue
-                        if service_info['fields'][field].get('required', False) and field not in extra_data:
-                            missing_fields.append(field)
-
-                if missing_fields:
-                    # Missing required data fields for the action
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "error": f"Missing required fields for action '{action}': {missing_fields}"
-                    })
+                
+                # Validate required fields using utility class
+                is_valid, missing_fields = HAServiceValidator.validate_required_fields(service_info, extra_data)
+                if not is_valid:
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, 
+                        error=f"Missing required fields for action '{action}': {missing_fields}"
+                    ))
                     continue
 
                 # Prepare request URL and payload for the service call
@@ -330,52 +257,43 @@ class HomeAssistantClient:
                 payload_data = {"entity_id": entity_info['entity_id'], **extra_data}
 
                 try:
-                    response = self._retry_request('POST', url, headers=self.headers, json=payload_data)
+                    response = self.request_handler.retry_request('POST', url, headers=self.request_handler.headers, json=payload_data)
                     response_data = response.json() if response.content else {}
 
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "success": True,
-                        "status": response.status_code,
-                        "response": response_data,
-                    })
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, success=True,
+                        status=response.status_code,
+                        response=response_data
+                    ))
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Command executed: {action} on {target}")
 
                 except requests.exceptions.RequestException as e:
                     # HTTP request failed after retries
                     error_msg = f"Failed to execute command after retries: {e}"
                     print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "error": error_msg,
-                        "url": url,
-                        "payload": payload_data,
-                    })
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, error=error_msg,
+                        url=url, payload=payload_data
+                    ))
 
                 except ValueError as e:  # JSON decoding error
                     error_msg = f"Failed to parse response JSON: {e}"
                     print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {error_msg}")
-                    results.append({
-                        "target": target,
-                        "action": action,
-                        "error": error_msg,
-                        "status": response.status_code,
-                        "response": response.text,
-                    })
+                    results.append(HADataFormatter.format_command_result(
+                        target, action, error=error_msg,
+                        status=response.status_code,
+                        response=response.text
+                    ))
 
             else:
                 # Call the simple function corresponding to the action
                 # Pass any data parameters from the command
                 result = self.simple_functions.call_function_by_name(simple_action, **extra_data)
-                results.append({
-                    "target": target,
-                    "action": action,
-                    "success": True,
-                    "response": result,
-                    "type": "simple_function"  # Tag to identify simple function execution
-                })
+                results.append(HADataFormatter.format_command_result(
+                    target, action, success=True,
+                    response=result,
+                    type="simple_function"
+                ))
         
         if debug:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] All command results: {results}")
@@ -393,7 +311,7 @@ class HomeAssistantClient:
         """
         try:
             url = f"{self.base_url}/api/services"
-            response = self._retry_request('GET', url, headers=self.headers)
+            response = self.request_handler.retry_request('GET', url, headers=self.request_handler.headers)
             services = response.json()
 
             for item in services:
@@ -411,12 +329,7 @@ class HomeAssistantClient:
 
         @return JSON-formatted string with device names and supported actions.
         """
-        devices = {}
-        for name, info in self.entity_map.items():
-            # Replace underscores with spaces for readability in action names
-            actions = [action.replace('_', ' ') for action in info['actions']]
-            devices[name] = actions
-        return json.dumps({"devices": devices}, indent=2)
+        return HADataFormatter.generate_devices_prompt_fragment(self.entity_map)
     
     def get_home_location(self):
         """
@@ -426,7 +339,7 @@ class HomeAssistantClient:
         """
         url = f"{self.base_url}/api/config"
         try:
-            response = self._retry_request('GET', url, headers=self.headers)
+            response = self.request_handler.retry_request('GET', url, headers=self.request_handler.headers)
             config = response.json()
             latitude = config.get('latitude')
             longitude = config.get('longitude')
