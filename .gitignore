@@ -210,3 +210,7 @@ __marimo__/
 .piper_voices/piper_voices/*.onnx
 piper_voices/*.onnx
 piper_voices/*.onnx
+
+# Sounds
+local_llhama/sounds/*.wav
+local_llhama/sounds/*.mp3
