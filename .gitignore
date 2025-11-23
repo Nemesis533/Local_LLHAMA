@@ -214,3 +214,7 @@ piper_voices/*.onnx
 # Sounds
 local_llhama/sounds/*.wav
 local_llhama/sounds/*.mp3
+
+# Wiki
+
+Local_LLHAMA.wiki/
