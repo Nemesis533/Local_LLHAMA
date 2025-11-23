@@ -40,7 +40,7 @@
       "type": "bool"
     },
     "allow_internet_searches": {
-      "value": "True",
+      "value": "False",
       "type": "bool"
     },
       "ollama_model": {

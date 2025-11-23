@@ -59,7 +59,7 @@ class LocalLLHamaSystemController:
         start = time.time()
         ha_client = HomeAssistantClient()
         loader.apply([ha_client])
-        ha_client.initialize_HA()
+        ha_client.initialize_HA(allow_internet_searches=loader.allow_internet_searches)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Home Assistant initialized in {time.time() - start:.2f} seconds"
         )

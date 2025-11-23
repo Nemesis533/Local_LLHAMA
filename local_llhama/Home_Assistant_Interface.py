@@ -117,10 +117,13 @@ class HomeAssistantClient:
             raise requests.exceptions.RequestException(error_msg) from last_exception
         raise requests.exceptions.RequestException(error_msg)
 
-    def initialize_HA(self):
+    def initialize_HA(self, allow_internet_searches=True):
                 
         # Initialize simple functions handler with home location
-        self.simple_functions : SimpleFunctions = SimpleFunctions(self.get_home_location())
+        self.simple_functions : SimpleFunctions = SimpleFunctions(
+            self.get_home_location(), 
+            allow_internet_searches=allow_internet_searches
+        )
 
         # Fetch domain actions from Home Assistant API
         self.domain_to_actions = self.fetch_domain_actions()
