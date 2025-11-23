@@ -95,7 +95,11 @@ socket.on('log_line', (data) => {
     // Default log style
     div.classList.add('log-line');
 
-  if (trimmed.includes('[Main]') || trimmed.includes('[LLM Reply]') || trimmed.includes('[User Prompt]')) {
+  if (trimmed.includes('[LLM Reply]')) {
+    div.classList.add('llm-reply-line'); // purple
+  } else if (trimmed.includes('[User Prompt]')) {
+    div.classList.add('user-prompt-line'); // blue
+  } else if (trimmed.includes('[Main]')) {
     div.classList.add('main-line'); // cyan
   } else if (trimmed.includes('[Supervisor]')) {
     div.classList.add('supervisor-line'); // magenta

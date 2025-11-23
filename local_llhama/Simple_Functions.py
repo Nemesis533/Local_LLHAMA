@@ -191,6 +191,28 @@ class SimpleFunctions:
         except Exception:
             return error_message
 
+    def _format_weather_response(self, location: str, temperature: float, condition: str = None, wind_speed: float = None) -> str:
+        """
+        @brief Format a consistent weather response message.
+
+        @param location Location name or description.
+        @param temperature Temperature value.
+        @param condition Optional weather condition description.
+        @param wind_speed Optional wind speed value.
+        @return Formatted weather string.
+        """
+        response = f"The weather in {location} is"
+        
+        if condition:
+            response += f" {condition} with a temperature of {round(temperature, 2)} degrees"
+        else:
+            response += f" {round(temperature, 2)} degrees"
+        
+        if wind_speed is not None:
+            response += f" and wind speed {round(wind_speed, 2)} km/h"
+        
+        return response + "."
+
     def home_weather(self, place=None):
         """
         @brief Fetch weather forecast from a local weather server.
@@ -213,7 +235,11 @@ class SimpleFunctions:
 
         today = forecast[0]
         if today:
-            return f"The weather at the location is {today['condition']} with a temperature of {round(float(today['temp']),2)} degrees."
+            return self._format_weather_response(
+                location="home",
+                temperature=float(today['temp']),
+                condition=today.get('condition')
+            )
         return error_message
     
     # === CALENDAR/REMINDER FUNCTIONS ===
@@ -480,6 +506,9 @@ class SimpleFunctions:
         """
         error_message = "Weather data not available at the moment, please try later."
 
+        if not place:
+            return "Please specify a location."
+
         lat, lon = self.get_coordinates(place)
 
         if lat is None or lon is None:
@@ -491,11 +520,21 @@ class SimpleFunctions:
             'longitude': lon,
             'current_weather': True
         }
-        response = requests.get(url, params=params)
-        data = response.json().get("current_weather", {})
-        if data:
-            return f"The weather in {place} is {data['temperature']}°C with wind speed {data['windspeed']} km/h."
-        return f"Weather data not available for {place}."
+        
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json().get("current_weather", {})
+            
+            if data:
+                return self._format_weather_response(
+                    location=place,
+                    temperature=data['temperature'],
+                    wind_speed=data.get('windspeed')
+                )
+            return f"Weather data not available for {place}."
+        except requests.RequestException:
+            return error_message
     
     def find_matching_action(self, command_json: dict | list) -> str | None:
         """

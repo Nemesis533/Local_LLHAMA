@@ -303,6 +303,8 @@ body, html {
 }
 
 .main-line { color: #06b6d4; font-weight: 500; }
+.user-prompt-line { color: #3b82f6; font-weight: 500; }
+.llm-reply-line { color: #8b5cf6; font-weight: 500; }
 .supervisor-line { color: #ec4899; font-weight: 500; }
 .log-info { color: #10b981; }
 .log-warning { color: #fbbf24; }

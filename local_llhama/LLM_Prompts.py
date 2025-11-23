@@ -46,7 +46,7 @@ Examples:
 
 Weather function result:
 {{
-    "response": "The weather in Paris is 18°C with wind speed 15 km/h."
+    "response": "The weather in Paris is 18°C with wind speed 15 kilometers per hour."
 }}
 
 JSON response:
@@ -57,12 +57,12 @@ JSON response:
 
 Weather function result:
 [
-    {{"target": "home_weather", "action": "home_weather", "success": true, "response": "The weather at the location is scattered clouds with a temperature of 6.8 degrees.", "type": "simple_function"}}
+    {{"target": "home_weather", "action": "home_weather", "success": true, "response": "The weather at the location is scattered clouds with a temperature of - .8 degrees.", "type": "simple_function"}}
 ]
 
 JSON response:
 {{
-    "nl_response": "You've got some scattered clouds overhead and it's about 7 degrees out there - might want to bring a jacket!",
+    "nl_response": "You've got some scattered clouds overhead and it's about negative 7 degrees out there - dress well, it's cold outside!",
     "language": "en"
 }}
 
