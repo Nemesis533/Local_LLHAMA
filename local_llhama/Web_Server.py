@@ -1,6 +1,7 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
+from flask_login import LoginManager
 import io
 import threading
 import socket
@@ -9,10 +10,14 @@ from queue import Queue, Empty
 from pathlib import Path
 import psutil
 import os
+import secrets
 from dotenv import load_dotenv
 
 # Import blueprints from the routes package
-from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp
+from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp, auth_bp
+
+# Import authentication
+from .auth import AuthManager
 
 # Import LogLevel
 from .Shared_Logger import LogLevel
@@ -48,6 +53,13 @@ class LocalLLHAMA_WebService:
             static_url_path='/static',
             static_folder=str(self.static_path),
         )
+        
+        # Security configuration
+        self._configure_security()
+        
+        # Initialize authentication
+        self._setup_authentication()
+        
         CORS(self.app)
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         self.socketio.start_background_task(self.monitor_messages)
@@ -59,6 +71,7 @@ class LocalLLHAMA_WebService:
         self.app.config["STATIC_PATH"] = self.static_path
 
         # Register blueprints
+        self.app.register_blueprint(auth_bp)  # Auth routes first
         self.app.register_blueprint(main_bp)
         self.app.register_blueprint(settings_bp)
         self.app.register_blueprint(llm_bp)
@@ -68,6 +81,49 @@ class LocalLLHAMA_WebService:
         # Socket.IO handlers
         self.socketio.on_event('connect', self.handle_connect)
         self.socketio.on_event('disconnect', self.handle_disconnect)
+    
+    def _configure_security(self):
+        """Configure Flask security settings."""
+        # Generate or load secret key
+        secret_key = os.getenv('SECRET_KEY')
+        if not secret_key:
+            # Generate a new secret key
+            secret_key = secrets.token_hex(32)
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No SECRET_KEY in .env, generated temporary key")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Add this to .env for persistent sessions:")
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] SECRET_KEY={secret_key}")
+        
+        self.app.config['SECRET_KEY'] = secret_key
+        
+        # Session configuration
+        session_timeout = int(os.getenv('SESSION_TIMEOUT_HOURS', '24'))
+        self.app.config['PERMANENT_SESSION_LIFETIME'] = session_timeout * 3600  # Convert to seconds
+        
+        # Security headers
+        self.app.config['SESSION_COOKIE_SECURE'] = False  # Set True if using HTTPS
+        self.app.config['SESSION_COOKIE_HTTPONLY'] = True
+        self.app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+        
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Security configured: {session_timeout}h session timeout")
+    
+    def _setup_authentication(self):
+        """Initialize Flask-Login and authentication manager."""
+        # Initialize LoginManager
+        self.login_manager = LoginManager()
+        self.login_manager.init_app(self.app)
+        self.login_manager.login_view = 'auth.login'
+        self.login_manager.login_message = 'Please log in to access this page.'
+        
+        # Initialize AuthManager
+        self.auth_manager = AuthManager()
+        self.app.config['AUTH_MANAGER'] = self.auth_manager
+        
+        # User loader callback
+        @self.login_manager.user_loader
+        def load_user(user_id):
+            return self.auth_manager.get_user_by_id(int(user_id))
+        
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Authentication system initialized")
 
 
     def _is_ip_allowed(self, ip):
@@ -199,5 +255,7 @@ class LocalLLHAMA_WebService:
     def run(self):
         if self.host == '0.0.0.0':
             self.host = self.get_host_ip()
-        self.socketio.run(self.app, host=self.host, port=5001, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting web server on {self.host}:{self.port}")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at: http://{self.host}:{self.port}/login")
+        self.socketio.run(self.app, host=self.host, port=5001, debug=False, use_reloader=False)
 

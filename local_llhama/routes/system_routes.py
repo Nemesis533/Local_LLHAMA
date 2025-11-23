@@ -1,9 +1,11 @@
 # system_routes.py
 from flask import Blueprint, jsonify, request, current_app
+from flask_login import login_required
 
 system_bp = Blueprint("system", __name__)
 
 @system_bp.route("/restart-system", methods=["POST"])
+@login_required
 def restart_system():
     """
     Enqueues a restart command to the LLM system.

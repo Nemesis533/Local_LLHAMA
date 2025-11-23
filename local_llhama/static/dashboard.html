@@ -7,21 +7,25 @@
 </head>
 <body>
   <div class="container">
-    <img
-      id="status-image"
-      src="/static/images/llm.png"
-      alt="Status"
-      onerror="this.style.display='none';"
-    />
+    <!-- Header with logout -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-title">
+          <img id="status-image" src="/static/images/llm.png" alt="Status" onerror="this.style.display='none';" />
+          <h1>Local LLHAMA Dashboard</h1>
+        </div>
+        <button id="logout-btn" class="logout-btn">Logout</button>
+      </div>
+    </div>
 
     <div class="dashboard">
       <!-- Settings Section -->
       <section id="settings-dashboard">
         <h2>Settings Overview</h2>
-        <div id="settings-content">Loading settings...</div>
-        <div>
-          <button id="save-settings-btn">💾 Save Settings</button>
-          <button id="restart-system-btn">🔄 Restart System</button>
+        <div id="settings-content" class="settings-scroll">Loading settings...</div>
+        <div class="settings-actions">
+          <button id="save-settings-btn" class="btn-save">Save Settings</button>
+          <button id="restart-system-btn" class="btn-restart">Restart System</button>
         </div>
       </section>
 
