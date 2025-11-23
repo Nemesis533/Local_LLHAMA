@@ -44,6 +44,7 @@ class SettingLoaderClass:
         self.load_models_in_8_bit = True
         self.base_path = base_path
         self.use_ollama = True
+        self.allow_internet_searches = True
         self.ollama_ip =""
         self.ollama_model =""
         self.settings_file = f"{self.base_path}{self.json_path}"
