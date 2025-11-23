@@ -17,16 +17,18 @@ class SimpleFunctions:
     Handles tasks like weather info, news lookups, Wikipedia queries, and other logic outside HA.
     """
 
-    def __init__(self, home_location, command_schema_path=None):
+    def __init__(self, home_location, command_schema_path=None, allow_internet_searches=True):
         """
         @brief Initialize with home location.
         @param home_location Dictionary with 'latitude' and 'longitude'.
         @param command_schema_path Optional path to command schema file.
+        @param allow_internet_searches Whether to allow internet-based searches (Wikipedia, news, etc.)
         """
         load_dotenv()
         
         self.home_location = home_location
         self.local_weather_url = "http://192.168.88.243:8000/weather-forecast"
+        self.allow_internet_searches = allow_internet_searches
         
         # Load API keys from environment
         self.newsdata_api_key = os.getenv("NEWSDATA_API_KEY", "YOUR_NEWSDATA_API_KEY")
@@ -79,6 +81,9 @@ class SimpleFunctions:
         @param topic Topic/article name as a string.
         @return Summary string or error message.
         """
+        if not self.allow_internet_searches:
+            return "Internet searches are currently disabled in system settings."
+        
         error_message = "Wikipedia information not available at the moment, please try later."
 
         if not topic:
@@ -146,6 +151,9 @@ class SimpleFunctions:
         @param query Search term string.
         @return Summary of top news articles or error message.
         """
+        if not self.allow_internet_searches:
+            return "Internet searches are currently disabled in system settings."
+        
         error_message = "News data not available at the moment, please try later."
 
         if not query:
