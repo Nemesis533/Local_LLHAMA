@@ -1,0 +1,7 @@
+sounds taken from https://uppbeat.io/ using the free sounds available on the platform at the time of download
+
+system_awake.mp3
+pop-ui-cluster-runs-om-fx-2-2-00-03.mp3
+Hi there this is you.mp3
+digital-watch-alarm-tomas-herudek-1-00-13.mp3
+computer-error-meme-jam-fx-1-00-02.mp3
