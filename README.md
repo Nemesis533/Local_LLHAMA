@@ -23,8 +23,9 @@ The system has been refactored for improved performance, maintainability, and mo
 - Fuzzy device/entity matching using dynamic Home Assistant entity list; for optmization purposes, a manual list of devices can also be assigned instead of filtering the full list from HA.
   This solves the problem of having to call devices by the exact name that they are saved under - you can now say "light above the desk" to call the "desk light".
 - Execute multiple commands in a single sentence
-- NEW! Thanks to Integration with Ollama, natual language responses will be returned when no device is present.
-- Basic web interface for output monitoring and connection status (expansion and system control planned)
+- Thanks to Integration with Ollama, natual language responses will be returned when no device is present.
+- NEW! Calendar and reminder system with automatic notifications - set reminders, alarms, and appointments with natural language
+- NEW! Basic web interface for output monitoring, connection status, and calendar management
 - Ability to integrate non-Home Assistant devices and commands with the same pipeline as the one used for Home Assistant.
 
 ## System Requirements
@@ -122,17 +123,21 @@ Configures web information sources (news, Wikipedia, etc.) with allowed websites
    - Transcribed text + HA entities sent to LLM (local or Ollama)
    - Entities manually supplied or auto-fetched from HA
    - LLM identifies devices/actions, generates HA JSON or NL response
+   - Calendar operations parsed and executed via natural language
    - Web queries fetch real-time data (weather, news, Wikipedia)
 
 5. **Command Execution**  
    - Valid JSON sent to HA API
+   - Calendar events stored in local SQLite database
+   - Background thread monitors for due reminders/alarms and triggers notification sound
    - Non-HA actions matched via `command_schema.txt` using reflection
    - Failed queries reported to user
 
 6. **Feedback and Output**  
    - The piper-tts engine provides spoken confirmation or failure
-   - Output and logs are also available through a simple web UI for basic monitoring.
-   - The langiuage is returned along with the reponse by the LLM
+   - Output and logs are also available through a simple web UI for basic monitoring
+   - Calendar events displayed in web dashboard with real-time updates
+   - The language is returned along with the response by the LLM
   
 7. **FSM Diagram**
 
@@ -147,6 +152,10 @@ Apaga la luz de la cocina y enciende la lámpara del salón.
 Turn on the desk light and tell me the weather.
 What's in the news today?
 Tell me about the Eiffel Tower.
+Set a reminder to drink water in 30 minutes.
+Add an appointment for tomorrow at 2 PM.
+What reminders do I have today?
+List my calendar for the next week.
 ```
 
 Features demonstrated:
@@ -155,6 +164,7 @@ Features demonstrated:
 - No exact device names required
 - Multiple commands per sentence
 - Mixed HA actions + information queries
+- Calendar and reminder management with natural time parsing
 - Web information retrieval
 - One turn Command Conversational context maintained (e.g., "turn them back on" after turning lights off)
 
@@ -184,6 +194,7 @@ All dependencies are listed in `requirements.txt`.
 ├── local_llhama/
 │   ├── Audio_Input.py               # Whisper STT, wake word detection, recording
 │   ├── Audio_Output.py              # Piper TTS, sound playback
+│   ├── HA_Utils.py                  # Home Assistant utility functions
 │   ├── Home_Assistant_Interface.py  # HA API communication
 │   ├── LLM_Handler.py               # LLaMA inference logic
 │   ├── LLM_Prompts.py               # Prompt templates
@@ -193,23 +204,34 @@ All dependencies are listed in `requirements.txt`.
 │   ├── Runtime_Supervisor.py        # System orchestration
 │   ├── Settings_Loader.py           # Configuration loader (reflection-based)
 │   ├── Shared_Logger.py             # Centralized logging
-│   ├── Simple_Functions.py          # Non-HA utilities (weather, news, etc.)
-│   ├── Sound_And_Speech.py          # Legacy audio handler
-│   ├── State_Machine.py             # FSM implementation
+│   ├── Simple_Functions.py          # Non-HA utilities (weather, news, calendar, etc.)
+│   ├── State_Machine.py             # FSM implementation with calendar monitoring
 │   ├── System_Controller.py         # Component orchestration
 │   ├── Web_Server.py                # Flask backend
 │   ├── command_schema.txt           # Custom command definitions
+│   ├── auth/                        # Authentication and calendar management
+│   │   ├── auth_manager.py          # User authentication
+│   │   ├── calendar_manager.py      # SQLite-based calendar/reminder system
+│   │   └── db_manager.py            # Database utilities
 │   ├── routes/                      # Web UI route handlers
-│   │   ├── llm_routes.py
-│   │   ├── main_routes.py
-│   │   ├── settings_routes.py
-│   │   ├── system_routes.py
-│   │   └── user_routes.py
+│   │   ├── auth_routes.py           # Login/logout
+│   │   ├── calendar_routes.py       # Calendar API endpoints
+│   │   ├── llm_routes.py            # LLM interaction
+│   │   ├── main_routes.py           # Dashboard
+│   │   ├── settings_routes.py       # Configuration management
+│   │   ├── system_routes.py         # System control
+│   │   └── user_routes.py           # User management
 │   ├── settings/
 │   │   ├── object_settings.json     # Non-sensitive config
 │   │   └── web_search_config.json   # Web search settings
-│   ├── sounds/                      # System audio files
+│   ├── sounds/                      # System audio files (confirmation, reminder, etc.)
 │   ├── static/                      # Web UI (HTML, CSS, JS, images)
+│   ├── state_components/            # State machine components
+│   │   ├── audio_manager.py         # Audio handling
+│   │   ├── command_processor.py     # Command processing
+│   │   ├── message_handler.py       # Message routing
+│   │   ├── queue_manager.py         # Queue management
+│   │   └── state_handlers.py        # State transition logic
 │   └── tests/                       # Test suite
 ├── piper_voices/                    # TTS voice models (.onnx)
 ├── wiki_docs/                       # Auto-generated documentation
@@ -225,8 +247,12 @@ Web UI provides:
 - Real-time system output monitoring
 - Settings editor with live reload
 - Text-based command interaction (voice-free)
+- Calendar management - view upcoming reminders, alarms, and appointments
+- Delete calendar events with confirmation
+- Auto-refresh calendar display every 30 seconds
 - Connection status indicators
 - Configuration management
+- User authentication with session management
 
 Access via browser after system start. IP restrictions configured via `ALLOWED_IP_PREFIXES` in `.env`.
 
@@ -264,14 +290,18 @@ Open discussions before submitting major PRs.
 ## Future Work
 
 **Completed:**
-- ✓ Remote LLM support (Ollama server)
-- ✓ Web UI with system control
-- ✓ Prompt Guard toggle
-- ✓ Multiple LLM support
-- ✓ Web search integration
-- ✓ Modular audio architecture
+- Remote LLM support (Ollama server)
+- Web UI with system control
+- Prompt Guard toggle
+- Multiple LLM support
+- Web search integration
+- Modular audio architecture
+- Calendar and reminder system with natural language parsing
+- Automatic reminder/alarm notifications with sound playback
+- Web-based calendar management interface
 
 **Planned:**
+- Auto-rescheduling for repeating reminders and alarms
 - Performance optimizations
 - Enhanced TTS performance and flexibility
 - Expanded web search capabilities
