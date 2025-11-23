@@ -20,6 +20,7 @@ class SoundActions(Enum):
     system_awake = 1      # Sound when system wakes up
     action_closing = 2    # Sound when an action closes
     system_error = 3      # Sound for system errors
+    reminder = 4          # Sound for reminders and alarms
 
 class SoundPlayer:
     """
@@ -61,7 +62,8 @@ class SoundPlayer:
         self.sounds_dictionary = {
             "system_awake": "system_awake.mp3",
             "action_closing": "action_closing.mp3",
-            "system_error": "system_error.mp3"
+            "system_error": "system_error.mp3",
+            "reminder": "reminder.mp3"
         }
 
     def cleanup(self):

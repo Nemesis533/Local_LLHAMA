@@ -108,6 +108,10 @@ class StateMachineInstance:
             "commands",
             target=self._command_worker
         )
+        self.thread_manager.register_thread(
+            "calendar",
+            target=self._calendar_checker_worker
+        )
 
     def _sound_player_worker(self):
         """Background thread that plays queued sound actions asynchronously."""
@@ -129,6 +133,132 @@ class StateMachineInstance:
         current_state = self.state_manager.get_state()
         if current_state == State.PARSING_VOICE:
             self.state_handlers._command_worker()
+
+    def _calendar_checker_worker(self):
+        """Background thread that checks for due reminders/alarms and plays notification sound."""
+        from datetime import datetime
+        
+        # Track which events have already triggered to avoid repeated notifications
+        triggered_events = set()
+        
+        while not self.thread_manager.is_stopping():
+            try:
+                # Check if ha_client has simple_functions with calendar
+                if not hasattr(self.ha_client, 'simple_functions') or not hasattr(self.ha_client.simple_functions, 'calendar'):
+                    time.sleep(60)  # Wait a minute before checking again
+                    continue
+                
+                calendar_manager = self.ha_client.simple_functions.calendar
+                now = datetime.now()
+                
+                # Get events that might be due now
+                # Check window: 60 seconds in the past to 30 seconds in the future
+                # This ensures we catch events even if check timing is slightly off
+                from datetime import timedelta
+                conn = calendar_manager._get_connection()
+                cursor = conn.cursor()
+                
+                lookback_time = (now - timedelta(seconds=60)).isoformat()
+                lookahead_time = (now + timedelta(seconds=30)).isoformat()
+                
+                query = '''
+                    SELECT * FROM events 
+                    WHERE due_datetime >= ? AND due_datetime <= ?
+                    AND is_active = 1
+                    AND is_completed = 0
+                    AND event_type IN ('reminder', 'alarm')
+                    ORDER BY due_datetime ASC
+                '''
+                
+                cursor.execute(query, [lookback_time, lookahead_time])
+                rows = cursor.fetchall()
+                conn.close()
+                
+                upcoming_events = [dict(row) for row in rows]
+                
+                for event in upcoming_events:
+                    event_id = event['id']
+                    event_type = event['event_type']
+                    
+                    # Only process reminders and alarms
+                    if event_type not in ['reminder', 'alarm']:
+                        continue
+                    
+                    # Skip if already triggered
+                    if event_id in triggered_events:
+                        continue
+                    
+                    # Parse event due time
+                    try:
+                        due_time = datetime.fromisoformat(event['due_datetime'])
+                    except:
+                        continue
+                    
+                    # Check if event is due NOW (time has arrived)
+                    # Only trigger if current time has reached or passed the due time,
+                    # but within a grace period after the due time
+                    # Grace period needs to be larger than check interval (30s) to ensure we catch it
+                    from datetime import timedelta
+                    grace_period = timedelta(seconds=90)  # 90 seconds to ensure we catch it with 30s checks
+                    
+                    # Calculate time difference for debugging
+                    time_until_due = (due_time - now).total_seconds()
+                    
+                    # Debug log to help troubleshoot (only log events within 5 minutes)
+                    if event_type in ['reminder', 'alarm'] and time_until_due > -300 and time_until_due < 300:
+                        is_within_grace = now >= due_time and now <= (due_time + grace_period)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Checking {event_type} '{event['title']}': due at {due_time.strftime('%H:%M:%S')}, now is {now.strftime('%H:%M:%S')}, time_until_due={time_until_due:.1f}s, already_triggered={event_id in triggered_events}, will_trigger={is_within_grace and event_id not in triggered_events}")
+                    
+                    # Only trigger if the due time has passed (or is now) but not too long ago
+                    if now >= due_time and now <= (due_time + grace_period):
+                        # Play reminder sound
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {event_type.capitalize()} TRIGGERED: {event['title']} (due at {due_time.strftime('%H:%M:%S')}, triggered at {now.strftime('%H:%M:%S')})")
+                        self.play_sound(SoundActions.reminder)
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sound queued for playback")
+                        
+                        # Mark as triggered
+                        triggered_events.add(event_id)
+                        
+                        # If it's a one-time event (not repeating), mark as completed
+                        if event.get('repeat_pattern') == 'none':
+                            calendar_manager.complete_event(event_id)
+                        
+                        # Send reminder notification to web server (optional)
+                        try:
+                            reminder_message = {
+                                "type": "reminder",
+                                "title": event['title'],
+                                "description": event.get('description', ''),
+                                "event_type": event_type,
+                                "due_time": event['due_datetime']
+                            }
+                            self.message_handler.send_to_web_server(reminder_message)
+                        except Exception as e:
+                            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send reminder notification: {e}")
+                
+                # Clean up old triggered events (older than 5 minutes)
+                cleanup_time = now - timedelta(minutes=5)
+                events_to_remove = set()
+                for event_id in triggered_events:
+                    event = calendar_manager.get_event_by_id(event_id)
+                    if event:
+                        try:
+                            due_time = datetime.fromisoformat(event['due_datetime'])
+                            if due_time < cleanup_time:
+                                events_to_remove.add(event_id)
+                        except:
+                            events_to_remove.add(event_id)
+                    else:
+                        events_to_remove.add(event_id)
+                
+                triggered_events -= events_to_remove
+                
+                # Check every 30 seconds
+                time.sleep(30)
+                
+            except Exception as e:
+                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Calendar checker error: {type(e).__name__}: {e}")
+                time.sleep(60)  # Wait longer on error
 
     # ===============================
     # Public Interface Methods
