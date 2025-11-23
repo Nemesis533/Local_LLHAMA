@@ -209,7 +209,7 @@ class SimpleFunctions:
             response += f" {round(temperature, 2)} degrees"
         
         if wind_speed is not None:
-            response += f" and wind speed {round(wind_speed, 2)} km/h"
+            response += f" and wind speed {round(wind_speed, 2)} kmh"
         
         return response + "."
 
