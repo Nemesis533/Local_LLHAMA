@@ -2,11 +2,13 @@
 import requests
 import json
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 
 # === Custom Imports ===
 from .Shared_Logger import LogLevel
+from .auth.calendar_manager import CalendarManager
 
 
 class SimpleFunctions:
@@ -37,6 +39,9 @@ class SimpleFunctions:
         if command_schema_path is None:
             command_schema_path = os.path.join(os.path.dirname(__file__), "command_schema.txt")
         self.command_schema = self._load_command_schema(command_schema_path)
+        
+        # Initialize calendar manager
+        self.calendar = CalendarManager()
 
     def _load_command_schema(self, filepath: str) -> dict:
         """
@@ -210,6 +215,182 @@ class SimpleFunctions:
         if today:
             return f"The weather at the location is {today['condition']} with a temperature of {round(float(today['temp']),2)} degrees."
         return error_message
+    
+    # === CALENDAR/REMINDER FUNCTIONS ===
+    
+    def add_reminder(self, title: str, when: str, description: str = "", repeat: str = "none") -> str:
+        """
+        Add a reminder for a specific date and time.
+        
+        @param title: What to be reminded about
+        @param when: When to be reminded (e.g., "2025-12-25 09:00", "tomorrow at 15:00")
+        @param description: Optional additional details
+        @param repeat: Repeat pattern - "none", "daily", "weekly", "monthly", "yearly"
+        @return: Confirmation message
+        """
+        success, message, _ = self.calendar.add_reminder(title, when, description, repeat)
+        return message
+    
+    def add_appointment(self, title: str, when: str, description: str = "") -> str:
+        """
+        Schedule an appointment.
+        
+        @param title: Appointment title/purpose
+        @param when: When the appointment is scheduled (e.g., "2025-12-25 14:00")
+        @param description: Optional appointment details
+        @return: Confirmation message
+        """
+        success, message, _ = self.calendar.add_appointment(title, when, description)
+        return message
+    
+    def add_alarm(self, title: str, when: str, repeat: str = "none") -> str:
+        """
+        Set an alarm.
+        
+        @param title: Alarm label/purpose
+        @param when: When the alarm should go off (e.g., "2025-12-25 07:00", "tomorrow at 6:30")
+        @param repeat: Repeat pattern - "none", "daily", "weekly"
+        @return: Confirmation message
+        """
+        success, message, _ = self.calendar.add_alarm(title, when, repeat)
+        return message
+    
+    def get_upcoming_reminders(self, days: int = 7) -> str:
+        """
+        Get upcoming reminders within specified days.
+        
+        @param days: Number of days to look ahead (default 7)
+        @return: Formatted list of upcoming reminders
+        """
+        events = self.calendar.get_upcoming_events(event_type='reminder', days=days)
+        
+        if not events:
+            return f"No reminders scheduled for the next {days} days."
+        
+        result = f"Upcoming reminders (next {days} days):\n"
+        for event in events:
+            dt = datetime.fromisoformat(event['due_datetime'])
+            formatted = dt.strftime("%B %d at %I:%M %p")
+            result += f"\n- {event['title']} - {formatted}"
+            if event['repeat_pattern'] != 'none':
+                result += f" (repeats {event['repeat_pattern']})"
+        
+        return result
+    
+    def get_upcoming_appointments(self, days: int = 7) -> str:
+        """
+        Get upcoming appointments within specified days.
+        
+        @param days: Number of days to look ahead (default 7)
+        @return: Formatted list of upcoming appointments
+        """
+        events = self.calendar.get_upcoming_events(event_type='appointment', days=days)
+        
+        if not events:
+            return f"No appointments scheduled for the next {days} days."
+        
+        result = f"Upcoming appointments (next {days} days):\n"
+        for event in events:
+            dt = datetime.fromisoformat(event['due_datetime'])
+            formatted = dt.strftime("%B %d at %I:%M %p")
+            result += f"\n- {event['title']} - {formatted}"
+            if event['description']:
+                result += f"\n  Details: {event['description']}"
+        
+        return result
+    
+    def get_alarms(self) -> str:
+        """
+        Get all active alarms.
+        
+        @return: Formatted list of alarms
+        """
+        events = self.calendar.get_upcoming_events(event_type='alarm', days=365)
+        
+        if not events:
+            return "No alarms currently set."
+        
+        result = "Active alarms:\n"
+        for event in events:
+            dt = datetime.fromisoformat(event['due_datetime'])
+            formatted = dt.strftime("%B %d at %I:%M %p")
+            result += f"\n- {event['title']} - {formatted}"
+            if event['repeat_pattern'] != 'none':
+                result += f" (repeats {event['repeat_pattern']})"
+        
+        return result
+    
+    def complete_reminder(self, search_term: str) -> str:
+        """
+        Mark a reminder as completed by searching for it.
+        
+        @param search_term: Text to search for in reminder titles
+        @return: Confirmation message
+        """
+        events = self.calendar.search_events(search_term, event_type='reminder')
+        
+        if not events:
+            return f"No reminder found matching '{search_term}'."
+        
+        if len(events) > 1:
+            result = f"Multiple reminders found for '{search_term}':\n"
+            for event in events:
+                dt = datetime.fromisoformat(event['due_datetime'])
+                formatted = dt.strftime("%B %d at %I:%M %p")
+                result += f"\n- ID {event['id']}: {event['title']} - {formatted}"
+            result += "\n\nPlease be more specific or use the ID."
+            return result
+        
+        event = events[0]
+        success, message = self.calendar.complete_event(event['id'])
+        return f"Marked '{event['title']}' as completed."
+    
+    def delete_reminder(self, search_term: str) -> str:
+        """
+        Delete a reminder, appointment, or alarm by searching for it.
+        
+        @param search_term: Text to search for in event titles
+        @return: Confirmation message
+        """
+        events = self.calendar.search_events(search_term)
+        
+        if not events:
+            return f"No event found matching '{search_term}'."
+        
+        if len(events) > 1:
+            result = f"Multiple events found for '{search_term}':\n"
+            for event in events:
+                dt = datetime.fromisoformat(event['due_datetime'])
+                formatted = dt.strftime("%B %d at %I:%M %p")
+                result += f"\n- ID {event['id']}: {event['title']} ({event['event_type']}) - {formatted}"
+            result += "\n\nPlease be more specific or use the ID."
+            return result
+        
+        event = events[0]
+        success, message = self.calendar.delete_event(event['id'])
+        return f"Deleted {event['event_type']} '{event['title']}'."
+    
+    def get_all_upcoming_events(self, days: int = 7) -> str:
+        """
+        Get all upcoming events (reminders, appointments, alarms) within specified days.
+        
+        @param days: Number of days to look ahead (default 7)
+        @return: Formatted list of all upcoming events
+        """
+        events = self.calendar.get_upcoming_events(days=days)
+        
+        if not events:
+            return f"No events scheduled for the next {days} days."
+        
+        result = f"Upcoming events (next {days} days):\n"
+        for event in events:
+            dt = datetime.fromisoformat(event['due_datetime'])
+            formatted = dt.strftime("%B %d at %I:%M %p")
+            result += f"\n- [{event['event_type'].upper()}] {event['title']} - {formatted}"
+            if event['repeat_pattern'] != 'none':
+                result += f" (repeats {event['repeat_pattern']})"
+        
+        return result
 
     def get_coordinates(self, place_name):
         """
