@@ -391,6 +391,64 @@ class SimpleFunctions:
                 result += f" (repeats {event['repeat_pattern']})"
         
         return result
+    
+    def list_calendar(self, days: int = 7) -> str:
+        """
+        List all calendar entries including reminders, appointments, and alarms in an organized format.
+        Simple function that provides a comprehensive view of the calendar.
+        
+        @param days: Number of days to look ahead (default 7)
+        @return: Formatted calendar listing grouped by type
+        """
+        all_events = self.calendar.get_upcoming_events(days=days, include_completed=False)
+        
+        if not all_events:
+            return f"Calendar is empty for the next {days} days."
+        
+        # Group events by type
+        reminders = [e for e in all_events if e['event_type'] == 'reminder']
+        appointments = [e for e in all_events if e['event_type'] == 'appointment']
+        alarms = [e for e in all_events if e['event_type'] == 'alarm']
+        
+        result = f"CALENDAR (next {days} days):\n"
+        
+        # Show reminders
+        if reminders:
+            result += f"\nREMINDERS ({len(reminders)}):\n"
+            for event in reminders:
+                dt = datetime.fromisoformat(event['due_datetime'])
+                formatted = dt.strftime("%b %d at %I:%M %p")
+                result += f"  - {event['title']} - {formatted}"
+                if event['repeat_pattern'] != 'none':
+                    result += f" [repeats {event['repeat_pattern']}]"
+                if event.get('description'):
+                    result += f"\n    Details: {event['description']}"
+                result += "\n"
+        
+        # Show alarms
+        if alarms:
+            result += f"\nALARMS ({len(alarms)}):\n"
+            for event in alarms:
+                dt = datetime.fromisoformat(event['due_datetime'])
+                formatted = dt.strftime("%b %d at %I:%M %p")
+                result += f"  - {event['title']} - {formatted}"
+                if event['repeat_pattern'] != 'none':
+                    result += f" [repeats {event['repeat_pattern']}]"
+                result += "\n"
+        
+        # Show appointments
+        if appointments:
+            result += f"\nAPPOINTMENTS ({len(appointments)}):\n"
+            for event in appointments:
+                dt = datetime.fromisoformat(event['due_datetime'])
+                formatted = dt.strftime("%b %d at %I:%M %p")
+                result += f"  - {event['title']} - {formatted}"
+                if event.get('description'):
+                    result += f"\n    Details: {event['description']}"
+                result += "\n"
+        
+        result += f"\nTotal: {len(all_events)} event(s)"
+        return result
 
     def get_coordinates(self, place_name):
         """
