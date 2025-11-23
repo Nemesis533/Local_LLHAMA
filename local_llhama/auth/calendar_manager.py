@@ -326,6 +326,33 @@ class CalendarManager:
             except (ValueError, IndexError):
                 pass
         
+        # Handle "now + X minutes/hours/days" or "now+X minutes/hours/days"
+        if "now" in datetime_str_lower and ("+") in datetime_str_lower:
+            try:
+                # Remove spaces around + for easier parsing
+                datetime_str_clean = datetime_str_lower.replace(" ", "")
+                # Split on 'now+'
+                if "now+" in datetime_str_clean:
+                    after_now = datetime_str_clean.split("now+")[1]
+                    # Extract number and unit
+                    import re
+                    match = re.match(r'(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)', after_now)
+                    if match:
+                        amount = int(match.group(1))
+                        unit = match.group(2).lower()
+                        
+                        if "day" in unit:
+                            dt = now + timedelta(days=amount)
+                            return dt.replace(second=0, microsecond=0).isoformat()
+                        elif "hour" in unit or "hr" in unit:
+                            dt = now + timedelta(hours=amount)
+                            return dt.replace(second=0, microsecond=0).isoformat()
+                        elif "minute" in unit or "min" in unit:
+                            dt = now + timedelta(minutes=amount)
+                            return dt.replace(second=0, microsecond=0).isoformat()
+            except (ValueError, IndexError, AttributeError):
+                pass
+        
         return None
     
     # === READ Operations ===
