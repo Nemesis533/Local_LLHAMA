@@ -152,20 +152,31 @@ class StateHandlers:
     
     def _command_worker(self):
         """Thread worker that processes transcriptions and parses commands using the LLM."""
-        transcription = self.sm.queue_manager.get_safe(
+        transcription_data = self.sm.queue_manager.get_safe(
             self.sm.queue_manager.transcription_queue,
             timeout=2,
             log_prefix=self.log_prefix
         )
         
-        if transcription is None:
+        if transcription_data is None:
             self.sm.state_manager.transition(self.sm.State.LISTENING)
             return
 
-        message = f"{self.log_prefix} [User Prompt]: {transcription}"
+        # Handle both old string format and new dict format
+        if isinstance(transcription_data, dict):
+            transcription = transcription_data.get('text', transcription_data)
+            from_webui = transcription_data.get('from_webui', False)
+        else:
+            transcription = transcription_data
+            from_webui = False
+        
+        # Store from_webui flag for use in other handlers
+        self.sm.from_webui = from_webui
+
+        message = f"{self.log_prefix} [User Prompt]: {transcription} (from_webui={from_webui})"
         self.sm.message_handler.send_to_web_server(message)
 
-        structured_output = self.sm.command_processor.parse_transcription(transcription)
+        structured_output = self.sm.command_processor.parse_transcription(transcription, from_webui=from_webui)
 
         if structured_output:
             if structured_output.get("commands"):
@@ -186,38 +197,56 @@ class StateHandlers:
                 lang = structured_output.get("language")
                 print(f"{self.log_prefix} [{LogLevel.INFO.name}] NL Response: {nl_message}")
                 
-                success = self.sm.queue_manager.put_safe(
-                    self.sm.queue_manager.speech_queue,
-                    [nl_message, lang],
-                    log_prefix=self.log_prefix
-                )
+                # Always send response to WebUI
+                message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
+                self.sm.message_handler.send_to_web_server(message)
                 
-                if success:
-                    message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                    self.sm.message_handler.send_to_web_server(message)
-                    print(f"{self.log_prefix} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
-                    self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                # Only queue for speaking if NOT from WebUI
+                if not from_webui:
+                    success = self.sm.queue_manager.put_safe(
+                        self.sm.queue_manager.speech_queue,
+                        [nl_message, lang],
+                        log_prefix=self.log_prefix
+                    )
+                    
+                    if success:
+                        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Successfully put NL response into speech queue")
+                        self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                    else:
+                        self.sm.state_manager.transition(self.sm.State.LISTENING)
                 else:
+                    print(f"{self.log_prefix} [{LogLevel.INFO.name}] Skipping speech for WebUI request")
                     self.sm.state_manager.transition(self.sm.State.LISTENING)
 
             else:
-                self._queue_error_message("No valid commands or responses extracted, Please try again.")
+                self._queue_error_message("No valid commands or responses extracted, Please try again.", from_webui)
     
-    def _queue_error_message(self, message):
+    def _queue_error_message(self, message, from_webui=False):
         """Queue an error message to be spoken."""
         print(f"{self.log_prefix} [{LogLevel.WARNING.name}] {message}")
-        success = self.sm.queue_manager.put_safe(
-            self.sm.queue_manager.speech_queue,
-            [message, "en"],
-            log_prefix=self.log_prefix
-        )
-        if success:
-            self.sm.state_manager.transition(self.sm.State.SPEAKING)
+        
+        # Send to WebUI
+        web_message = f"{self.log_prefix} [Error]: {message}"
+        self.sm.message_handler.send_to_web_server(web_message)
+        
+        # Only queue for speaking if NOT from WebUI
+        if not from_webui:
+            success = self.sm.queue_manager.put_safe(
+                self.sm.queue_manager.speech_queue,
+                [message, "en"],
+                log_prefix=self.log_prefix
+            )
+            if success:
+                self.sm.state_manager.transition(self.sm.State.SPEAKING)
+            else:
+                self.sm.state_manager.transition(self.sm.State.LISTENING)
         else:
             self.sm.state_manager.transition(self.sm.State.LISTENING)
     
     def _handle_simple_function_result(self, command_result, language):
         """Handle results from simple functions by converting to natural language."""
+        from_webui = getattr(self.sm, 'from_webui', False)
+        
         if isinstance(self.sm.command_llm, OllamaClient):
             nl_output = self.sm.command_processor.process_command_result(command_result, language)
             
@@ -229,14 +258,19 @@ class StateHandlers:
                 message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
                 self.sm.message_handler.send_to_web_server(message)
                 
-                success = self.sm.queue_manager.put_safe(
-                    self.sm.queue_manager.speech_queue,
-                    [nl_message, lang],
-                    log_prefix=self.log_prefix
-                )
-                if success:
-                    self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                # Only queue for speaking if NOT from WebUI
+                if not from_webui:
+                    success = self.sm.queue_manager.put_safe(
+                        self.sm.queue_manager.speech_queue,
+                        [nl_message, lang],
+                        log_prefix=self.log_prefix
+                    )
+                    if success:
+                        self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                    else:
+                        self.sm.state_manager.transition(self.sm.State.LISTENING)
                 else:
+                    print(f"{self.log_prefix} [{LogLevel.INFO.name}] Skipping speech for WebUI request")
                     self.sm.state_manager.transition(self.sm.State.LISTENING)
             else:
                 # Fallback: use raw response
@@ -248,13 +282,17 @@ class StateHandlers:
                 message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
                 self.sm.message_handler.send_to_web_server(message)
                 
-                success = self.sm.queue_manager.put_safe(
-                    self.sm.queue_manager.speech_queue,
-                    [fallback_msg, language],
-                    log_prefix=self.log_prefix
-                )
-                if success:
-                    self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                # Only queue for speaking if NOT from WebUI
+                if not from_webui:
+                    success = self.sm.queue_manager.put_safe(
+                        self.sm.queue_manager.speech_queue,
+                        [fallback_msg, language],
+                        log_prefix=self.log_prefix
+                    )
+                    if success:
+                        self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                    else:
+                        self.sm.state_manager.transition(self.sm.State.LISTENING)
                 else:
                     self.sm.state_manager.transition(self.sm.State.LISTENING)
         else:
@@ -262,11 +300,20 @@ class StateHandlers:
             message = f"{self.log_prefix} [Command Result]: {command_result}"
             self.sm.message_handler.send_to_web_server(message)
             
-            success = self.sm.queue_manager.put_safe(
-                self.sm.queue_manager.speech_queue,
-                [str(command_result), language],
-                log_prefix=self.log_prefix
-            )
+            # Only queue for speaking if NOT from WebUI
+            if not from_webui:
+                success = self.sm.queue_manager.put_safe(
+                    self.sm.queue_manager.speech_queue,
+                    [str(command_result), language],
+                    log_prefix=self.log_prefix
+                )
+                if success:
+                    self.sm.state_manager.transition(self.sm.State.SPEAKING)
+                else:
+                    self.sm.state_manager.transition(self.sm.State.LISTENING)
+            else:
+                self.sm.state_manager.transition(self.sm.State.LISTENING)
+ 
             if success:
                 self.sm.state_manager.transition(self.sm.State.SPEAKING)
             else:

@@ -62,6 +62,7 @@ class StateMachineInstance:
         self.base_path = base_path
         self.system_controller = system_controller
         self.class_prefix_message = "[State Machine]"
+        self.from_webui = False  # Track if current request is from WebUI
         
         voice_dir = "/home/llhama-usr/Local_LLHAMA/piper_voices"
 
@@ -354,11 +355,25 @@ class StateMachineInstance:
         elif isinstance(message, str):
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received legacy string message: {message}")
 
-    def _handle_ollama_command_message(self, command_data):
+    def _handle_ollama_command_message(self, message_data):
         """Handle incoming Ollama command from web interface."""
+        # Extract command data and from_webui flag
+        if isinstance(message_data, dict):
+            command_data = message_data.get('data', message_data)
+            from_webui = message_data.get('from_webui', True)
+        else:
+            command_data = message_data
+            from_webui = True
+        
+        # Package transcription with from_webui flag
+        transcription_data = {
+            'text': command_data,
+            'from_webui': from_webui
+        }
+        
         success = self.queue_manager.put_safe(
             self.queue_manager.transcription_queue,
-            command_data,
+            transcription_data,
             log_prefix=self.class_prefix_message
         )
         if success:

@@ -15,9 +15,11 @@ def from_user_text():
         return jsonify({"error": "No text provided"}), 400
 
     user_text = data['text']
+    # WebUI requests are always marked as from_webui=True
+    from_webui = data.get('from_webui', True)
 
     with current_app.app_context():
         service = current_app.config["SERVICE_INSTANCE"]
-        service.send_ollama_command(text=user_text)
+        service.send_ollama_command(text=user_text, from_webui=from_webui)
 
     return jsonify({"success": True})

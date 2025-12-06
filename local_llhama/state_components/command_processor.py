@@ -16,9 +16,16 @@ class CommandProcessor:
         self.command_llm = command_llm
         self.log_prefix = log_prefix
 
-    def parse_transcription(self, transcription):
-        """Parse transcription using LLM and return structured output."""
-        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Got transcription: {transcription}")
+    def parse_transcription(self, transcription, from_webui=False):
+        """Parse transcription using LLM and return structured output.
+        
+        @param transcription The text to parse
+        @param from_webui Boolean indicating if request came from WebUI (True) or STT (False)
+        """
+        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Got transcription: {transcription} (from_webui={from_webui})")
+        
+        # from_webui is available here for different processing logic if needed
+        # Currently just logged, but can be used to modify behavior
         
         if not isinstance(self.command_llm, OllamaClient):
             structured_output = self.command_llm.parse_with_llm(transcription)

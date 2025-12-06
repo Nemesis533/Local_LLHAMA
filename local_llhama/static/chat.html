@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM Chat Interface</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header with logout -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-title">
+          <img id="status-image" src="/static/images/llm.png" alt="Status" onerror="this.style.display='none';" />
+          <h1>LLM Chat Interface</h1>
+        </div>
+        <div class="header-nav">
+          <button id="dashboard-btn" class="nav-btn">Dashboard</button>
+          <button id="logout-btn" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-layout">
+      <!-- Sidebar for chat history (placeholder) -->
+      <aside class="chat-sidebar">
+        <h2>Chat History</h2>
+        <div class="chat-history-list">
+          <p class="placeholder-text">Coming soon...</p>
+        </div>
+      </aside>
+
+      <!-- Main chat area -->
+      <main class="chat-main">
+        <!-- Chat messages display -->
+        <div class="chat-messages" id="chat-messages">
+          <div class="welcome-message">
+            <h3>Welcome to the LLM Chat Interface</h3>
+            <p>Start a conversation by typing a message below. Your requests will be processed through the full system pipeline including simple functions.</p>
+          </div>
+        </div>
+
+        <!-- Chat input area -->
+        <div class="chat-input-container">
+          <textarea 
+            id="chat-input" 
+            class="chat-input" 
+            placeholder="Type your message here..." 
+            rows="3"
+          ></textarea>
+          <button id="send-chat-btn" class="send-chat-btn">
+            <span>Send</span>
+          </button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/socket.io.min.js"></script>
+  <script src="/static/chat.js"></script>
+</body>
+</html>

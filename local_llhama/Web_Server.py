@@ -62,7 +62,8 @@ class LocalLLHAMA_WebService:
         
         CORS(self.app)
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
-        self.socketio.start_background_task(self.monitor_messages)
+        # Start lightweight message monitor after SocketIO is ready
+        self.message_monitor_started = False
         self.connected_clients = set()
         self.clients_lock = threading.Lock()
 
@@ -176,6 +177,11 @@ class LocalLLHAMA_WebService:
             self.emit_messages("Local_LLHAMA socket connected!")
         except Exception as e:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send welcome message: {repr(e)}")
+        
+        # Start message monitor on first connection
+        if not self.message_monitor_started:
+            self.message_monitor_started = True
+            self.socketio.start_background_task(self.monitor_messages_lightweight)
 
 
 
@@ -184,15 +190,16 @@ class LocalLLHAMA_WebService:
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
 
-    def send_ollama_command(self, text: str):
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text}")
+    def send_ollama_command(self, text: str, from_webui: bool = True):
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text} (from_webui={from_webui})")
         if not self.action_message_queue:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Action message queue not initialized")
             raise RuntimeError("Message queue not initialized.")
         
         message = {
             "type": "ollama_command",
-            "data": text
+            "data": text,
+            "from_webui": from_webui
         }
         
         try:
@@ -201,52 +208,35 @@ class LocalLLHAMA_WebService:
         except Exception as e:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {repr(e)}")
             raise RuntimeError(f"Failed to queue command: {repr(e)}")
-        
-    def monitor_messages(self):
+
+    def monitor_messages_lightweight(self):
+        """Lightweight non-blocking message monitor using SocketIO sleep."""
         if not self.web_server_message_queue:
-            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Web server message queue not initialized")
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Web server message queue not initialized")
             return
         
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting message monitor")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Message monitor started")
         
         while True:
             try:
-                message = self.web_server_message_queue.get(timeout=1.0)
+                # Non-blocking check
+                message = self.web_server_message_queue.get_nowait()
                 
-                if isinstance(message, dict):
-                    msg_type = message.get("type")
-                    if msg_type == "web_ui_message":
-                        message_data = message.get("data")
-                        if message_data:
-                            try:
-                                self.emit_messages(message_data)
-                            except Exception as e:
-                                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to emit message: {repr(e)}")
-                        else:
-                            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received web_ui_message with no data")
-                    else:
-                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unknown message type: {msg_type}")
-                
-                elif isinstance(message, str):
-                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Received string message: {message}")
-                else:
-                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Unexpected message type: {type(message).__name__}")
-                    
+                if isinstance(message, dict) and message.get("type") == "web_ui_message":
+                    message_data = message.get("data")
+                    if message_data:
+                        try:
+                            self.emit_messages(message_data)
+                        except Exception as e:
+                            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit: {repr(e)}")
+                            
             except Empty:
-                # Queue empty, yield to allow other Socket.IO tasks
-                self.socketio.sleep(0.05)
-                continue
-            except AttributeError as e:
-                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Queue attribute error: {repr(e)}")
-                self.socketio.sleep(1.0)
-                continue
+                pass  # Queue empty, that's fine
             except Exception as e:
-                print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Message queue error: {repr(e)}")
-                self.socketio.sleep(0.5)
-                continue
-
-
-
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Monitor error: {repr(e)}")
+            
+            # Sleep to avoid busy waiting - this properly yields to SocketIO
+            self.socketio.sleep(0.1)
 
     def get_host_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
