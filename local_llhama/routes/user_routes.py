@@ -35,5 +35,6 @@ def get_current_user():
     return jsonify({
         "id": current_user.id,
         "username": current_user.username,
-        "is_admin": current_user.is_admin
+        "is_admin": current_user.is_admin,
+        "can_access_dashboard": current_user.can_access_dashboard
     })

@@ -47,6 +47,7 @@ class CalendarManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 title TEXT NOT NULL,
                 description TEXT,
                 event_type TEXT NOT NULL CHECK(event_type IN ('reminder', 'appointment', 'alarm')),
@@ -59,6 +60,13 @@ class CalendarManager:
                 notification_minutes_before INTEGER DEFAULT 0
             )
         ''')
+        
+        # Migrate existing table if needed (add user_id column)
+        cursor.execute("PRAGMA table_info(events)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'user_id' not in columns:
+            print(f"{self.class_prefix_message} {LogLevel.INFO} Migrating calendar database: adding user_id column")
+            cursor.execute("ALTER TABLE events ADD COLUMN user_id INTEGER")
         
         # Create index for faster queries
         cursor.execute('''
@@ -73,6 +81,10 @@ class CalendarManager:
             CREATE INDEX IF NOT EXISTS idx_is_completed ON events(is_completed)
         ''')
         
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_user_id ON events(user_id)
+        ''')
+        
         conn.commit()
         conn.close()
         print(f"{self.class_prefix_message} {LogLevel.INFO} Calendar database initialized")
@@ -80,7 +92,7 @@ class CalendarManager:
     # === CREATE Operations ===
     
     def add_reminder(self, title: str, due_datetime: str, description: str = "", 
-                     repeat_pattern: str = "none", notification_minutes: int = 0) -> Tuple[bool, str, int]:
+                     repeat_pattern: str = "none", notification_minutes: int = 0, user_id: int = None) -> Tuple[bool, str, int]:
         """
         Add a new reminder.
         
@@ -89,13 +101,14 @@ class CalendarManager:
         @param description: Optional description
         @param repeat_pattern: 'none', 'daily', 'weekly', 'monthly', 'yearly'
         @param notification_minutes: Minutes before to notify (0 = at time)
+        @param user_id: User ID for per-user calendars (None for voice-created generic entries)
         @return: Tuple (success, message, event_id)
         """
         return self._add_event('reminder', title, due_datetime, description, 
-                              repeat_pattern, notification_minutes)
+                              repeat_pattern, notification_minutes, user_id)
     
     def add_appointment(self, title: str, due_datetime: str, description: str = "",
-                       notification_minutes: int = 15) -> Tuple[bool, str, int]:
+                       notification_minutes: int = 15, user_id: int = None) -> Tuple[bool, str, int]:
         """
         Add a new appointment (non-repeating event).
         
@@ -103,24 +116,26 @@ class CalendarManager:
         @param due_datetime: When the appointment is scheduled
         @param description: Optional description
         @param notification_minutes: Minutes before to notify (default 15)
+        @param user_id: User ID for per-user calendars (None for voice-created generic entries)
         @return: Tuple (success, message, event_id)
         """
         return self._add_event('appointment', title, due_datetime, description,
-                              'none', notification_minutes)
+                              'none', notification_minutes, user_id)
     
-    def add_alarm(self, title: str, due_datetime: str, repeat_pattern: str = "none") -> Tuple[bool, str, int]:
+    def add_alarm(self, title: str, due_datetime: str, repeat_pattern: str = "none", user_id: int = None) -> Tuple[bool, str, int]:
         """
         Add a new alarm.
         
         @param title: Title/label for the alarm
         @param due_datetime: When the alarm should go off
         @param repeat_pattern: 'none', 'daily', 'weekly'
+        @param user_id: User ID for per-user calendars (None for voice-created generic entries)
         @return: Tuple (success, message, event_id)
         """
-        return self._add_event('alarm', title, due_datetime, "", repeat_pattern, 0)
+        return self._add_event('alarm', title, due_datetime, "", repeat_pattern, 0, user_id)
     
     def _add_event(self, event_type: str, title: str, due_datetime: str, 
-                   description: str, repeat_pattern: str, notification_minutes: int) -> Tuple[bool, str, int]:
+                   description: str, repeat_pattern: str, notification_minutes: int, user_id: int = None) -> Tuple[bool, str, int]:
         """Internal method to add any type of event."""
         try:
             # Parse datetime
@@ -132,10 +147,10 @@ class CalendarManager:
             cursor = conn.cursor()
             
             cursor.execute('''
-                INSERT INTO events (title, description, event_type, due_datetime, 
+                INSERT INTO events (user_id, title, description, event_type, due_datetime, 
                                    repeat_pattern, notification_minutes_before)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (title, description, event_type, parsed_datetime, repeat_pattern, notification_minutes))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, title, description, event_type, parsed_datetime, repeat_pattern, notification_minutes))
             
             event_id = cursor.lastrowid
             conn.commit()
@@ -361,13 +376,14 @@ class CalendarManager:
     # === READ Operations ===
     
     def get_upcoming_events(self, event_type: Optional[str] = None, 
-                           days: int = 7, include_completed: bool = False) -> List[Dict]:
+                           days: int = 7, include_completed: bool = False, user_id: Optional[int] = None) -> List[Dict]:
         """
         Get upcoming events within specified days.
         
         @param event_type: Filter by type ('reminder', 'appointment', 'alarm') or None for all
         @param days: Number of days to look ahead
         @param include_completed: Include completed events
+        @param user_id: Filter by user ID (None = all events including generic voice-created ones)
         @return: List of event dictionaries
         """
         conn = self._get_connection()
@@ -389,6 +405,10 @@ class CalendarManager:
         if event_type:
             query += ' AND event_type = ?'
             params.append(event_type)
+        
+        if user_id is not None:
+            query += ' AND user_id = ?'
+            params.append(user_id)
         
         query += ' ORDER BY due_datetime ASC'
         
