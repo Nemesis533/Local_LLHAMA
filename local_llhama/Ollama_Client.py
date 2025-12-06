@@ -13,7 +13,7 @@ import requests
 
 # === Custom Imports ===
 from .Shared_Logger import LogLevel
-from .LLM_Prompts import SMART_HOME_PROMPT_TEMPLATE, RESPONSE_PROCESSOR_PROMPT
+from .LLM_Prompts import SMART_HOME_PROMPT_TEMPLATE, RESPONSE_PROCESSOR_PROMPT,CONVERSATION_PROCESSOR_PROMPT
 
 
 class OllamaClient:
@@ -35,10 +35,12 @@ class OllamaClient:
         self.ha_client = ha_client
         self.devices_context = self.ha_client.generate_devices_prompt_fragment()
         self.response_processor_prompt = RESPONSE_PROCESSOR_PROMPT
+        self.conversation_processor_prompt = CONVERSATION_PROCESSOR_PROMPT
         
         # Context management - keep only last request and response
         self.last_user_message = None
-        self.last_assistant_response = None
+        self.last_message_from_chat = False  # Track if last command was from chat
+
 
         self.languages = {
             "English": "en",
@@ -146,7 +148,7 @@ class OllamaClient:
         """
         self.system_prompt = prompt
     
-    def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096, message_type: str = "command"):
+    def send_message(self, user_message: str, temperature: float = 0.1, top_p: float = 1, max_tokens: int = 4096, message_type: str = "command", from_chat: bool = False):
         """
         @brief Send message to Ollama for processing.
         @param user_message The message to process.
@@ -154,6 +156,7 @@ class OllamaClient:
         @param top_p Nucleus sampling parameter.
         @param max_tokens Maximum tokens to generate.
         @param message_type Either "command" for command parsing or "response" for processing function results.
+        @param from_chat Whether this command originates from chat (tracked for response processing).
         @return Parsed JSON response.
         """
         # Validate input
@@ -161,20 +164,31 @@ class OllamaClient:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided")
             return {"commands": []}
         
-        # Choose system prompt based on message type
+        # Choose system prompt based on message type and origin
         if message_type == "response":
-            system_prompt = self.response_processor_prompt
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing simple function response")
+            # Use conversation prompt if the original command was from chat
+            if self.last_message_from_chat:
+                system_prompt = self.conversation_processor_prompt
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing chat response with conversation prompt")
+            else:
+                system_prompt = self.response_processor_prompt
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Processing simple function response")
         else:
             system_prompt = self.system_prompt
         
         # Build the prompt with context if available
         prompt = user_message
-        if message_type == "command" and self.last_user_message and self.last_assistant_response:
-            # Include last conversation in context
-            context_prefix = f"Previous user message: {self.last_user_message}\nPrevious assistant response: {self.last_assistant_response}\n\nCurrent user message: "
-            prompt = context_prefix + user_message
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including previous context in prompt")
+        if self.last_user_message:
+            if message_type == "command":
+                # Include last conversation in context for command parsing
+                context_prefix = f"Previous user message: {self.last_user_message}\n\nCurrent user message: "
+                prompt = context_prefix + user_message
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including previous context in prompt")
+            elif message_type == "response":
+                # Include last user message and response for response processing
+                context_prefix = f"Original user query: {self.last_user_message}\n\n"
+                prompt = context_prefix + user_message
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including user query context in response processing")
         
         url = f"http://{self.host}/api/generate"
 
@@ -251,12 +265,17 @@ class OllamaClient:
                 print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Response is not a dict")
                 return {"commands": []}
             
-            # Update context for command type messages only (not for response processing)
+            # Update context for command type messages and nl_response messages (not for response processing)
             if message_type == "command":
                 # Store current exchange as the "last" exchange, replacing any previous one
                 self.last_user_message = user_message
-                self.last_assistant_response = output
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated context with current exchange")
+                self.last_message_from_chat = from_chat  # Track if this command is from chat
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated context with current exchange (from_chat={from_chat})")
+            elif message_type == "response":
+                # Reset the chat flag after processing response
+                self.last_message_from_chat = False
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Reset chat origin flag after response processing")
+                    
             
             return parsed
         except json.JSONDecodeError as e:

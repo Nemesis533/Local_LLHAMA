@@ -121,7 +121,7 @@ class ChatHandler:
             if not isinstance(self.command_llm, OllamaClient):
                 return self.command_llm.parse_with_llm(text)
             else:
-                return self.command_llm.send_message(text)
+                return self.command_llm.send_message(text, from_chat=True)
         except Exception as e:
             print(f"{self.log_prefix} [{LogLevel.CRITICAL.name}] LLM parsing failed: {type(e).__name__}: {e}")
             return None

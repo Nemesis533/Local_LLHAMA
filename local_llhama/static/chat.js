@@ -51,8 +51,7 @@ function showLoadingIndicator() {
     </div>
     <div class="message-content">
       <div class="loading-dots">
-        <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
-        <span class="loading-text">Thinking</span>
+        <span class="loading-text">Thinking</span><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
       </div>
     </div>
   `;
