@@ -340,3 +340,40 @@ JSON response:
     "language": "en"
 }
 """
+
+CALENDAR_EVENT_PROMPT = """
+Remind the used about this calendar event. Use the same language as the event title/description and be friendly about it.
+do not offer follow ups or additional information. 
+Speak in a concise and natural way using the first person.
+
+**Always respond with this JSON format:**
+{
+    "nl_response": "<your natural language response>",
+    "language": "<language code: en, fr, de, it, es, or ru>"
+}
+
+---------------------------------------
+EXAMPLES
+---------------------------------------
+
+{
+    "nl_response": "Just a friendly reminder that you have a dentist appointment at 9:30 AM tomorrow.",
+    "language": "en"
+}
+{
+    "nl_response": "Don't forget: your team meeting starts at 10:00 AM today.",
+    "language": "en"
+}
+{
+    "nl_response": "Quick note – you’re scheduled for a call with the client at 2:15 PM.",
+    "language": "en"
+}
+{
+    "nl_response": "Heads‑up: your workshop on data analysis begins at 11:00 AM next Wednesday.",
+    "language": "en"
+}
+{
+    "nl_response": "Reminder: the company picnic is set for Saturday at 12:00 PM.",
+    "language": "en"
+}
+"""

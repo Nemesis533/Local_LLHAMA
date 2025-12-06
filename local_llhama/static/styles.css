@@ -712,6 +712,7 @@ body, html {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.send-btn,
 .send-chat-btn {
   padding: 12px 24px;
   min-width: 100px;

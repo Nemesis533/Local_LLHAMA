@@ -8,6 +8,7 @@ from .Audio_Output import SoundActions
 from .Home_Assistant_Interface import HomeAssistantClient
 from .Ollama_Client import OllamaClient
 from .Shared_Logger import LogLevel
+from .LLM_Prompts import CALENDAR_EVENT_PROMPT
 
 # === Component Imports ===
 from .state_components import (
@@ -228,18 +229,45 @@ class StateMachineInstance:
                     # Only trigger if the due time has passed (or is now) but not too long ago
                     if now >= due_time and now <= (due_time + grace_period):
                         # Play reminder sound
-                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {event_type.capitalize()} TRIGGERED: {event['title']} (due at {due_time.strftime('%H:%M:%S')}, triggered at {now.strftime('%H:%M:%S')})")
+                        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {event_type.capitalize()} TRIGGERED: {event['title']} (due at {due_time.strftime('%H:%M:%S')}, triggered at {now.strftime('%H:%M:%S')})")  
                         self.play_sound(SoundActions.reminder)
                         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sound queued for playback")
                         
                         # Mark as triggered
                         triggered_events.add(event_id)
                         
+                        # Send chat notification if event has user_id (chat-created event)
+                        user_id = event.get('user_id')
+                        if user_id and isinstance(self.command_llm, OllamaClient):
+                            try:
+                                # Format event details for LLM
+                                event_description = event.get('description', '')
+                                llm_input = f"""Calendar Event Reminder:
+- Type: {event_type}
+- Title: {event['title']}
+- Time: {due_time.strftime('%I:%M %p')}
+{f"- Description: {event_description}" if event_description else ''}
+
+Create a friendly reminder message for this calendar event."""
+                                
+                                # Get natural language response from LLM using calendar prompt
+                                nl_output = self.command_llm.send_message(
+                                    llm_input, 
+                                    message_type="response",
+                                    from_chat=True
+                                )
+                                
+                                if nl_output and nl_output.get('nl_response'):
+                                    # Send as formatted LLM reply to user's chat
+                                    notification_message = f"[Chat Handler] [LLM Reply]: {nl_output.get('nl_response')}"
+                                    self.message_handler.send_to_web_server(notification_message, client_id=str(user_id))
+                                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sent calendar notification to user {user_id}")
+                            except Exception as e:
+                                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to send chat notification: {type(e).__name__}: {e}")
+                        
                         # If it's a one-time event (not repeating), mark as completed
                         if event.get('repeat_pattern') == 'none':
-                            calendar_manager.complete_event(event_id)
-                        
-                        # Send reminder notification to web server (optional)
+                            calendar_manager.complete_event(event_id)                        # Send reminder notification to web server (optional)
                         try:
                             reminder_message = {
                                 "type": "reminder",
