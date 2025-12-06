@@ -94,7 +94,8 @@ class StateHandlers:
                     # Pure HA commands: just play success sound, no verbal feedback
                     print(f"{self.log_prefix} [{LogLevel.INFO.name}] HA command(s) executed successfully: {command_result}")
                     message = f"{self.log_prefix} [HA Command Result]: {command_result}"
-                    self.sm.message_handler.send_to_web_server(message)
+                    client_id = getattr(self.sm, 'client_id', None)
+                    self.sm.message_handler.send_to_web_server(message, client_id=client_id)
                     self.sm.play_sound(SoundActions.system_awake)
                     self.sm.state_manager.transition(self.sm.State.LISTENING)
             else:
@@ -166,17 +167,20 @@ class StateHandlers:
         if isinstance(transcription_data, dict):
             transcription = transcription_data.get('text', transcription_data)
             from_webui = transcription_data.get('from_webui', False)
+            client_id = transcription_data.get('client_id')
         else:
             transcription = transcription_data
             from_webui = False
+            client_id = None
         
-        # Store from_webui flag for use in other handlers
+        # Store from_webui flag and client_id for use in other handlers
         self.sm.from_webui = from_webui
+        self.sm.client_id = client_id
 
         message = f"{self.log_prefix} [User Prompt]: {transcription} (from_webui={from_webui})"
-        self.sm.message_handler.send_to_web_server(message)
+        self.sm.message_handler.send_to_web_server(message, client_id=client_id)
 
-        structured_output = self.sm.command_processor.parse_transcription(transcription, from_webui=from_webui)
+        structured_output = self.sm.command_processor.parse_transcription(transcription, from_webui=from_webui, client_id=client_id)
 
         if structured_output:
             if structured_output.get("commands"):
@@ -199,7 +203,8 @@ class StateHandlers:
                 
                 # Always send response to WebUI
                 message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                self.sm.message_handler.send_to_web_server(message)
+                client_id = getattr(self.sm, 'client_id', None)
+                self.sm.message_handler.send_to_web_server(message, client_id=client_id)
                 
                 # Only queue for speaking if NOT from WebUI
                 if not from_webui:
@@ -227,7 +232,8 @@ class StateHandlers:
         
         # Send to WebUI
         web_message = f"{self.log_prefix} [Error]: {message}"
-        self.sm.message_handler.send_to_web_server(web_message)
+        client_id = getattr(self.sm, 'client_id', None)
+        self.sm.message_handler.send_to_web_server(web_message, client_id=client_id)
         
         # Only queue for speaking if NOT from WebUI
         if not from_webui:
@@ -256,7 +262,8 @@ class StateHandlers:
                 print(f"{self.log_prefix} [{LogLevel.INFO.name}] LLM converted response: {nl_message}")
                 
                 message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                self.sm.message_handler.send_to_web_server(message)
+                client_id = getattr(self.sm, 'client_id', None)
+                self.sm.message_handler.send_to_web_server(message, client_id=client_id)
                 
                 # Only queue for speaking if NOT from WebUI
                 if not from_webui:
@@ -280,7 +287,8 @@ class StateHandlers:
                 ]
                 fallback_msg = str(simple_function_results)
                 message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
-                self.sm.message_handler.send_to_web_server(message)
+                client_id = getattr(self.sm, 'client_id', None)
+                self.sm.message_handler.send_to_web_server(message, client_id=client_id)
                 
                 # Only queue for speaking if NOT from WebUI
                 if not from_webui:
@@ -298,7 +306,8 @@ class StateHandlers:
         else:
             # Non-Ollama client: use raw response
             message = f"{self.log_prefix} [Command Result]: {command_result}"
-            self.sm.message_handler.send_to_web_server(message)
+            client_id = getattr(self.sm, 'client_id', None)
+            self.sm.message_handler.send_to_web_server(message, client_id=client_id)
             
             # Only queue for speaking if NOT from WebUI
             if not from_webui:

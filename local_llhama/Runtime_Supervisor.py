@@ -60,6 +60,7 @@ class LocalLLHamaSupervisor:
         
         self.web_server_message_queue  : mp.Queue = mp.Queue()
         self.action_message_queue  : mp.Queue = mp.Queue()
+        self.chat_message_queue  : mp.Queue = mp.Queue()
 
         self.initialize_system()
         
@@ -75,13 +76,13 @@ class LocalLLHamaSupervisor:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Resolved base path: {resolved}")
         return resolved
 
-    def start_local_web_service_process(self, action_message_queue,web_server_message_queue, loader):
+    def start_local_web_service_process(self, action_message_queue, web_server_message_queue, chat_message_queue, loader):
         """
         Start the local web dashboard in a separate process.
         """
 
         def run_service():
-            webservice = LocalLLHAMA_WebService(action_message_queue=action_message_queue,web_server_message_queue=web_server_message_queue)
+            webservice = LocalLLHAMA_WebService(action_message_queue=action_message_queue, web_server_message_queue=web_server_message_queue, chat_message_queue=chat_message_queue)
             webservice.settings_data = loader.data
             webservice.settings_file = loader.settings_file
             webservice.run()
@@ -114,6 +115,7 @@ class LocalLLHamaSupervisor:
         # Setup message queue for inter-process communication
         self.system_controller.action_message_queue = self.action_message_queue
         self.system_controller.web_server_message_queue = self.web_server_message_queue
+        self.system_controller.chat_message_queue = self.chat_message_queue
 
         # Load settings
         self.system_controller.setup_settings()
@@ -135,7 +137,7 @@ class LocalLLHamaSupervisor:
         self.system_controller.state_machine.transition(State.LISTENING)
 
         # Start local web service process
-        self.start_local_web_service_process(self.action_message_queue,self.web_server_message_queue, self.system_controller.loader)
+        self.start_local_web_service_process(self.action_message_queue, self.web_server_message_queue, self.chat_message_queue, self.system_controller.loader)
 
         # Continuous monitoring loop
         while True:

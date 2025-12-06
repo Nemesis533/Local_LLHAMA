@@ -30,6 +30,7 @@ class LocalLLHamaSystemController:
         self.base_path = base_path
         self.web_server_message_queue = None
         self.action_message_queue = None
+        self.chat_message_queue = None
         self.loader : SettingLoaderClass = None
         self.monitor_thread = None
         self.command_llm = None
@@ -88,6 +89,7 @@ class LocalLLHamaSystemController:
                                    base_path=self.base_path,
                                      action_message_queue=self.action_message_queue,
                                      web_server_message_queue=self.web_server_message_queue,
+                                     chat_message_queue=self.chat_message_queue,
                                      system_controller=self)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine initialized in {time.time() - start:.2f} seconds"

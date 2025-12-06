@@ -11,6 +11,7 @@ from .state_manager import StateTransitionManager
 from .message_handler import MessageHandler
 from .command_processor import CommandProcessor
 from .state_handlers import StateHandlers
+from .chat_handler import ChatHandler
 
 __all__ = [
     "QueueManager",
@@ -20,4 +21,5 @@ __all__ = [
     "MessageHandler",
     "CommandProcessor",
     "StateHandlers",
+    "ChatHandler",
 ]

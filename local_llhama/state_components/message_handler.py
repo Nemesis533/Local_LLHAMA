@@ -18,12 +18,13 @@ class MessageHandler:
         self.web_server_message_queue = web_server_queue
         self.log_prefix = log_prefix
 
-    def send_to_web_server(self, message):
+    def send_to_web_server(self, message, client_id=None):
         """Send a message to the web server queue."""
         try:
             message_dict = {
                 "type": "web_ui_message",
-                "data": message
+                "data": message,
+                "client_id": client_id
             }
             self.web_server_message_queue.put(message_dict, timeout=1)
         except Exception as e:

@@ -93,7 +93,9 @@ async function sendMessage() {
 }
 
 // Listen for responses from the system via WebSocket
-socket.on('new_message', (message) => {
+socket.on('log_line', (data) => {
+  const message = data.line || data;
+  
   // Parse different message types
   if (typeof message === 'string') {
     // Check if it's a user prompt or LLM reply
@@ -112,8 +114,6 @@ socket.on('new_message', (message) => {
       if (result) {
         addMessage(result, 'assistant');
       }
-    } else {
-      // Generic system message
       addMessage(message, 'system');
     }
   }

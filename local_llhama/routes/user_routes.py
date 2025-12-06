@@ -9,17 +9,21 @@ user_bp = Blueprint("user", __name__)
 def from_user_text():
     """
     Receives user text from the frontend and processes it.
+    Uses dedicated chat handler to avoid state machine conflicts.
     """
+    from flask import session
+    
     data = request.get_json()
     if not data or 'text' not in data:
         return jsonify({"error": "No text provided"}), 400
 
     user_text = data['text']
-    # WebUI requests are always marked as from_webui=True
-    from_webui = data.get('from_webui', True)
+    # Get client_id from session
+    client_id = data.get('client_id') or session.get('_id')
 
     with current_app.app_context():
         service = current_app.config["SERVICE_INSTANCE"]
-        service.send_ollama_command(text=user_text, from_webui=from_webui)
+        # Route to dedicated chat handler instead of state machine
+        service.send_chat_message(text=user_text, client_id=client_id)
 
     return jsonify({"success": True})

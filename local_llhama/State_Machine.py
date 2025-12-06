@@ -18,6 +18,7 @@ from .state_components import (
     MessageHandler,
     CommandProcessor,
     StateHandlers,
+    ChatHandler,
 )
 
 
@@ -50,12 +51,13 @@ class StateMachineInstance:
     # Expose State enum at class level for easier access
     State = State
 
-    def __init__(self, command_llm, device, ha_client, base_path=None, action_message_queue=None, web_server_message_queue=None, system_controller=None):
+    def __init__(self, command_llm, device, ha_client, base_path=None, action_message_queue=None, web_server_message_queue=None, chat_message_queue=None, system_controller=None):
         """
         @brief Initialize the state machine, threads, queues, and component instances.
         @param command_llm The LLM instance used for command parsing.
         @param device The computation device (e.g., "cuda" or "cpu").
         @param ha_client The Home Assistant client interface.
+        @param chat_message_queue Queue for WebUI chat messages (bypasses state machine).
         @param system_controller Reference to the system controller for restart coordination.
         """
         self.device = device
@@ -84,6 +86,19 @@ class StateMachineInstance:
 
         # Home Assistant client interface
         self.ha_client: HomeAssistantClient = ha_client
+        
+        # Initialize ChatHandler for WebUI chat messages (bypasses state machine)
+        self.chat_handler = None
+        if chat_message_queue:
+            self.chat_handler = ChatHandler(
+                chat_queue=chat_message_queue,
+                command_llm=command_llm,
+                ha_client=ha_client,
+                message_handler=self.message_handler,
+                log_prefix="[Chat Handler]"
+            )
+            self.chat_handler.start()
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Chat handler initialized and started")
 
         # Start worker threads
         self._start_worker_threads()
@@ -357,18 +372,21 @@ class StateMachineInstance:
 
     def _handle_ollama_command_message(self, message_data):
         """Handle incoming Ollama command from web interface."""
-        # Extract command data and from_webui flag
+        # Extract command data, from_webui flag, and client_id
         if isinstance(message_data, dict):
             command_data = message_data.get('data', message_data)
             from_webui = message_data.get('from_webui', True)
+            client_id = message_data.get('client_id')
         else:
             command_data = message_data
             from_webui = True
+            client_id = None
         
-        # Package transcription with from_webui flag
+        # Package transcription with from_webui flag and client_id
         transcription_data = {
             'text': command_data,
-            'from_webui': from_webui
+            'from_webui': from_webui,
+            'client_id': client_id
         }
         
         success = self.queue_manager.put_safe(

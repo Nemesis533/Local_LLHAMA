@@ -24,12 +24,13 @@ from .Shared_Logger import LogLevel
 
 
 class LocalLLHAMA_WebService:
-    def __init__(self, host='0.0.0.0', port=5001, action_message_queue=None,web_server_message_queue=None):
+    def __init__(self, host='0.0.0.0', port=5001, action_message_queue=None, web_server_message_queue=None, chat_message_queue=None):
         # Load environment variables
         load_dotenv()
         
         self.web_server_message_queue  : mp.Queue  = web_server_message_queue
         self.action_message_queue : mp.Queue  = action_message_queue
+        self.chat_message_queue : mp.Queue  = chat_message_queue
         self.host = host
         self.port = port
         self.stdout_buffer = io.StringIO()
@@ -65,6 +66,7 @@ class LocalLLHAMA_WebService:
         # Start lightweight message monitor after SocketIO is ready
         self.message_monitor_started = False
         self.connected_clients = set()
+        self.client_sessions = {}  # Map session_id to socket_id for routing
         self.clients_lock = threading.Lock()
 
         # Put service instance + paths into app config
@@ -144,12 +146,25 @@ class LocalLLHAMA_WebService:
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
         
-    def emit_messages(self, message):
+    def emit_messages(self, message, client_id=None):
         if not message:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Attempted to emit empty message")
             return
         
         with self.clients_lock:
+            # If client_id specified, send only to that client's socket
+            if client_id and client_id in self.client_sessions:
+                target_sid = self.client_sessions[client_id]
+                if target_sid in self.connected_clients:
+                    try:
+                        self.socketio.emit('log_line', {'line': message}, room=target_sid)
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit to client {target_sid}: {repr(e)}")
+                        self.connected_clients.discard(target_sid)
+                        del self.client_sessions[client_id]
+                return
+            
+            # Broadcast to all clients (for system messages, STT responses, etc.)
             clients_to_remove = []
             for sid in self.connected_clients:
                 try:
@@ -189,9 +204,13 @@ class LocalLLHAMA_WebService:
         print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Client disconnected: {request.sid}")
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
+            # Clean up client session mapping
+            sessions_to_remove = [session_id for session_id, sid in self.client_sessions.items() if sid == request.sid]
+            for session_id in sessions_to_remove:
+                del self.client_sessions[session_id]
 
-    def send_ollama_command(self, text: str, from_webui: bool = True):
-        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text} (from_webui={from_webui})")
+    def send_ollama_command(self, text: str, from_webui: bool = True, client_id: str = None):
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text} (from_webui={from_webui}, client={client_id})")
         if not self.action_message_queue:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Action message queue not initialized")
             raise RuntimeError("Message queue not initialized.")
@@ -199,7 +218,8 @@ class LocalLLHAMA_WebService:
         message = {
             "type": "ollama_command",
             "data": text,
-            "from_webui": from_webui
+            "from_webui": from_webui,
+            "client_id": client_id
         }
         
         try:
@@ -208,6 +228,25 @@ class LocalLLHAMA_WebService:
         except Exception as e:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue command: {repr(e)}")
             raise RuntimeError(f"Failed to queue command: {repr(e)}")
+    
+    def send_chat_message(self, text: str, client_id: str = None):
+        """Send chat message to dedicated chat handler (bypasses state machine)."""
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Chat from User: {text} (client={client_id})")
+        if not self.chat_message_queue:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Chat message queue not initialized")
+            raise RuntimeError("Chat message queue not initialized.")
+        
+        message = {
+            "text": text,
+            "client_id": client_id
+        }
+        
+        try:
+            self.chat_message_queue.put(message, timeout=2.0)
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Chat message queued successfully")
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue chat message: {repr(e)}")
+            raise RuntimeError(f"Failed to queue chat message: {repr(e)}")
 
     def monitor_messages_lightweight(self):
         """Lightweight non-blocking message monitor using SocketIO sleep."""
@@ -224,9 +263,10 @@ class LocalLLHAMA_WebService:
                 
                 if isinstance(message, dict) and message.get("type") == "web_ui_message":
                     message_data = message.get("data")
+                    client_id = message.get("client_id")
                     if message_data:
                         try:
-                            self.emit_messages(message_data)
+                            self.emit_messages(message_data, client_id=client_id)
                         except Exception as e:
                             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit: {repr(e)}")
                             
