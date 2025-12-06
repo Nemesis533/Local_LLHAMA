@@ -6,6 +6,7 @@ Handles login verification, session management, and password operations.
 from werkzeug.security import check_password_hash
 from .db_manager import DatabaseManager
 
+from ..Shared_Logger import LogLevel
 
 class AuthManager:
     """
@@ -19,10 +20,11 @@ class AuthManager:
         
         @param db_path: Path to SQLite database file. If None, uses default location.
         """
-        self.db = DatabaseManager(db_path)
+        self.class_prefix_message = "[AuthManager]"
+        self.db_manager = DatabaseManager(db_path)
         
         # Check if password reset is needed on initialization
-        self.db.check_password_reset_needed()
+        self.db_manager.check_password_reset_needed()
     
     def verify_credentials(self, username, password):
         """
@@ -33,29 +35,29 @@ class AuthManager:
         @return: User object if credentials are valid, None otherwise.
         """
         if not username or not password:
-            print("[Auth] [WARNING] Empty username or password provided")
+            print(f"{self.class_prefix_message} {LogLevel.WARNING} Empty username or password provided")
             return None
         
         # Get user from database
-        user = self.db.get_user_by_username(username)
+        user = self.db_manager.get_user_by_username(username)
         
         if not user:
-            print(f"[Auth] [WARNING] Login attempt for non-existent user: {username}")
+            print(f"{self.class_prefix_message} {LogLevel.WARNING} Login attempt for non-existent user: {username}")
             return None
         
         # Check if user is active
         if not user.is_active:
-            print(f"[Auth] [WARNING] Login attempt for inactive user: {username}")
+            print(f"{self.class_prefix_message} {LogLevel.WARNING} Login attempt for inactive user: {username}")
             return None
         
         # Verify password
         if check_password_hash(user.password_hash, password):
-            print(f"[Auth] [INFO] Successful login for user: {username}")
+            print(f"{self.class_prefix_message} {LogLevel.INFO} Successful login for user: {username}")
             # Update last login timestamp
-            self.db.update_last_login(username)
+            self.db_manager.update_last_login(username)
             return user
         else:
-            print(f"[Auth] [WARNING] Failed login attempt for user: {username}")
+            print(f"{self.class_prefix_message} {LogLevel.WARNING} Failed login attempt for user: {username}")
             return None
     
     def get_user_by_id(self, user_id):
@@ -65,7 +67,7 @@ class AuthManager:
         @param user_id: User ID to look up.
         @return: User object if found, None otherwise.
         """
-        return self.db.get_user_by_id(user_id)
+        return self.db_manager.get_user_by_id(user_id)
     
     def validate_password_strength(self, password):
         """
@@ -105,7 +107,7 @@ class AuthManager:
             return False, error_msg
         
         # Update password
-        success = self.db.update_password(username, new_password)
+        success = self.db_manager.update_password(username, new_password)
         if success:
             return True, "Password changed successfully"
         else:

@@ -29,6 +29,14 @@ def dashboard():
     """
     Serves the main dashboard HTML page.
     """
+    # Check if user must change password
+    if current_user.must_change_password:
+        return redirect('/change-password-required')
+    
+    # Check if user has dashboard access
+    if not current_user.can_access_dashboard:
+        return "Access Denied: You do not have permission to access the dashboard", 403
+    
     # Authenticated users can always access, show loading within page if needed
     static_path = current_app.config.get("STATIC_PATH")
     return send_file(static_path / 'dashboard.html')
@@ -39,6 +47,14 @@ def chat():
     """
     Serves the chat interface HTML page.
     """
+    # Check if user must change password
+    if current_user.must_change_password:
+        return redirect('/change-password-required')
+    
+    # Check if user has chat access
+    if not current_user.can_access_chat:
+        return "Access Denied: You do not have permission to access the chat", 403
+    
     # Authenticated users can always access
     static_path = current_app.config.get("STATIC_PATH")
     return send_file(static_path / 'chat.html')

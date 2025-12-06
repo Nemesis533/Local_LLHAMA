@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
+from ..Shared_Logger import LogLevel
+
 
 class CalendarManager:
     """
@@ -20,6 +22,7 @@ class CalendarManager:
         
         @param db_path: Path to SQLite database file. If None, uses default location.
         """
+        self.class_prefix_message = "[CalendarManager]"
         if db_path is None:
             base_path = Path(__file__).parent.parent
             data_dir = base_path / "data"
@@ -72,7 +75,7 @@ class CalendarManager:
         
         conn.commit()
         conn.close()
-        print("[CalendarManager] [INFO] Calendar database initialized")
+        print(f"{self.class_prefix_message} {LogLevel.INFO} Calendar database initialized")
     
     # === CREATE Operations ===
     
@@ -143,12 +146,12 @@ class CalendarManager:
             if repeat_pattern != 'none':
                 message += f" (repeats {repeat_pattern})"
             
-            print(f"[CalendarManager] [INFO] {message}")
+            print(f"{self.class_prefix_message} {LogLevel.INFO} {message}")
             return True, message, event_id
             
         except Exception as e:
             error_msg = f"Failed to add {event_type}: {e}"
-            print(f"[CalendarManager] [ERROR] {error_msg}")
+            print(f"{self.class_prefix_message} {LogLevel.ERROR} {error_msg}")
             return False, error_msg, -1
     
     def _parse_datetime(self, datetime_str: str) -> Optional[str]:

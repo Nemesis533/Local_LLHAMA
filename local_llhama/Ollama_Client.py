@@ -181,7 +181,7 @@ class OllamaClient:
         # Use higher temperature for response processing to make it more creative
         if message_type == "response":
             temperature = 0.8  # More creative for processing Wikipedia/news responses
-            top_p = 0.95
+            top_p = 0.90
 
         payload = {
             "model": self.model,
@@ -260,6 +260,16 @@ class OllamaClient:
             
             return parsed
         except json.JSONDecodeError as e:
+            # Try to recover from double-brace errors ({{ instead of {)
+            if output.startswith('{{') and output.endswith('}}'):
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Detected double braces, stripping and retrying")
+                try:
+                    parsed = json.loads(output[1:-1])
+                    if isinstance(parsed, dict):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {repr(e)}")
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Raw output: {output[:200]}...")
             return {"commands": []}

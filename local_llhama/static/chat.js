@@ -39,6 +39,36 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Show loading indicator
+function showLoadingIndicator() {
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'chat-message assistant-message loading-message';
+  loadingDiv.id = 'loading-indicator';
+  
+  loadingDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-type">Assistant</span>
+    </div>
+    <div class="message-content">
+      <div class="loading-dots">
+        <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+        <span class="loading-text">Thinking</span>
+      </div>
+    </div>
+  `;
+  
+  chatMessages.appendChild(loadingDiv);
+  scrollToBottom();
+}
+
+// Hide loading indicator
+function hideLoadingIndicator() {
+  const loadingDiv = document.getElementById('loading-indicator');
+  if (loadingDiv) {
+    loadingDiv.remove();
+  }
+}
+
 // Send message
 async function sendMessage() {
   const message = chatInput.value.trim();
@@ -53,6 +83,9 @@ async function sendMessage() {
   // Clear input
   chatInput.value = '';
   chatInput.style.height = 'auto';
+  
+  // Show loading indicator
+  showLoadingIndicator();
   
   // Disable send button
   sendBtn.disabled = true;
@@ -78,11 +111,13 @@ async function sendMessage() {
     const data = await response.json();
     
     if (!data.success) {
+      hideLoadingIndicator();
       addMessage('Failed to send message. Please try again.', 'system');
     }
     
   } catch (error) {
     console.error('Error sending message:', error);
+    hideLoadingIndicator();
     addMessage(`Error: ${error.message}`, 'system');
   } finally {
     // Re-enable send button
@@ -103,18 +138,23 @@ socket.on('log_line', (data) => {
       // Skip - we already showed the user message
       return;
     } else if (message.includes('[LLM Reply]:')) {
-      // Extract the actual reply
+      // Extract the actual reply and hide loading indicator
       const reply = message.split('[LLM Reply]:')[1]?.trim();
       if (reply) {
+        hideLoadingIndicator();
         addMessage(reply, 'assistant');
       }
     } else if (message.includes('[Command Result]:')) {
-      // Show command execution results
+      // Show command execution results and hide loading indicator
       const result = message.split('[Command Result]:')[1]?.trim();
       if (result) {
+        hideLoadingIndicator();
         addMessage(result, 'assistant');
       }
       addMessage(message, 'system');
+    } else if (message.includes('[Error]:')) {
+      // Hide loading indicator on error
+      hideLoadingIndicator();
     }
   }
 });

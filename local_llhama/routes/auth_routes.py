@@ -50,6 +50,11 @@ def login():
         # Log user in with Flask-Login
         login_user(user, remember=remember)
         print(f"[Auth] [INFO] User {username} logged in successfully")
+        
+        # Check if password change is required
+        if user.must_change_password:
+            return jsonify({"success": True, "redirect": "/change-password-required"}), 200
+        
         return jsonify({"success": True, "redirect": "/dashboard"}), 200
     else:
         return jsonify({"error": "Invalid username or password"}), 401
@@ -95,6 +100,8 @@ def change_password():
     )
     
     if success:
+        # Clear must_change_password flag
+        auth_manager.db_manager.clear_password_change_flag(current_user.username)
         print(f"[Auth] [INFO] Password changed for user: {current_user.username}")
         return jsonify({"success": True, "message": message}), 200
     else:
@@ -110,7 +117,18 @@ def check_auth():
     if current_user.is_authenticated:
         return jsonify({
             "authenticated": True,
-            "username": current_user.username
+            "username": current_user.username,
+            "must_change_password": current_user.must_change_password,
+            "is_admin": current_user.is_admin,
+            "can_access_dashboard": current_user.can_access_dashboard,
+            "can_access_chat": current_user.can_access_chat
         }), 200
     else:
         return jsonify({"authenticated": False}), 200
+
+
+@auth_bp.route('/change-password-required', methods=['GET'])
+@login_required
+def change_password_required_page():
+    """Serve the forced password change page."""
+    return current_app.send_static_file('change-password.html')

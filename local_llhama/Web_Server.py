@@ -14,7 +14,7 @@ import secrets
 from dotenv import load_dotenv
 
 # Import blueprints from the routes package
-from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp, auth_bp, calendar_bp
+from .routes import main_bp, settings_bp, llm_bp, system_bp, user_bp, auth_bp, calendar_bp, admin_bp
 
 # Import authentication
 from .auth import AuthManager
@@ -82,6 +82,7 @@ class LocalLLHAMA_WebService:
         self.app.register_blueprint(system_bp)
         self.app.register_blueprint(user_bp)
         self.app.register_blueprint(calendar_bp)
+        self.app.register_blueprint(admin_bp)
 
         # Socket.IO handlers
         self.socketio.on_event('connect', self.handle_connect)
