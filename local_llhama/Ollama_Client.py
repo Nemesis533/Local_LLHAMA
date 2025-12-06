@@ -211,11 +211,14 @@ class OllamaClient:
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=30)
+            response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
         except requests.exceptions.Timeout:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request timeout connecting to Ollama at {self.host}")
-            return {"commands": []}
+            return {
+                "nl_response": "I'm sorry, the request timed out. The language model is taking too long to respond. Please try again.",
+                "language": "en"
+            }
         except requests.exceptions.ConnectionError as e:
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Connection error to Ollama: {repr(e)}")
             print(f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check if Ollama is running at {self.host}")

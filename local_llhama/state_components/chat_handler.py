@@ -37,6 +37,11 @@ class ChatHandler:
         self.message_handler = message_handler
         self.log_prefix = log_prefix
         
+        # Track last 3 interactions per client (client_id -> list of {user, assistant} dicts)
+        self.conversation_history = {}
+        # Track current user query for command execution flow (client_id -> query)
+        self.pending_user_queries = {}
+        
         self.running = False
         self.worker_thread = None
         
@@ -97,31 +102,52 @@ class ChatHandler:
             self.message_handler.send_to_web_server(user_message, client_id=client_id)
             
             # Parse with LLM
-            structured_output = self._parse_with_llm(text)
+            structured_output = self._parse_with_llm(text, client_id)
             
             if not structured_output:
                 self._send_error_response("Failed to parse message", client_id)
                 return
             
-            # Handle different response types
+            # Handle different response types and track responses
+            assistant_response = None
             if structured_output.get("commands"):
+                # Store user query for later (will be saved after command completes)
+                self.pending_user_queries[client_id] = text
                 self._handle_commands(structured_output, client_id)
+                return  # Don't store yet, will be stored in _handle_simple_function_result or _handle_commands
             elif structured_output.get("nl_response"):
+                assistant_response = structured_output.get("nl_response")
                 self._handle_nl_response(structured_output, client_id)
             else:
                 self._send_error_response("No valid commands or responses extracted", client_id)
+                return
+            
+            # Store interaction in history (only for nl_response, commands stored separately)
+            if assistant_response:
+                self._add_to_history(client_id, text, assistant_response)
                 
         except Exception as e:
             print(f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Error handling chat message: {type(e).__name__}: {e}")
             self._send_error_response("An error occurred processing your message", client_id)
     
-    def _parse_with_llm(self, text):
+    def _parse_with_llm(self, text, client_id):
         """Parse text with LLM and return structured output."""
         try:
+            # Build prompt with conversation history
+            prompt = text
+            if client_id in self.conversation_history and self.conversation_history[client_id]:
+                history = self.conversation_history[client_id]
+                history_text = "Previous interactions with the user:\n"
+                for interaction in history:
+                    history_text += f"User: {interaction['user']}\n"
+                    history_text += f"Assistant: {interaction['assistant']}\n"
+                prompt = f"{history_text}\nThis is the last thing the user asked: {text}"
+                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Including {len(history)} previous interactions in prompt")
+            
             if not isinstance(self.command_llm, OllamaClient):
-                return self.command_llm.parse_with_llm(text)
+                return self.command_llm.parse_with_llm(prompt)
             else:
-                return self.command_llm.send_message(text, from_chat=True)
+                return self.command_llm.send_message(prompt, from_chat=True)
         except Exception as e:
             print(f"{self.log_prefix} [{LogLevel.CRITICAL.name}] LLM parsing failed: {type(e).__name__}: {e}")
             return None
@@ -154,8 +180,14 @@ class ChatHandler:
                     self._handle_simple_function_result(results, language, client_id)
                 else:
                     # Pure HA commands: just send confirmation
-                    message = f"{self.log_prefix} [Command Result]: Commands executed successfully"
+                    confirmation = "Commands executed successfully"
+                    message = f"{self.log_prefix} [Command Result]: {confirmation}"
                     self.message_handler.send_to_web_server(message, client_id=client_id)
+                    
+                    # Store interaction in history
+                    if client_id in self.pending_user_queries:
+                        self._add_to_history(client_id, self.pending_user_queries[client_id], confirmation)
+                        del self.pending_user_queries[client_id]
             else:
                 self._send_error_response("Command execution returned no results", client_id)
                 
@@ -185,6 +217,11 @@ class ChatHandler:
                 nl_message = nl_output.get("nl_response")
                 message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
                 self.message_handler.send_to_web_server(message, client_id=client_id)
+                
+                # Store interaction in history
+                if client_id in self.pending_user_queries:
+                    self._add_to_history(client_id, self.pending_user_queries[client_id], nl_message)
+                    del self.pending_user_queries[client_id]
             else:
                 # Fallback
                 fallback_msg = str(simple_function_results)
@@ -215,3 +252,25 @@ class ChatHandler:
         """
         message = f"{self.log_prefix} [Error]: {error_text}"
         self.message_handler.send_to_web_server(message, client_id=client_id)
+    
+    def _add_to_history(self, client_id, user_text, assistant_text):
+        """
+        Add interaction to conversation history, keeping last 3.
+        
+        @param client_id Client identifier
+        @param user_text User's message
+        @param assistant_text Assistant's response
+        """
+        if client_id not in self.conversation_history:
+            self.conversation_history[client_id] = []
+        
+        self.conversation_history[client_id].append({
+            'user': user_text,
+            'assistant': assistant_text
+        })
+        
+        # Keep only last 3 interactions
+        if len(self.conversation_history[client_id]) > 3:
+            self.conversation_history[client_id] = self.conversation_history[client_id][-3:]
+        
+        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Stored interaction for client {client_id} (history size: {len(self.conversation_history[client_id])})")

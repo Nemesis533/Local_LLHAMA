@@ -159,8 +159,18 @@ socket.on('log_line', (data) => {
 });
 
 // Handle connection events
-socket.on('connect', () => {
+socket.on('connect', async () => {
   console.log('Connected to server');
+  
+  // Register user with WebSocket for per-user message routing
+  try {
+    const response = await fetch('/api/current_user');
+    const userData = await response.json();
+    socket.emit('register_user', { user_id: userData.id });
+    console.log('Registered user:', userData.id);
+  } catch (error) {
+    console.error('Failed to register user:', error);
+  }
 });
 
 socket.on('disconnect', () => {

@@ -87,6 +87,7 @@ class LocalLLHAMA_WebService:
         # Socket.IO handlers
         self.socketio.on_event('connect', self.handle_connect)
         self.socketio.on_event('disconnect', self.handle_disconnect)
+        self.socketio.on_event('register_user', self.handle_register_user)
     
     def _configure_security(self):
         """Configure Flask security settings."""
@@ -206,9 +207,20 @@ class LocalLLHAMA_WebService:
         with self.clients_lock:
             self.connected_clients.discard(request.sid)
             # Clean up client session mapping
-            sessions_to_remove = [session_id for session_id, sid in self.client_sessions.items() if sid == request.sid]
-            for session_id in sessions_to_remove:
-                del self.client_sessions[session_id]
+            sessions_to_remove = [user_id for user_id, sid in self.client_sessions.items() if sid == request.sid]
+            for user_id in sessions_to_remove:
+                del self.client_sessions[user_id]
+    
+    def handle_register_user(self, data):
+        """
+        Register authenticated user's socket connection.
+        Maps user_id to socket_id for per-user message routing.
+        """
+        user_id = data.get('user_id')
+        if user_id:
+            with self.clients_lock:
+                self.client_sessions[str(user_id)] = request.sid
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Registered user {user_id} with socket {request.sid}")
 
     def send_ollama_command(self, text: str, from_webui: bool = True, client_id: str = None):
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Text from User: {text} (from_webui={from_webui}, client={client_id})")
