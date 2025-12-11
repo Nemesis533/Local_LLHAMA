@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Local LLHAMA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #2c3e50;
+        }
+        
+        .admin-header h1 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .users-table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .users-table th {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .users-table td {
+            padding: 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .users-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .permission-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin: 2px;
+        }
+        
+        .badge-yes {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .badge-no {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .badge-admin {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-edit {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-reset {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .btn-delete {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-small:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .form-group-checkbox input {
+            margin-right: 8px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .password-display {
+            background: #fef5e7;
+            border: 2px solid #f39c12;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .password-display h3 {
+            margin: 0 0 10px 0;
+            color: #d68910;
+        }
+        
+        .password-value {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            color: #e74c3c;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        
+        .password-warning {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>👤 User Administration</h1>
+            <div class="header-buttons">
+                <button class="btn" onclick="window.location.href='/'">Dashboard</button>
+                <button class="btn btn-primary" onclick="showCreateUserModal()">Create New User</button>
+                <button class="btn btn-logout" onclick="window.location.href='/logout'">Logout</button>
+            </div>
+        </div>
+
+        <div class="users-table-container">
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Status</th>
+                        <th>Permissions</th>
+                        <th>Created</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px;">Loading users...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New User</h2>
+            </div>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="newUsername">Username:</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newIsAdmin">
+                    <label for="newIsAdmin">Admin Privileges</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newCanDashboard" checked>
+                    <label for="newCanDashboard">Can Access Dashboard</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newCanChat" checked>
+                    <label for="newCanChat">Can Access Chat</label>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn" onclick="closeModal('createUserModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+            <div id="newPasswordDisplay" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Edit Permissions Modal -->
+    <div id="editPermissionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Permissions: <span id="editUsername"></span></h2>
+            </div>
+            <form id="editPermissionsForm">
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editIsAdmin">
+                    <label for="editIsAdmin">Admin Privileges</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editCanDashboard">
+                    <label for="editCanDashboard">Can Access Dashboard</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editCanChat">
+                    <label for="editCanChat">Can Access Chat</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editIsActive">
+                    <label for="editIsActive">Account Active</label>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn" onclick="closeModal('editPermissionsModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Password Reset</h2>
+            </div>
+            <div id="resetPasswordDisplay"></div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-primary" onclick="closeModal('resetPasswordModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+</html>

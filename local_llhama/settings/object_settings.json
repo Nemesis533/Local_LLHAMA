@@ -1,0 +1,59 @@
+{
+  "HomeAssistantClient": {
+    "ALLOWED_DOMAINS": {
+      "value": [
+        "light",
+        "climate",
+        "switch",
+        "fan",
+        "media_player",
+        "thermostat"
+      ],
+      "type": "list"
+    },
+    "allowed_entities": {
+      "value": [
+        "light.kitchen_light",
+        "light.desk_light",
+        "light.couch_light",
+        "climate.as35p",
+        "climate.as25p"
+      ],
+      "type": "list"
+    }
+  },
+  "SettingLoaderClass": {
+    "allow_internet_searches": {
+      "value": true,
+      "type": "bool"
+    },
+    "base_model_path": {
+      "value": "/mnt/fast_storage/huggingface/hub/",
+      "type": "str"
+    },
+    "command_llm_name": {
+      "value": "meta-llama/Llama-3.1-8B",
+      "type": "str"
+    },
+    "load_models_in_8_bit": {
+      "value": true,
+      "type": "bool"
+    },
+    "ollama_model": {
+      "value": "gpt-oss:20b",
+      "type": "str"
+    },
+    "prompt_guard_model_name": {
+      "value": "./llama_guard_trained_multilingual",
+      "type": "str"
+    },
+    "use_guard_llm": {
+      "value": false,
+      "type": "bool"
+    },
+    "use_ollama": {
+      "value": true,
+      "type": "bool"
+    }
+  }
+}

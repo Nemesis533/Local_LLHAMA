@@ -1,0 +1,131 @@
+{
+  "home_weather": {
+    "entity_id": "home_weather",
+    "actions": ["home_weather"],
+    "description": "Get weather forecast for your home location",
+    "example": {"action": "home_weather", "target": "home_weather"},
+    "parameters": {}
+  },
+  "get_weather": {
+    "entity_id": "get_weather",
+    "actions": ["get_weather"],
+    "description": "Get current weather for any location in the world by place name",
+    "example": {"action": "get_weather", "target": "get_weather", "data": {"place": "New York"}},
+    "parameters": {
+      "place": {"required": true, "description": "Name of the location (city, country, etc.)"}
+    }
+  },
+  "get_wikipedia_summary": {
+    "entity_id": "get_wikipedia_summary",
+    "actions": ["get_wikipedia_summary"],
+    "description": "Get information from Wikipedia about any topic",
+    "example": {"action": "get_wikipedia_summary", "target": "get_wikipedia_summary", "data": {"topic": "Python programming"}},
+    "parameters": {
+      "topic": {"required": true, "description": "Topic or subject to look up on Wikipedia"}
+    }
+  },
+  "get_news_summary": {
+    "entity_id": "get_news_summary",
+    "actions": ["get_news_summary"],
+    "description": "Get latest news headlines about a specific topic",
+    "example": {"action": "get_news_summary", "target": "get_news_summary", "data": {"query": "technology"}},
+    "parameters": {
+      "query": {"required": true, "description": "News topic or search query"}
+    }
+  },
+  "add_reminder": {
+    "entity_id": "add_reminder",
+    "actions": ["add_reminder"],
+    "description": "Create a reminder for a specific date and time. Use for tasks that need to be remembered.",
+    "example": {"action": "add_reminder", "target": "add_reminder", "data": {"title": "Take medication", "when": "tomorrow at 09:00", "description": "Vitamin D supplement", "repeat": "daily"}},
+    "parameters": {
+      "title": {"required": true, "description": "What to be reminded about"},
+      "when": {"required": true, "description": "When to be reminded (ISO format like '2025-12-25 09:00' or natural language like 'tomorrow at 3pm')"},
+      "description": {"required": false, "description": "Optional additional details about the reminder"},
+      "repeat": {"required": false, "description": "Repeat pattern: 'none' (default), 'daily', 'weekly', 'monthly', 'yearly'"}
+    }
+  },
+  "add_appointment": {
+    "entity_id": "add_appointment",
+    "actions": ["add_appointment"],
+    "description": "Schedule an appointment. Use for meetings, doctor visits, or scheduled events.",
+    "example": {"action": "add_appointment", "target": "add_appointment", "data": {"title": "Doctor appointment", "when": "2025-12-25 14:30", "description": "Annual checkup"}},
+    "parameters": {
+      "title": {"required": true, "description": "Appointment title or purpose"},
+      "when": {"required": true, "description": "When the appointment is scheduled (ISO format or natural language)"},
+      "description": {"required": false, "description": "Optional appointment details or notes"}
+    }
+  },
+  "add_alarm": {
+    "entity_id": "add_alarm",
+    "actions": ["add_alarm"],
+    "description": "Set an alarm to go off at a specific time. Use for wake-up alarms or timed alerts.",
+    "example": {"action": "add_alarm", "target": "add_alarm", "data": {"title": "Wake up", "when": "tomorrow at 07:00", "repeat": "daily"}},
+    "parameters": {
+      "title": {"required": true, "description": "Alarm label or purpose"},
+      "when": {"required": true, "description": "When the alarm should go off (ISO format or natural language)"},
+      "repeat": {"required": false, "description": "Repeat pattern: 'none' (default), 'daily', 'weekly'"}
+    }
+  },
+  "get_upcoming_reminders": {
+    "entity_id": "get_upcoming_reminders",
+    "actions": ["get_upcoming_reminders"],
+    "description": "List all upcoming reminders within a specified number of days",
+    "example": {"action": "get_upcoming_reminders", "target": "get_upcoming_reminders", "data": {"days": 7}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
+    }
+  },
+  "get_upcoming_appointments": {
+    "entity_id": "get_upcoming_appointments",
+    "actions": ["get_upcoming_appointments"],
+    "description": "List all upcoming appointments within a specified number of days",
+    "example": {"action": "get_upcoming_appointments", "target": "get_upcoming_appointments", "data": {"days": 7}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
+    }
+  },
+  "get_alarms": {
+    "entity_id": "get_alarms",
+    "actions": ["get_alarms"],
+    "description": "List all active alarms that are currently set",
+    "example": {"action": "get_alarms", "target": "get_alarms"},
+    "parameters": {}
+  },
+  "get_all_upcoming_events": {
+    "entity_id": "get_all_upcoming_events",
+    "actions": ["get_all_upcoming_events"],
+    "description": "Get all upcoming events (reminders, appointments, and alarms) within a specified number of days",
+    "example": {"action": "get_all_upcoming_events", "target": "get_all_upcoming_events", "data": {"days": 7}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
+    }
+  },
+  "list_calendar": {
+    "entity_id": "list_calendar",
+    "actions": ["list_calendar"],
+    "description": "List all calendar entries in an organized format - shows reminders, appointments, and alarms grouped by type. Simple and comprehensive calendar view.",
+    "example": {"action": "list_calendar", "target": "list_calendar", "data": {"days": 7}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"}
+    }
+  },
+  "complete_reminder": {
+    "entity_id": "complete_reminder",
+    "actions": ["complete_reminder"],
+    "description": "Mark a reminder as completed. Search by title or keywords.",
+    "example": {"action": "complete_reminder", "target": "complete_reminder", "data": {"search_term": "medication"}},
+    "parameters": {
+      "search_term": {"required": true, "description": "Text to search for in reminder titles"}
+    }
+  },
+  "delete_reminder": {
+    "entity_id": "delete_reminder",
+    "actions": ["delete_reminder"],
+    "description": "Delete a reminder, appointment, or alarm. Search by title or keywords.",
+    "example": {"action": "delete_reminder", "target": "delete_reminder", "data": {"search_term": "workout"}},
+    "parameters": {
+      "search_term": {"required": true, "description": "Text to search for in event titles"}
+    }
+  }
+}

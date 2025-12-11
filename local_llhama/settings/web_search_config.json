@@ -1,0 +1,16 @@
+{
+  "allowed_websites": [
+    {
+      "name": "Google News",
+      "url": "https://news.google.com/home?hl=en-US&gl=US&ceid=US:en",
+      "description": "News aggregator from various sources"
+    },
+    {
+      "name": "Wikipedia",
+      "url": "https://it.wikipedia.org",
+      "description": "Free online encyclopedia"
+    }
+  ],
+  "max_results": 3,
+  "timeout": 10
+}
