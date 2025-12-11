@@ -12,7 +12,7 @@ As an independent system that runs on base Linux and interfaces with HA (or pote
 The project started as a voice-first domotic assistant has evolved into a **complete self-hosted AI assistant platform** that aims to deliver an all-in-one package.
 The trajectory change was caused by recent cloud-based AI services with ads and telemetry to which this project tries to offer an alternative.
 
-![Multi-command example](screenshot/chat_window_1.png)
+![Multi-command example](screenshots/chat_window_1.png)
 
 **Current State**:
 
@@ -67,7 +67,7 @@ The system now includes comprehensive configuration management as well as preset
 - Admin panel with user, language, prompt, system, web settings and more.
 - Role-based access control (admin, chat permission)
 
-![Admin Prompt Page](screenshot/admin_window.png)
+![Admin Prompt Page](screenshots/admin_window.png)
 
 ## Latest Additions
 
@@ -142,7 +142,7 @@ Edit `.env` with your credentials:
 
 **Important:** Never commit `.env` to version control.
 
-![Login Page](screenshot/login_window.png)
+![Login Page](screenshots/login_window.png)
 
 ## Configuration
 
