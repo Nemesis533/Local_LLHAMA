@@ -1,0 +1,76 @@
+{
+  "home_weather": {
+    "entity_id": "home_weather",
+    "actions": ["home_weather"],
+    "description": "Get weather forecast for your home location",
+    "display_name": "Checking the weather at Home...",
+    "example": {"action": "home_weather", "target": "home_weather"},
+    "parameters": {}
+  },
+  "get_weather": {
+    "entity_id": "get_weather",
+    "actions": ["get_weather"],
+    "description": "Get current weather for any location in the world by place name",
+    "display_name": "Consulting the Weather Service...",
+    "example": {"action": "get_weather", "target": "get_weather", "data": {"place": "New York"}},
+    "parameters": {
+      "place": {"required": true, "description": "Name of the location (city, country, etc.)"}
+    }
+  },
+  "get_wikipedia_summary": {
+    "entity_id": "get_wikipedia_summary",
+    "actions": ["get_wikipedia_summary"],
+    "description": "Get information from Wikipedia about any topic",
+    "display_name": "Searching Wikipedia...",
+    "example": {"action": "get_wikipedia_summary", "target": "get_wikipedia_summary", "data": {"topic": "Python programming"}},
+    "parameters": {
+      "topic": {"required": true, "description": "Topic or subject to look up on Wikipedia"}
+    }
+  },
+  "get_news_summary": {
+    "entity_id": "get_news_summary",
+    "actions": ["get_news_summary"],
+    "description": "Get latest news headlines about a specific topic",
+    "display_name": "Fetching The Latest News...",
+    "example": {"action": "get_news_summary", "target": "get_news_summary", "data": {"query": "technology"}},
+    "parameters": {
+      "query": {"required": true, "description": "News topic or search query"}
+    }
+  },
+  "add_event": {
+    "entity_id": "add_event",
+    "actions": ["add_event"],
+    "description": "Create a calendar event - reminder (tasks to remember), appointment (scheduled meetings/events), or alarm (time-based alerts). Reminders notify immediately, appointments notify 15 min before, alarms notify at exact time.",
+    "display_name": "Adding Event to Calendar...",
+    "example": {"action": "add_event", "target": "add_event", "data": {"event_type": "reminder", "title": "Take medication", "when": "tomorrow at 09:00", "description": "Vitamin D supplement", "repeat": "daily"}},
+    "parameters": {
+      "event_type": {"required": true, "description": "Type of event: 'reminder', 'appointment', or 'alarm'"},
+      "title": {"required": true, "description": "Event title or what to remember"},
+      "when": {"required": true, "description": "When the event occurs (ISO format like '2025-12-25 09:00' or natural language like 'tomorrow at 3pm')"},
+      "description": {"required": false, "description": "Optional additional details"},
+      "repeat": {"required": false, "description": "Repeat pattern: 'none' (default), 'daily', 'weekly', 'monthly', 'yearly'"}
+    }
+  },
+  "get_events": {
+    "entity_id": "get_events",
+    "actions": ["get_events"],
+    "description": "List upcoming calendar events. Can filter by event_type (reminder/appointment/alarm) or omit to get all events.",
+    "display_name": "Checking Calendar Events...",
+    "example": {"action": "get_events", "target": "get_events", "data": {"days": 7, "event_type": "reminder"}},
+    "parameters": {
+      "days": {"required": false, "description": "Number of days to look ahead (default 7)"},
+      "event_type": {"required": false, "description": "Filter by type: 'reminder', 'appointment', 'alarm', or omit for all events"}
+    }
+  },
+  "manage_event": {
+    "entity_id": "manage_event",
+    "actions": ["manage_event"],
+    "description": "Complete or delete calendar events. Searches for events by title/description keywords.",
+    "display_name": "Managing Calendar Event...",
+    "example": {"action": "manage_event", "target": "manage_event", "data": {"operation": "complete", "search_term": "medication"}},
+    "parameters": {
+      "operation": {"required": true, "description": "Action to perform: 'complete' or 'delete'"},
+      "search_term": {"required": true, "description": "Text to search for in event titles/descriptions"}
+    }
+  }
+}

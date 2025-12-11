@@ -1,0 +1,75 @@
+{
+  "name": "Multi-Lingual Large VRAM/Multi-GPU",
+  "description": "High-performance multilingual setup for high VRAM capacity or multiple GPUs. Best Overall Performance",
+  "requirements": {
+    "gpu_count": 1,
+    "vram_per_gpu": "24GB",
+    "languages": ["en", "fr", "de", "it", "es", "ru"]
+  },
+  "settings": {
+    "SettingLoaderClass": {
+      "ollama_model": {
+        "value": "gpt-oss:20b",
+        "type": "str"
+      },
+      "ollama_embedding_model": {
+        "value": "embeddinggemma",
+        "type": "str"
+      },
+      "allow_internet_searches": {
+        "value": true,
+        "type": "bool"
+      }
+    },
+    "AudioTranscriptionClass": {
+      "whisper_model": {
+        "value": "turbo",
+        "type": "str"
+      }
+    },
+    "TextToSpeech": {
+      "language_models": {
+        "value": {
+          "en": "en_US-amy-medium.onnx",
+          "fr": "fr_FR-siwis-medium.onnx",
+          "de": "de_DE-thorsten-high.onnx",
+          "it": "it_IT-paola-medium.onnx",
+          "es": "es_AR-daniela-high.onnx",
+          "ru": "ru_RU-ruslan-medium.onnx"
+        },
+        "type": "dict"
+      }
+    },
+    "ChatHandler": {
+      "max_tokens": {
+        "value": 4096,
+        "type": "int"
+      },
+      "default_context_words": {
+        "value": 400,
+        "type": "int"
+      },
+      "min_context_words": {
+        "value": 200,
+        "type": "int"
+      },
+      "context_reduction_factor": {
+        "value": 0.6,
+        "type": "float"
+      }
+    },
+    "OllamaClient": {
+      "languages": {
+        "value": {
+          "English": "en",
+          "French": "fr",
+          "German": "de",
+          "Italian": "it",
+          "Spanish": "es",
+          "Russian": "ru"
+        },
+        "type": "dict"
+      }
+    }
+  }
+}

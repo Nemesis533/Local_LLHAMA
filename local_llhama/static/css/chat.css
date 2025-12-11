@@ -1,0 +1,304 @@
+/**
+ * Chat Interface
+ * Chat layout, messages, and conversation styles
+ */
+
+/* Model Info Badge */
+.model-info {
+  display: block;
+  margin-left: var(--space-lg);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.model-label {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal);
+}
+
+.model-name {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+  font-family: 'Courier New', monospace;
+}
+
+.chat-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  gap: 0;
+  background: var(--bg-primary);
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Chat Sidebar */
+.chat-sidebar {
+  width: 300px;
+  border-right: 3px solid var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+}
+
+.chat-sidebar-header {
+  padding: var(--space-xl);
+  border-bottom: 3px solid var(--color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-sidebar h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.chat-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.placeholder-text {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+/* Main Chat Area */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Welcome Message */
+.welcome-message {
+  text-align: center;
+  padding: var(--space-2xl);
+  color: var(--text-muted);
+}
+
+.welcome-message h3 {
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--space-md);
+  color: var(--text-secondary);
+}
+
+.welcome-message p {
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+/* Chat Messages */
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  max-width: 80%;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user-message {
+  align-self: flex-end;
+  background: var(--color-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-primary-dark);
+}
+
+.assistant-message {
+  align-self: flex-start;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-secondary);
+  border: 1px solid var(--border-light);
+}
+
+.system-message {
+  align-self: center;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  max-width: 60%;
+  font-size: var(--font-size-sm);
+  font-style: normal;
+  border-left: 4px solid var(--color-warning);
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+  gap: var(--space-md);
+}
+
+.message-type {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.message-time {
+  font-size: var(--font-size-xs);
+  opacity: 0.7;
+}
+
+.message-content {
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+/* Code Blocks in Messages */
+.message-content code {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  border: 1px solid var(--bg-tertiary);
+}
+
+.user-message .message-content code {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.message-content pre {
+  background: var(--color-slate-900);
+  color: var(--color-gray-200);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: var(--space-sm) 0;
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  display: block;
+  white-space: pre;
+}
+
+/* Loading Indicator */
+.loading-message {
+  align-self: flex-start;
+  padding: var(--space-md);
+}
+
+/* Streaming Message Indicator */
+.streaming-message {
+  position: relative;
+}
+
+.streaming-message::after {
+  content: '▋';
+  display: inline-block;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+  color: var(--color-secondary);
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Status Message Indicator */
+.status-message {
+  opacity: 0.9;
+  font-style: italic;
+}
+
+.status-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-secondary);
+}
+
+.status-icon {
+  font-size: 1.2em;
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: var(--space-xs);
+  margin-left: var(--space-xs);
+}
+
+.loading-dots .dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+/* Chat Input */
+.chat-input-container {
+  border-top: 3px solid var(--color-primary);
+  padding: var(--space-xl);
+  background: var(--bg-secondary);
+  display: flex;
+  gap: var(--space-md);
+}
+
+.chat-input {
+  flex: 1;
+  padding: var(--space-md);
+  border: 2px solid var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  resize: none;
+  min-height: 60px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  max-height: 200px;
+  transition: border-color var(--transition-base);
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(224, 244, 255, 0.2);
+}

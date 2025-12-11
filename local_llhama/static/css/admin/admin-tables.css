@@ -1,0 +1,116 @@
+/**
+ * Admin Tables Styles
+ * Users table and data display
+ */
+
+.users-table-container {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-light);
+    overflow: hidden;
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.users-table th {
+    background: var(--color-primary);
+    color: var(--text-primary);
+    padding: var(--space-md);
+    text-align: left;
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: var(--font-size-sm);
+}
+
+.users-table td {
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary);
+    height: 70px;
+    vertical-align: middle;
+}
+
+.users-table tr:hover {
+    background: var(--bg-hover);
+}
+
+.permission-badge {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    margin: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    min-height: 24px;
+    vertical-align: middle;
+}
+
+.badge-yes {
+    background: var(--color-success);
+    color: var(--text-primary);
+}
+
+.badge-no {
+    background: var(--color-danger);
+    color: var(--text-primary);
+}
+
+.badge-admin {
+    background: var(--color-secondary);
+    color: var(--text-primary);
+}
+
+.badge-warning {
+    background: var(--color-warning);
+    color: var(--text-primary);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.btn-small {
+    padding: 8px 12px;
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-edit {
+    background: var(--color-secondary);
+    color: var(--text-primary);
+}
+
+.btn-reset {
+    background: var(--color-warning);
+    color: var(--text-primary);
+}
+
+.btn-delete {
+    background: var(--color-danger);
+    color: var(--text-primary);
+}
+
+.btn-small:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}

@@ -1,0 +1,1050 @@
+// Admin Panel JavaScript
+
+let currentEditingUser = null;
+
+// Load users on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+    // Preload language settings (but don't display yet)
+    loadLanguageSettings();
+    // Preload prompts data (but don't display yet)
+    loadPromptsData();
+    // Preload web search config (but don't display yet)
+    loadWebSearchConfig();
+});
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/admin/users');
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        displayUsers(data.users);
+    } catch (error) {
+        showError('Failed to load users: ' + error.message);
+    }
+}
+
+function displayUsers(users) {
+    const tbody = document.getElementById('users-table-body');
+    
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = users.map(user => `
+        <tr>
+            <td><strong>${escapeHtml(user.username)}</strong></td>
+            <td>
+                ${user.is_active ? '<span class="permission-badge badge-yes">Active</span>' : '<span class="permission-badge badge-no">Inactive</span>'}
+                ${user.must_change_password ? '<span class="permission-badge badge-warning">Must Change Password</span>' : ''}
+            </td>
+            <td>
+                ${user.is_admin ? '<span class="permission-badge badge-admin">Admin</span>' : ''}
+                ${user.can_access_dashboard ? '<span class="permission-badge badge-yes">Dashboard</span>' : '<span class="permission-badge badge-no">No Dashboard</span>'}
+                ${user.can_access_chat ? '<span class="permission-badge badge-yes">Chat</span>' : '<span class="permission-badge badge-no">No Chat</span>'}
+            </td>
+            <td>${formatDate(user.created_at)}</td>
+            <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-small btn-edit" onclick="editPermissions('${escapeHtml(user.username)}', ${JSON.stringify(user).replace(/"/g, '&quot;')})">Edit</button>
+                    <button class="btn-small btn-reset" onclick="resetPassword('${escapeHtml(user.username)}')">Reset Password</button>
+                    ${user.username !== 'admin' ? `<button class="btn-small btn-delete" onclick="deleteUser('${escapeHtml(user.username)}')">Delete</button>` : ''}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showCreateUserModal() {
+    document.getElementById('createUserModal').style.display = 'block';
+    document.getElementById('createUserForm').reset();
+    document.getElementById('newPasswordDisplay').style.display = 'none';
+}
+
+function editPermissions(username, userData) {
+    currentEditingUser = username;
+    document.getElementById('editUsername').textContent = username;
+    document.getElementById('editIsAdmin').checked = userData.is_admin;
+    document.getElementById('editCanDashboard').checked = userData.can_access_dashboard;
+    document.getElementById('editCanChat').checked = userData.can_access_chat;
+    document.getElementById('editIsActive').checked = userData.is_active;
+    document.getElementById('editPermissionsModal').style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+
+// Create User Form Handler
+document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const username = document.getElementById('newUsername').value.trim();
+    const isAdmin = document.getElementById('newIsAdmin').checked;
+    const canDashboard = document.getElementById('newCanDashboard').checked;
+    const canChat = document.getElementById('newCanChat').checked;
+    
+    try {
+        const response = await fetch('/admin/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: username,
+                is_admin: isAdmin,
+                can_access_dashboard: canDashboard,
+                can_access_chat: canChat
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        if (data.success) {
+            // Show generated password
+            document.getElementById('newPasswordDisplay').innerHTML = `
+                <div class="password-display">
+                    <h3>⚠️ User Created Successfully</h3>
+                    <p>Username: <strong>${escapeHtml(data.username)}</strong></p>
+                    <p>Temporary Password:</p>
+                    <div class="password-value">${escapeHtml(data.password)}</div>
+                    <p class="password-warning">${data.warning}</p>
+                </div>
+            `;
+            document.getElementById('newPasswordDisplay').style.display = 'block';
+            
+            // Hide form
+            document.getElementById('createUserForm').style.display = 'none';
+            
+            // Reload users list
+            loadUsers();
+        }
+    } catch (error) {
+        showError('Failed to create user: ' + error.message);
+    }
+});
+
+// Edit Permissions Form Handler
+document.getElementById('editPermissionsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    if (!currentEditingUser) return;
+    
+    const isAdmin = document.getElementById('editIsAdmin').checked;
+    const canDashboard = document.getElementById('editCanDashboard').checked;
+    const canChat = document.getElementById('editCanChat').checked;
+    const isActive = document.getElementById('editIsActive').checked;
+    
+    try {
+        const response = await fetch(`/admin/users/${currentEditingUser}/permissions`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                is_admin: isAdmin,
+                can_access_dashboard: canDashboard,
+                can_access_chat: canChat,
+                is_active: isActive
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        if (data.success) {
+            closeModal('editPermissionsModal');
+            loadUsers();
+            showSuccess('Permissions updated successfully');
+        }
+    } catch (error) {
+        showError('Failed to update permissions: ' + error.message);
+    }
+});
+
+async function resetPassword(username) {
+    if (!confirm(`Reset password for user "${username}"? A new temporary password will be generated.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/users/${username}/password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        if (data.success) {
+            // Show new password in modal
+            document.getElementById('resetPasswordDisplay').innerHTML = `
+                <div class="password-display">
+                    <h3>⚠️ Password Reset Successfully</h3>
+                    <p>Username: <strong>${escapeHtml(data.username)}</strong></p>
+                    <p>New Temporary Password:</p>
+                    <div class="password-value">${escapeHtml(data.password)}</div>
+                    <p class="password-warning">${data.warning}</p>
+                    <p class="password-warning">User will be required to change this password on next login.</p>
+                </div>
+            `;
+            document.getElementById('resetPasswordModal').style.display = 'block';
+            loadUsers();
+        }
+    } catch (error) {
+        showError('Failed to reset password: ' + error.message);
+    }
+}
+
+async function deleteUser(username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/users/${username}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        
+        if (data.success) {
+            loadUsers();
+            showSuccess('User deleted successfully');
+        }
+    } catch (error) {
+        showError('Failed to delete user: ' + error.message);
+    }
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showError(message) {
+    alert('Error: ' + message);
+}
+
+function showSuccess(message) {
+    alert(message);
+}
+
+// ==========================================
+// Tab Management
+// ==========================================
+
+function switchTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+        tab.style.display = 'none';
+    });
+    
+    // Remove active class from all buttons
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab
+    const selectedTab = document.getElementById(tabName + '-tab');
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+        selectedTab.style.display = 'block';
+    }
+    
+    // Activate the clicked button - improved matching
+    const buttons = document.querySelectorAll('.tab-button');
+    buttons.forEach(btn => {
+        const btnText = btn.textContent.toLowerCase();
+        if ((tabName === 'users' && btnText.includes('user')) ||
+            (tabName === 'languages' && btnText.includes('language')) ||
+            (tabName === 'prompts' && btnText.includes('prompt')) ||
+            (tabName === 'websearch' && btnText.includes('web'))) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Refresh data when switching tabs
+    if (tabName === 'languages') {
+        displayLanguageMappings();
+    }
+    
+    if (tabName === 'prompts') {
+        displayPrompts();
+    }
+    
+    if (tabName === 'websearch') {
+        displayWebSearchConfig();
+    }
+}
+
+// ==========================================
+// Language Management
+// ==========================================
+
+let languageModels = {};
+let availableVoices = [];
+
+async function loadLanguageSettings() {
+    try {
+        // Load current language models
+        const modelsResponse = await fetch('/settings/language-models');
+        const modelsData = await modelsResponse.json();
+        
+        if (modelsData.status === 'ok') {
+            languageModels = modelsData.language_models;
+        }
+        
+        // Load available voice files
+        const voicesResponse = await fetch('/settings/available-voices');
+        const voicesData = await voicesResponse.json();
+        
+        if (voicesData.status === 'ok') {
+            availableVoices = voicesData.voices;
+        }
+        
+        displayLanguageMappings();
+        
+    } catch (error) {
+        showError('Failed to load language settings: ' + error.message);
+    }
+}
+
+function displayLanguageMappings() {
+    const container = document.getElementById('language-mappings-container');
+    
+    if (Object.keys(languageModels).length === 0) {
+        container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No language mappings configured. Click "Add Language" to create one.</p>';
+        return;
+    }
+    
+    container.innerHTML = Object.entries(languageModels).map(([langCode, modelFile]) => `
+        <div class="language-mapping" data-lang="${escapeHtml(langCode)}">
+            <label style="font-weight: 500; min-width: 100px;">Language Code:</label>
+            <input type="text" value="${escapeHtml(langCode)}" 
+                   onchange="updateLanguageCode('${escapeHtml(langCode)}', this.value)"
+                   placeholder="e.g., en, fr, de">
+            
+            <label style="font-weight: 500;">Voice Model:</label>
+            <select onchange="updateLanguageModel('${escapeHtml(langCode)}', this.value)">
+                ${availableVoices.map(voice => `
+                    <option value="${escapeHtml(voice)}" ${voice === modelFile ? 'selected' : ''}>
+                        ${escapeHtml(voice)}
+                    </option>
+                `).join('')}
+            </select>
+            
+            <button class="btn-small btn-danger" onclick="removeLanguageMapping('${escapeHtml(langCode)}')">
+                ✕ Remove
+            </button>
+        </div>
+    `).join('');
+}
+
+function addLanguageMapping() {
+    if (availableVoices.length === 0) {
+        showError('No voice models available. Please add .onnx files to the piper_voices directory.');
+        return;
+    }
+    
+    // Find a new language code that doesn't exist
+    let newLangCode = 'new';
+    let counter = 1;
+    while (languageModels[newLangCode]) {
+        newLangCode = 'new' + counter;
+        counter++;
+    }
+    
+    languageModels[newLangCode] = availableVoices[0];
+    displayLanguageMappings();
+}
+
+function updateLanguageCode(oldCode, newCode) {
+    newCode = newCode.trim().toLowerCase();
+    
+    if (!newCode) {
+        showError('Language code cannot be empty');
+        displayLanguageMappings();
+        return;
+    }
+    
+    if (newCode !== oldCode && languageModels[newCode]) {
+        showError('Language code "' + newCode + '" already exists');
+        displayLanguageMappings();
+        return;
+    }
+    
+    if (newCode !== oldCode) {
+        languageModels[newCode] = languageModels[oldCode];
+        delete languageModels[oldCode];
+        displayLanguageMappings();
+    }
+}
+
+function updateLanguageModel(langCode, modelFile) {
+    languageModels[langCode] = modelFile;
+}
+
+function removeLanguageMapping(langCode) {
+    if (confirm('Are you sure you want to remove the mapping for "' + langCode + '"?')) {
+        delete languageModels[langCode];
+        displayLanguageMappings();
+    }
+}
+
+async function saveLanguageModels() {
+    const statusDiv = document.getElementById('language-save-status');
+    
+    try {
+        const response = await fetch('/settings/language-models', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                language_models: languageModels
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            statusDiv.className = 'save-status success';
+            statusDiv.textContent = '✓ Language models saved successfully! Changes will take effect on next system restart.';
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            throw new Error(data.message || 'Failed to save');
+        }
+        
+    } catch (error) {
+        statusDiv.className = 'save-status error';
+        statusDiv.textContent = '✗ Error saving language models: ' + error.message;
+        statusDiv.style.display = 'block';
+    }
+}
+
+// ==========================================
+// Prompt Management
+// ==========================================
+
+let promptsData = {};
+
+async function loadPromptsData() {
+    try {
+        const response = await fetch('/settings/prompts');
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            promptsData = data.prompts;
+            return true;
+        } else {
+            showError('Failed to load prompts: ' + data.message);
+            return false;
+        }
+    } catch (error) {
+        showError('Failed to load prompts: ' + error.message);
+        return false;
+    }
+}
+
+async function displayPrompts() {
+    // Load data if not already loaded
+    if (Object.keys(promptsData).length === 0) {
+        const loaded = await loadPromptsData();
+        if (!loaded) return;
+    }
+    
+    const container = document.getElementById('prompts-container');
+    
+    if (Object.keys(promptsData).length === 0) {
+        container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No prompts configured.</p>';
+        return;
+    }
+    
+    // Define which prompts need template variables
+    const templateVarPrompts = ['smart_home_prompt_template'];
+    
+    container.innerHTML = Object.entries(promptsData).map(([promptKey, promptConfig]) => {
+        const description = promptConfig.description || 'No description available';
+        const value = promptConfig.value || '';
+        const displayName = promptKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        // Check if this prompt needs template variables
+        const needsTemplateVars = templateVarPrompts.includes(promptKey);
+        
+        let templateVarSection = '';
+        if (needsTemplateVars) {
+            templateVarSection = `
+                <div class="template-var-info">
+                    <strong>⚠️ Template Variables:</strong> This prompt requires specific template variables. 
+                    Use the buttons below to insert them at your cursor position.
+                </div>
+                <div class="template-variables">
+                    <button class="template-var-btn" onclick="insertTemplateVariable('${promptKey}', '{devices_context}')">
+                        Insert {devices_context}
+                    </button>
+                    <button class="template-var-btn" onclick="insertTemplateVariable('${promptKey}', '{simple_functions_context}')">
+                        Insert {simple_functions_context}
+                    </button>
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="prompt-editor">
+                <div class="prompt-header" onclick="togglePromptBody('${promptKey}')">
+                    <span>${displayName}</span>
+                    <span id="toggle-icon-${promptKey}">▶</span>
+                </div>
+                <div id="prompt-body-${promptKey}" class="prompt-body" style="display: none;">
+                    <div class="prompt-description">${escapeHtml(description)}</div>
+                    
+                    <label for="prompt-desc-${promptKey}">Description:</label>
+                    <input type="text" id="prompt-desc-${promptKey}" 
+                           value="${escapeHtml(description)}"
+                           onchange="updatePromptDescription('${promptKey}', this.value)">
+                    
+                    ${templateVarSection}
+                    
+                    <label for="prompt-value-${promptKey}">Prompt Content:</label>
+                    <textarea id="prompt-value-${promptKey}" 
+                              onchange="updatePromptValue('${promptKey}', this.value)"
+                    >${escapeHtml(value)}</textarea>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function togglePromptBody(promptKey) {
+    const body = document.getElementById(`prompt-body-${promptKey}`);
+    const icon = document.getElementById(`toggle-icon-${promptKey}`);
+    
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+
+function updatePromptDescription(promptKey, newDescription) {
+    if (promptsData[promptKey]) {
+        promptsData[promptKey].description = newDescription;
+    }
+}
+
+function updatePromptValue(promptKey, newValue) {
+    if (promptsData[promptKey]) {
+        promptsData[promptKey].value = newValue;
+    }
+}
+
+function insertTemplateVariable(promptKey, variable) {
+    const textarea = document.getElementById(`prompt-value-${promptKey}`);
+    
+    if (!textarea) return;
+    
+    // Get cursor position
+    const startPos = textarea.selectionStart;
+    const endPos = textarea.selectionEnd;
+    const currentValue = textarea.value;
+    
+    // Insert the variable at cursor position
+    const newValue = currentValue.substring(0, startPos) + variable + currentValue.substring(endPos);
+    
+    // Update textarea
+    textarea.value = newValue;
+    
+    // Update the data
+    updatePromptValue(promptKey, newValue);
+    
+    // Set cursor position after inserted text
+    const newCursorPos = startPos + variable.length;
+    textarea.focus();
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+    
+    // Visual feedback
+    textarea.style.background = '#e8f4f8';
+    setTimeout(() => {
+        textarea.style.background = 'white';
+    }, 200);
+}
+
+async function savePrompts() {
+    const statusDiv = document.getElementById('prompts-save-status');
+    
+    try {
+        const response = await fetch('/settings/prompts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompts: promptsData
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            statusDiv.className = 'save-status success';
+            statusDiv.textContent = '✓ Prompts saved successfully! Changes will take effect on next system restart.';
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            throw new Error(data.message || 'Failed to save');
+        }
+        
+    } catch (error) {
+        statusDiv.className = 'save-status error';
+        statusDiv.textContent = '✗ Error saving prompts: ' + error.message;
+        statusDiv.style.display = 'block';
+    }
+}
+
+// ===== WEB SEARCH CONFIGURATION =====
+
+let webSearchConfig = null;
+
+async function loadWebSearchConfig() {
+    try {
+        const response = await fetch('/settings/web-search');
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            webSearchConfig = data.config;
+            // Don't display yet - will display when tab is switched
+        } else {
+            console.error('Failed to load web search config:', data.message);
+        }
+    } catch (error) {
+        console.error('Error loading web search config:', error);
+    }
+}
+
+function displayWebSearchConfig() {
+    if (!webSearchConfig) {
+        console.error('No web search config data loaded');
+        return;
+    }
+    
+    // Set general settings
+    document.getElementById('max-results').value = webSearchConfig.max_results || 3;
+    document.getElementById('search-timeout').value = webSearchConfig.timeout || 10;
+    
+    // Set API tokens
+    const apiTokens = webSearchConfig.api_tokens || {};
+    document.getElementById('newsdata-api-key').value = apiTokens.newsdata || '';
+    document.getElementById('google-api-key').value = apiTokens.google || '';
+    
+    // Display allowed websites
+    displayWebsites();
+}
+
+function displayWebsites() {
+    const container = document.getElementById('websites-container');
+    const websites = webSearchConfig.allowed_websites || [];
+    
+    if (websites.length === 0) {
+        container.innerHTML = '<p style="color: #999; font-style: italic;">No websites configured yet.</p>';
+        return;
+    }
+    
+    container.innerHTML = websites.map((site, index) => `
+        <div class="website-item" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #3498db;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 8px;">
+                        <strong style="color: #2c3e50; font-size: 15px;">${escapeHtml(site.name)}</strong>
+                    </div>
+                    <div style="margin-bottom: 6px;">
+                        <span style="color: #666; font-size: 13px;">URL:</span>
+                        <code style="background: white; padding: 2px 6px; border-radius: 3px; font-size: 12px;">${escapeHtml(site.url)}</code>
+                    </div>
+                    <div style="color: #666; font-size: 13px;">
+                        ${escapeHtml(site.description || 'No description')}
+                    </div>
+                </div>
+                <div style="display: flex; gap: 5px; margin-left: 15px;">
+                    <button class="btn-small" onclick="editWebsite(${index})" title="Edit Website">✏️</button>
+                    <button class="btn-small" style="background: #e74c3c; color: white;" onclick="deleteWebsite(${index})" title="Delete Website">🗑️</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addWebsite() {
+    const name = prompt('Enter website name (e.g., "Wikipedia"):');
+    if (!name) return;
+    
+    const url = prompt('Enter website URL (e.g., "https://en.wikipedia.org"):');
+    if (!url) return;
+    
+    const description = prompt('Enter description (optional):') || '';
+    
+    if (!webSearchConfig.allowed_websites) {
+        webSearchConfig.allowed_websites = [];
+    }
+    
+    webSearchConfig.allowed_websites.push({
+        name: name.trim(),
+        url: url.trim(),
+        description: description.trim()
+    });
+    
+    displayWebsites();
+}
+
+function editWebsite(index) {
+    const site = webSearchConfig.allowed_websites[index];
+    
+    const name = prompt('Enter website name:', site.name);
+    if (name === null) return; // User cancelled
+    
+    const url = prompt('Enter website URL:', site.url);
+    if (url === null) return;
+    
+    const description = prompt('Enter description:', site.description || '');
+    if (description === null) return;
+    
+    webSearchConfig.allowed_websites[index] = {
+        name: name.trim(),
+        url: url.trim(),
+        description: description.trim()
+    };
+    
+    displayWebsites();
+}
+
+function deleteWebsite(index) {
+    const site = webSearchConfig.allowed_websites[index];
+    
+    if (confirm(`Delete website "${site.name}"?`)) {
+        webSearchConfig.allowed_websites.splice(index, 1);
+        displayWebsites();
+    }
+}
+
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    const button = event.target;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.textContent = '🙈 Hide';
+    } else {
+        input.type = 'password';
+        button.textContent = '👁 Show';
+    }
+}
+
+async function saveWebSearchConfig() {
+    const statusDiv = document.getElementById('websearch-save-status');
+    
+    try {
+        // Gather current form values
+        webSearchConfig.max_results = parseInt(document.getElementById('max-results').value);
+        webSearchConfig.timeout = parseInt(document.getElementById('search-timeout').value);
+        
+        // Update API tokens
+        if (!webSearchConfig.api_tokens) {
+            webSearchConfig.api_tokens = {};
+        }
+        
+        const newsdataKey = document.getElementById('newsdata-api-key').value.trim();
+        const googleKey = document.getElementById('google-api-key').value.trim();
+        
+        if (newsdataKey) {
+            webSearchConfig.api_tokens.newsdata = newsdataKey;
+        } else {
+            delete webSearchConfig.api_tokens.newsdata;
+        }
+        
+        if (googleKey) {
+            webSearchConfig.api_tokens.google = googleKey;
+        } else {
+            delete webSearchConfig.api_tokens.google;
+        }
+        
+        // Send to server
+        const response = await fetch('/settings/web-search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                config: webSearchConfig
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            statusDiv.className = 'save-status success';
+            statusDiv.textContent = '✓ Web search configuration saved successfully! Changes will take effect on next system restart.';
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            throw new Error(data.message || 'Failed to save');
+        }
+        
+    } catch (error) {
+        statusDiv.className = 'save-status error';
+        statusDiv.textContent = '✗ Error saving web search configuration: ' + error.message;
+        statusDiv.style.display = 'block';
+    }
+}
+
+// ============================================================================
+// Configuration Presets Functions
+// ============================================================================
+
+async function loadPresets() {
+    try {
+        // Load available presets
+        const presetsResponse = await fetch('/presets');
+        const presetsData = await presetsResponse.json();
+        
+        // Load current configuration
+        const currentResponse = await fetch('/presets/current');
+        const currentData = await currentResponse.json();
+        
+        console.log('Current config data:', currentData);
+        
+        if (currentData.status === 'ok') {
+            displayCurrentConfig(currentData.current_config);
+        }
+        
+        if (presetsData.status === 'ok') {
+            console.log('Active preset ID before display:', activePresetId);
+            displayPresets(presetsData.presets);
+        }
+    } catch (error) {
+        console.error('Failed to load presets:', error);
+        document.getElementById('presets-container').innerHTML = 
+            '<div style="color: #d32f2f; padding: 20px;">Failed to load presets: ' + error.message + '</div>';
+    }
+}
+
+// Store active preset ID and name globally
+let activePresetId = null;
+let activePresetName = null;
+
+function displayCurrentConfig(config) {
+    const display = document.getElementById('current-config-display');
+    activePresetId = config.active_preset || null;
+    
+    console.log('Config object:', config);
+    console.log('Setting activePresetId to:', activePresetId);
+    
+    display.innerHTML = `
+        <div style="display: grid; gap: 10px;">
+            ${activePresetId ? `<div style="background: #fff3e0; padding: 12px; border-radius: 6px; margin-bottom: 8px; border: 2px solid #ff9800;"><strong>📦 Active Preset:</strong> <span style="color: #ff9800; font-weight: bold; font-size: 16px;" id="active-preset-name">${escapeHtml(activePresetId)}</span></div>` : ''}
+            <div><strong>LLM Model:</strong> <span style="color: #1976d2;">${escapeHtml(config.llm_model)}</span></div>
+            <div><strong>Whisper Model:</strong> <span style="color: #1976d2;">${escapeHtml(config.whisper_model)}</span></div>
+            <div><strong>Languages:</strong> <span style="color: #1976d2;">${config.languages.join(', ')}</span></div>
+        </div>
+    `;
+}
+
+function displayPresets(presets) {
+    const container = document.getElementById('presets-container');
+    
+    if (presets.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No presets available</div>';
+        return;
+    }
+    
+    // Sort presets alphabetically by name
+    const sortedPresets = presets.sort((a, b) => a.name.localeCompare(b.name));
+    
+    container.innerHTML = sortedPresets.map(preset => {
+        const isActive = activePresetId && activePresetId === preset.id;
+        const req = preset.requirements || {};
+        
+        console.log(`Preset ${preset.id}: isActive=${isActive}, activePresetId=${activePresetId}`);
+        
+        // Store active preset name for display
+        if (isActive) {
+            activePresetName = preset.name;
+            // Update the active preset name in current config if element exists
+            setTimeout(() => {
+                const nameEl = document.getElementById('active-preset-name');
+                if (nameEl) {
+                    nameEl.textContent = preset.name;
+                }
+            }, 100);
+        }
+        
+        // Fetch detailed info for each preset (we'll do this inline for simplicity)
+        return `
+            <div class="preset-card ${isActive ? 'active' : ''}" data-preset-id="${escapeHtml(preset.id)}">
+                <h3>${escapeHtml(preset.name)}</h3>
+                <div class="preset-description">${escapeHtml(preset.description)}</div>
+                
+                <div class="preset-specs">
+                    <div class="preset-spec-item">
+                        <span class="preset-spec-label">📦 LLM Model:</span>
+                        <span class="preset-spec-value" id="llm-${escapeHtml(preset.id)}">Loading...</span>
+                    </div>
+                    <div class="preset-spec-item">
+                        <span class="preset-spec-label">🎤 Whisper:</span>
+                        <span class="preset-spec-value" id="whisper-${escapeHtml(preset.id)}">Loading...</span>
+                    </div>
+                    <div class="preset-spec-item">
+                        <span class="preset-spec-label">🌍 Languages:</span>
+                        <span class="preset-spec-value" id="lang-${escapeHtml(preset.id)}">Loading...</span>
+                    </div>
+                </div>
+                
+                ${req.gpu_count || req.vram_per_gpu ? `
+                <div class="preset-requirements">
+                    <strong>Requirements:</strong>
+                    ${req.gpu_count ? `<div>• GPUs: ${req.gpu_count}</div>` : ''}
+                    ${req.vram_per_gpu ? `<div>• VRAM: ${req.vram_per_gpu} per GPU</div>` : ''}
+                </div>
+                ` : ''}
+                
+                <button class="preset-apply-btn" onclick="applyPreset('${escapeHtml(preset.id)}', '${escapeHtml(preset.name)}')" ${isActive ? 'disabled' : ''}>
+                    ${isActive ? 'Currently Active' : 'Apply This Preset'}
+                </button>
+            </div>
+        `;
+    }).join('');
+    
+    // Load detailed info for each preset
+    presets.forEach(preset => {
+        loadPresetDetails(preset.id);
+    });
+}
+
+async function loadPresetDetails(presetId) {
+    try {
+        const response = await fetch(`/presets/${presetId}`);
+        const data = await response.json();
+        
+        if (data.status === 'ok' && data.preset) {
+            const summary = data.preset.settings_summary;
+            document.getElementById(`llm-${presetId}`).textContent = summary.llm_model;
+            document.getElementById(`whisper-${presetId}`).textContent = summary.whisper_model;
+            document.getElementById(`lang-${presetId}`).textContent = summary.languages.join(', ');
+        }
+    } catch (error) {
+        console.error(`Failed to load details for preset ${presetId}:`, error);
+    }
+}
+
+async function applyPreset(presetId, presetName) {
+    if (!confirm(`Apply preset "${presetName}"?\n\n⚠️ You will need to restart the system for changes to take effect.\n\nContinue?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/presets/${presetId}/apply`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            alert(`✅ Success!\n\n${data.message}\n\nPlease restart the Local LLHAMA system to apply these changes.`);
+            // Reload presets and current config to show the active state
+            await loadPresets();
+        } else {
+            alert(`❌ Error: ${data.message}`);
+        }
+    } catch (error) {
+        alert(`❌ Failed to apply preset: ${error.message}`);
+    }
+}
+
+// System restart function
+async function restartSystem() {
+    if (!confirm('Are you sure you want to restart the Local LLHAMA system?\n\nYou will be redirected to the dashboard where you can monitor the restart progress.')) {
+        return;
+    }
+    
+    try {
+        // Redirect to dashboard immediately with restart parameter
+        window.location.href = '/dashboard?restarting=true';
+        
+        // Send restart command (will execute even as page is redirecting)
+        fetch('/restart-system', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ action: 'restart' })
+        }).catch(err => console.error('Restart request failed:', err));
+        
+    } catch (error) {
+        alert(`❌ Failed to initiate restart: ${error.message}`);
+    }
+}
+
+// Load presets when switching to the presets tab
+const originalSwitchTab = switchTab;
+switchTab = function(tabName) {
+    originalSwitchTab(tabName);
+    if (tabName === 'presets') {
+        loadPresets();
+    }
+};

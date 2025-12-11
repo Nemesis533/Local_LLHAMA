@@ -1,0 +1,311 @@
+/**
+ * Admin Preset Styles
+ * Configuration preset cards and details
+ */
+
+.preset-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-xl);
+    transition: all var(--transition-base);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 4px 16px rgba(224, 244, 255, 0.219);
+}
+
+.preset-card h3 {
+    margin: 0 0 var(--space-md) 0;
+    color: var(--text-primary);
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preset-card .preset-description {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-md);
+    line-height: 1.5;
+    height: 60px;
+    overflow-y: auto;
+    padding-right: var(--space-xs);
+}
+
+.preset-card .preset-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+    font-size: 13px;
+}
+
+.preset-card .preset-spec-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preset-card .preset-spec-label {
+    font-weight: var(--font-weight-bold);
+    color: var(--text-secondary);
+    min-width: 120px;
+    text-transform: uppercase;
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.3px;
+}
+
+.preset-card .preset-spec-value {
+    color: var(--color-secondary);
+    font-family: 'Courier New', monospace;
+    font-weight: var(--font-weight-medium);
+}
+
+.preset-card .preset-requirements {
+    background: var(--bg-tertiary);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+    font-size: var(--font-size-sm);
+    border: 2px solid var(--border-light);
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-card .preset-requirements strong {
+    display: block;
+    margin-bottom: var(--space-xs);
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: var(--font-size-xs);
+}
+
+.preset-card .preset-buttons-container {
+    margin-top: auto;
+}
+
+.preset-card .preset-apply-btn {
+    width: 100%;
+    padding: var(--space-md);
+    background: var(--color-primary);
+    color: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preset-card .preset-apply-btn:hover {
+    background: var(--color-primary-dark);
+    box-shadow: 0 4px 12px rgba(224, 244, 255, 0.6);
+}
+
+/* Active preset */
+.preset-card.active {
+    border-color: var(--color-primary);
+    border-width: 4px;
+    box-shadow: 0 0 20px rgba(224, 244, 255, 0.6), 0 0 40px rgba(224, 244, 255, 0.3);
+    position: relative;
+    background: var(--bg-secondary);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(224, 244, 255, 0.6), 0 0 40px rgba(224, 244, 255, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(224, 244, 255, 0.8), 0 0 60px rgba(224, 244, 255, 0.5);
+    }
+}
+
+.preset-card.active::after {
+    content: "▣ ACTIVE";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--color-primary);
+    color: var(--text-primary);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preset-card.active .preset-apply-btn {
+    background: #4caf50;
+    color: white;
+    cursor: default;
+}
+
+.preset-card.active .preset-apply-btn:hover {
+    background: #4caf50;
+    box-shadow: none;
+}
+
+/* Preset buttons container */
+.preset-buttons-container {
+    position: relative;
+}
+
+/* Preset details expansion */
+.preset-details-toggle {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-md);
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.preset-details-toggle:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--text-primary);
+}
+
+.preset-details-toggle .toggle-icon {
+    transition: transform var(--transition-base);
+}
+
+.preset-details-toggle.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.preset-details-content {
+    position: absolute;
+    left: 0;
+    width: 200%;
+    top: 100%;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, width 0.3s ease;
+    z-index: 10;
+    background: var(--bg-primary);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.preset-details-content.expanded {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.preset-settings-section {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.preset-settings-section h4 {
+    color: #000;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--color-primary);
+    padding-bottom: var(--space-xs);
+}
+
+.preset-setting-item {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.preset-setting-item:last-child {
+    border-bottom: none;
+}
+
+.preset-setting-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.preset-setting-value {
+    color: #333;
+    font-size: var(--font-size-sm);
+    font-family: 'Monaco', 'Courier New', monospace;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-word;
+}
+
+/* Create New Preset Card */
+.preset-card.create-new {
+    border: 3px dashed var(--color-primary);
+    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.preset-card.create-new:hover {
+    background: var(--bg-secondary);
+    border-color: var(--color-secondary);
+    transform: scale(1.02);
+}
+
+.preset-card.create-new .create-icon {
+    font-size: 64px;
+    color: var(--color-primary);
+    margin-bottom: var(--space-md);
+}
+
+.preset-card.create-new .create-text {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preset-form-section {
+    margin-bottom: var(--space-xl);
+}
+
+.preset-form-section h4 {
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-md);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--color-primary);
+    padding-bottom: var(--space-xs);
+}

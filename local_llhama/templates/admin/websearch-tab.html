@@ -1,0 +1,46 @@
+<!-- Web Search Tab -->
+<div id="websearch-tab" class="tab-content" style="display: none;">
+    <div class="language-settings-container">
+        <h2>◈ Web Search Configuration</h2>
+        <p style="color: #666; margin-bottom: 20px;">
+            Configure web search settings and API tokens for external services.
+        </p>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="btn btn-success" onclick="saveWebSearchConfig()">■ Save Configuration</button>
+        </div>
+
+        <!-- General Settings -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0;">General Settings</h3>
+            
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="max-results">Maximum Results:</label>
+                <input type="number" id="max-results" min="1" max="20" style="width: 100px;">
+                <span style="color: #666; font-size: 13px; margin-left: 10px;">Number of search results to retrieve (1-20)</span>
+            </div>
+            
+            <div class="form-group">
+                <label for="search-timeout">Timeout (seconds):</label>
+                <input type="number" id="search-timeout" min="1" max="60" style="width: 100px;">
+                <span style="color: #666; font-size: 13px; margin-left: 10px;">Maximum time to wait for search response (1-60)</span>
+            </div>
+        </div>
+
+        <!-- Allowed Websites -->
+        <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0;">Allowed Websites</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Configure which websites can be used for information retrieval.
+            </p>
+            
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary btn-small" onclick="addWebsite()">➕ Add Website</button>
+            </div>
+            
+            <div id="websites-container"></div>
+        </div>
+        
+        <div id="websearch-save-status" style="margin-top: 15px; display: none;"></div>
+    </div>
+</div>

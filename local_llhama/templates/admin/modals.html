@@ -1,0 +1,221 @@
+<!-- Create User Modal -->
+<div id="createUserModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New User</h2>
+        </div>
+        <form id="createUserForm">
+            <div class="form-group">
+                <label for="newUsername">Username:</label>
+                <input type="text" id="newUsername" required>
+            </div>
+            
+            <div class="form-group-checkbox">
+                <input type="checkbox" id="newIsAdmin">
+                <label for="newIsAdmin">Admin Privileges</label>
+            </div>
+            
+            <div class="form-group-checkbox">
+                <input type="checkbox" id="newCanChat" checked>
+                <label for="newCanChat">Can Access Chat</label>
+            </div>
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn" onclick="closeModal('createUserModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </div>
+        </form>
+        <div id="newPasswordDisplay" style="display: none;"></div>
+    </div>
+</div>
+
+<!-- Edit Permissions Modal -->
+<div id="editPermissionsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Permissions: <span id="editUsername"></span></h2>
+        </div>
+        <form id="editPermissionsForm">
+            <div class="form-group-checkbox">
+                <input type="checkbox" id="editIsAdmin">
+                <label for="editIsAdmin">Admin Privileges</label>
+            </div>
+            
+            <div class="form-group-checkbox">
+                <input type="checkbox" id="editCanChat">
+                <label for="editCanChat">Can Access Chat</label>
+            </div>
+            
+            <div class="form-group-checkbox">
+                <input type="checkbox" id="editIsActive">
+                <label for="editIsActive">Account Active</label>
+            </div>
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn" onclick="closeModal('editPermissionsModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="resetPasswordModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Password Reset</h2>
+        </div>
+        <div id="resetPasswordDisplay"></div>
+        <div class="modal-buttons">
+            <button type="button" class="btn btn-primary" onclick="closeModal('resetPasswordModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Preset Modal -->
+<div id="createPresetModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h2>Create New Configuration Preset</h2>
+        </div>
+        <form id="createPresetForm">
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <h3>Basic Information</h3>
+                
+                <div class="form-group">
+                    <label for="newPresetId">Preset ID:</label>
+                    <input type="text" id="newPresetId" required pattern="[a-z0-9_]+" 
+                           title="Only lowercase letters, numbers, and underscores">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Use lowercase letters, numbers, and underscores only (e.g., my_custom_preset)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newPresetName">Display Name:</label>
+                    <input type="text" id="newPresetName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newPresetDescription">Description:</label>
+                    <textarea id="newPresetDescription" required rows="3"></textarea>
+                </div>
+            </div>
+
+            <!-- LLM Configuration Section -->
+            <div class="form-section">
+                <h3>LLM Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="newLlmModel">Model Name:</label>
+                    <input type="text" id="newLlmModel" required placeholder="e.g., llama3.2:3b">
+                </div>
+                
+                <div class="form-group">
+                    <label for="newTemperature">Temperature:</label>
+                    <input type="number" id="newTemperature" required step="0.1" min="0" max="2" value="0.7">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Controls randomness (0.0 = deterministic, 2.0 = very creative)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newTopP">Top P:</label>
+                    <input type="number" id="newTopP" required step="0.05" min="0" max="1" value="0.9">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Nucleus sampling threshold (0.0-1.0)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newTopK">Top K:</label>
+                    <input type="number" id="newTopK" required min="1" max="100" value="40">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Limits token selection pool (1-100)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Configuration Section -->
+            <div class="form-section">
+                <h3>Audio Configuration</h3>
+                
+                <div class="form-group">
+                    <label for="newSttModel">Speech-to-Text Model:</label>
+                    <input type="text" id="newSttModel" required placeholder="e.g., base">
+                </div>
+                
+                <div class="form-group">
+                    <label for="newTtsVoice">Text-to-Speech Voice:</label>
+                    <input type="text" id="newTtsVoice" required placeholder="e.g., en_US-amy-medium">
+                </div>
+            </div>
+
+            <!-- Chat Handler Settings Section -->
+            <div class="form-section">
+                <h3>Chat Handler Settings</h3>
+                
+                <div class="form-group">
+                    <label for="newMaxTokens">Max Tokens:</label>
+                    <input type="number" id="newMaxTokens" required min="512" max="32768" value="2048">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Maximum response length (512-32768)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newDefaultContextWords">Default Context Words:</label>
+                    <input type="number" id="newDefaultContextWords" required min="50" max="2000" value="300">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Initial context window size (50-2000)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newMinContextWords">Minimum Context Words:</label>
+                    <input type="number" id="newMinContextWords" required min="50" max="1000" value="100">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Minimum context window (50-1000)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newContextReductionFactor">Context Reduction Factor:</label>
+                    <input type="number" id="newContextReductionFactor" required step="0.05" min="0.1" max="0.9" value="0.5">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Reduction rate when context limit reached (0.1-0.9)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Requirements Section -->
+            <div class="form-section">
+                <h3>System Requirements</h3>
+                
+                <div class="form-group">
+                    <label for="newRam">RAM (GB):</label>
+                    <input type="number" id="newRam" required min="1" max="256" value="8">
+                </div>
+                
+                <div class="form-group">
+                    <label for="newVram">VRAM (GB):</label>
+                    <input type="number" id="newVram" required min="0" max="128" value="4">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        GPU memory required (use 0 for CPU-only)
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newDisk">Disk Space (GB):</label>
+                    <input type="number" id="newDisk" required min="1" max="500" value="10">
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button type="button" class="btn" onclick="closeModal('createPresetModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Preset</button>
+            </div>
+        </form>
+    </div>
+</div>

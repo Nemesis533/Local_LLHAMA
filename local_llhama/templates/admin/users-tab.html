@@ -1,0 +1,26 @@
+<!-- User Management Tab -->
+<div id="users-tab" class="tab-content active">
+    <div style="margin-bottom: 15px;">
+        <button class="btn btn-primary" onclick="showCreateUserModal()">Create New User</button>
+    </div>
+    
+    <div class="users-table-container">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Permissions</th>
+                    <th>Created</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-table-body">
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 20px;">Loading users...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

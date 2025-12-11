@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Loading - Local LLHAMA</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+  <div class="loading-container">
+    <div class="loading-content">
+      <img src="/static/images/llm.png" alt="LLHAMA Logo" class="loading-logo" onerror="this.style.display='none';" />
+      <h1>Local LLHAMA</h1>
+      <div class="loading-spinner"></div>
+      <p class="loading-text">System is starting up...</p>
+      <p class="loading-subtext">Please wait while we initialize all components</p>
+    </div>
+  </div>
+  
+  <script>
+    // Auto-refresh every 3 seconds to check if system is ready
+    setTimeout(() => {
+      window.location.reload();
+    }, 3000);
+  </script>
+</body>
+</html>

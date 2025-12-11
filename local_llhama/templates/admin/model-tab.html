@@ -1,0 +1,96 @@
+<!-- Model Tab -->
+<div id="model-tab" class="tab-content" style="display: none;">
+    <div class="language-settings-container">
+        <h2>◈ Model Configuration & Interaction</h2>
+        <p style="color: #666; margin-bottom: 20px;">
+            Configure the AI assistant's identity, interact with the model, and manage calendar events.
+        </p>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="btn btn-success" onclick="saveModelConfig()">■ Save Configuration</button>
+        </div>
+
+        <!-- Assistant Identity -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Assistant Identity</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Customize how the assistant identifies itself in conversations.
+            </p>
+            
+            <div class="form-group">
+                <label for="assistant-name">Assistant Name:</label>
+                <input type="text" 
+                       id="assistant-name" 
+                       placeholder="e.g., LLHAMA, Jarvis, Assistant" 
+                       style="width: 300px; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    This name will be used when the assistant refers to itself.
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Information -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Current Model Configuration</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Active language model and embedding settings (read-only).
+            </p>
+            
+            <div style="display: grid; grid-template-columns: 200px 1fr; gap: 15px; font-size: 14px;">
+                <div style="font-weight: 600; color: #000;">Language Model:</div>
+                <div id="current-ollama-model" style="color: #333; font-family: monospace;">-</div>
+                
+                <div style="font-weight: 600; color: #000;">Embedding Model:</div>
+                <div id="current-embedding-model" style="color: #333; font-family: monospace;">-</div>
+                
+                <div style="font-weight: 600; color: #000;">Internet Searches:</div>
+                <div id="current-internet-searches" style="color: #333;">-</div>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-left: 4px solid #3498db; font-size: 13px; color: #666;">
+                <strong>Note:</strong> To change model settings, use the Presets tab or manually edit the configuration file and restart the system.
+            </div>
+        </div>
+
+        <!-- Interaction Section -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Interact with Assistant</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Send text prompts to the assistant and view responses in the logs below.
+            </p>
+            
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" 
+                       id="model-prompt-input" 
+                       placeholder="Type your prompt here..." 
+                       style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <button id="model-send-prompt-btn" 
+                        class="btn btn-primary" 
+                        style="white-space: nowrap; padding: 10px 20px;">Send</button>
+            </div>
+            
+            <!-- Log Box -->
+            <div style="margin-top: 20px;">
+                <h4 style="margin-bottom: 10px; font-size: 14px; color: #555;">Conversation Log</h4>
+                <div id="model-log-box" 
+                     class="log-box" 
+                     style="height: 300px; overflow-y: auto; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 12px;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar Events Section -->
+        <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Upcoming Reminders & Alarms</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                View and manage upcoming calendar events, reminders, and alarms.
+            </p>
+            
+            <div id="model-calendar-events" class="calendar-events">
+                Loading...
+            </div>
+        </div>
+        
+        <div id="model-save-status" style="margin-top: 15px; display: none;"></div>
+    </div>
+</div>

@@ -1,0 +1,32 @@
+{
+  "allowed_websites": [
+    {
+      "name": "GDELT",
+      "url": "https://api.gdeltproject.org/api/v2/doc/doc",
+      "description": "Global Database of Events, Language, and Tone - Real-time global news monitoring"
+    },
+    {
+      "name": "Wikipedia",
+      "url": "https://en.wikipedia.org/api/rest_v1",
+      "description": "Free online encyclopedia - REST API for summaries"
+    },
+    {
+      "name": "Wikimedia",
+      "url": "https://api.wikimedia.org/core/v1/wikipedia/en/page",
+      "description": "Wikimedia API for full Wikipedia article HTML content"
+    },
+    {
+      "name": "Open-Meteo Weather",
+      "url": "https://api.open-meteo.com/v1/forecast",
+      "description": "Open-Meteo weather forecast API - free weather data"
+    },
+    {
+      "name": "Open-Meteo Geocoding",
+      "url": "https://geocoding-api.open-meteo.com/v1/search",
+      "description": "Open-Meteo geocoding API for location coordinates"
+    }
+  ],
+  "max_results": 5,
+  "timeout": 15,
+  "api_tokens": {}
+}
