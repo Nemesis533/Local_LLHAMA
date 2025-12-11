@@ -12,6 +12,8 @@ As an independent system that runs on base Linux and interfaces with HA (or pote
 The project started as a voice-first domotic assistant has evolved into a **complete self-hosted AI assistant platform** that aims to deliver an all-in-one package.
 The trajectory change was caused by recent cloud-based AI services with ads and telemetry to which this project tries to offer an alternative.
 
+![Multi-command example](screenshot/chat_window_1.png)
+
 **Current State**:
 
 A dual-pipeline system with chat and voice as equally useful interfaces. Both share identical LLM capabilities—function calling, Home Assistant control, web search, calendar management, etc.
@@ -64,6 +66,8 @@ The system now includes comprehensive configuration management as well as preset
 - Customizable model name for chat usage
 - Admin panel with user, language, prompt, system, web settings and more.
 - Role-based access control (admin, chat permission)
+
+![Admin Prompt Page](screenshot/admin_window.png)
 
 ## Latest Additions
 
@@ -137,6 +141,8 @@ Edit `.env` with your credentials:
 - `ALLOWED_IP_PREFIXES`: Comma-separated IP prefixes for web UI access
 
 **Important:** Never commit `.env` to version control.
+
+![Login Page](screenshot/login_window.png)
 
 ## Configuration
 
