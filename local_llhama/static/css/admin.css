@@ -1,0 +1,12 @@
+/**
+ * Admin Panel Styles
+ * Modular CSS for admin interface
+ */
+
+@import './admin/admin-layout.css';
+@import './admin/admin-tables.css';
+@import './admin/admin-forms.css';
+@import './admin/admin-tabs.css';
+@import './admin/admin-presets.css';
+@import './admin/admin-prompts.css';
+@import './admin/admin-system-settings.css';

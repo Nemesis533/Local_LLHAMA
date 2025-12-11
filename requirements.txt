@@ -1,0 +1,26 @@
+# Web framework
+flask==3.0.3
+flask-login==0.6.3
+flask-socketio==5.3.6
+flask-cors==4.0.1
+python-socketio==5.11.2
+eventlet==0.36.1
+
+# Database
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Audio processing
+torch==2.1.2  # Required by openai-whisper
+openai-whisper==20231117
+openwakeword==0.6.0
+piper-tts==1.2.0
+pyaudio==0.2.14
+pygame==2.5.2
+numpy==1.26.4
+
+# Utilities
+psutil==5.9.8
+requests==2.31.0
+beautifulsoup4==4.12.3
+python-dotenv==1.0.1

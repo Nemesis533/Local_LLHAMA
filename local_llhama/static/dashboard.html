@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM Status Viewer</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header with logout -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-title">
+          <img id="status-image" src="/static/images/llm.png" alt="Status" onerror="this.style.display='none';" />
+          <h1>Local LLHAMA Dashboard</h1>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="admin-btn" class="btn" style="display: none;" onclick="window.location.href='/admin'">Admin Panel</button>
+          <button id="chat-btn" class="btn" onclick="window.location.href='/chat'">Chat</button>
+          <button id="logout-btn" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard">
+      <!-- Settings Section -->
+      <section id="settings-dashboard">
+        <h2>Settings Overview</h2>
+        <div id="settings-content" class="settings-scroll">Loading settings...</div>
+        <div class="settings-actions">
+          <button id="save-settings-btn" class="btn-save">Save Settings</button>
+          <button id="restart-system-btn" class="btn-restart">Restart System</button>
+        </div>
+      </section>
+
+      <!-- Logs Section -->
+    <section id="logs-section">
+      <h2>Logs</h2>
+      <div class="log-box" id="log-box"></div>
+
+      <!-- Prompt Input -->
+      <label for="prompt-input" class="prompt-label">Prompt:</label>
+      <input type="text" id="prompt-input" class="prompt-input" placeholder="Type your prompt here..." />
+      <button id="send-prompt-btn">Send</button>
+
+      <!-- Calendar Events Section -->
+      <div id="calendar-section" class="calendar-section">
+        <h3>Upcoming Reminders & Alarms</h3>
+        <div id="calendar-events" class="calendar-events">Loading...</div>
+      </div>
+    </section>
+    </div>
+  </div>
+
+  <script src="/static/socket.io.min.js"></script>
+  <script>
+    // Check if user is admin and show admin button
+    fetch('/check-auth')
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.is_admin) {
+          document.getElementById('admin-btn').style.display = 'block';
+        }
+      });
+  </script>
+  <script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+/**
+ * Calendar Components
+ * Calendar sidebar, events, and event types
+ */
+
+.calendar-sidebar {
+  flex: 0 0 320px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.calendar-header {
+  padding: var(--space-xl);
+  border-bottom: 3px solid var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+}
+
+.calendar-header h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calendar-section {
+  padding: var(--space-lg);
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.calendar-section h3 {
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.calendar-events {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.no-events {
+  text-align: center;
+  color: var(--text-muted);
+  padding: var(--space-xl);
+  font-style: italic;
+}
+
+/* Event Groups */
+.event-group {
+  margin-bottom: var(--space-lg);
+}
+
+.event-group h4 {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-sm);
+}
+
+/* Calendar Event Cards */
+.calendar-event {
+  background: var(--bg-tertiary);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  border-left: 4px solid var(--color-primary);
+  transition: all var(--transition-base);
+}
+
+.calendar-event:hover {
+  background: var(--bg-hover);
+  border-left-width: 6px;
+}
+
+.calendar-event:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateX(4px);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: var(--space-xs);
+}
+
+.event-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+.event-time {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-xs);
+}
+
+.event-desc,
+.event-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Event Type Badges */
+.event-type-badge {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.event-type-badge.reminder {
+  background: var(--event-reminder);
+  color: var(--text-inverse);
+}
+
+.event-type-badge.appointment {
+  background: var(--event-appointment);
+  color: var(--text-inverse);
+}
+
+.event-type-badge.alarm {
+  background: var(--event-alarm);
+  color: var(--text-inverse);
+}
+
+/* Repeat Badge */
+.repeat-badge {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-slate-200);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-xs);
+}

@@ -1,0 +1,634 @@
+"""
+Ollama Core Client
+
+This module provides the main OllamaClient class for interacting with
+Ollama LLM server for command parsing and response processing.
+"""
+
+# === System Imports ===
+import json
+
+import requests
+
+# === Custom Imports ===
+from ..LLM_Prompts import (
+    CONVERSATION_PROCESSOR_PROMPT,
+    RESPONSE_PROCESSOR_PROMPT,
+    RESUME_CONVERSATION_PROMPT,
+    SAFETY_INSTRUCTION_PROMPT,
+    SMART_HOME_DECISION_MAKING_EXTENSION,
+    SMART_HOME_PROMPT_TEMPLATE,
+    is_safety_enabled,
+)
+from ..Shared_Logger import LogLevel
+from .ollama_context_builders import ContextBuilder
+from .ollama_embeddings import EmbeddingClient
+
+
+class OllamaClient:
+    """
+    Client to interact with Ollama server for language model inference.
+
+    Handles:
+    - Command parsing from natural language
+    - Response processing for function results
+    - Conversation management with context
+    - Embedding generation for message storage
+    """
+
+    def __init__(
+        self,
+        ha_client,
+        host: str = "http://your_ip:11434",
+        model: str = "qwen3-14b",
+        pg_client=None,
+        conversation_loader=None,
+        embedding_model: str = "nomic-embed-text",
+    ):
+        """
+        Initialize Ollama client with connection details.
+
+        @param ha_client HomeAssistantClient instance for device context
+        @param host Ollama server URL
+        @param model Model name to use on Ollama server
+        @param system_prompt Optional system prompt override
+        @param pg_client Optional PostgreSQLClient for storing message embeddings
+        @param conversation_loader Optional ConversationLoader for accessing previous conversations
+        @param embedding_model Embedding model name to use (default: nomic-embed-text)
+        """
+        self.class_prefix_message = "[OllamaClient]"
+        # Ensure host has http:// scheme
+        if not host.startswith("http://") and not host.startswith("https://"):
+            host = f"http://{host}"
+        self.host = host.rstrip("/")
+        self.model = model
+        self.ha_client = ha_client
+        self.pg_client = pg_client
+        self.conversation_loader = conversation_loader
+
+        self.context_builder = ContextBuilder(ha_client, self.class_prefix_message)
+        self.devices_context = self.context_builder.get_devices_context()
+
+        self.response_processor_prompt = RESPONSE_PROCESSOR_PROMPT
+        self.conversation_processor_prompt = CONVERSATION_PROCESSOR_PROMPT
+        self.decision_making_extension = SMART_HOME_DECISION_MAKING_EXTENSION
+        self.resume_conversation_prompt = RESUME_CONVERSATION_PROMPT
+        self.safety_prompt = SAFETY_INSTRUCTION_PROMPT if is_safety_enabled() else ""
+
+        self.embedding_client = EmbeddingClient(
+            host=self.host, model=embedding_model, pg_client=self.pg_client
+        )
+
+        # Context management - keep only last request and response
+        self.last_user_message = None
+        self.last_message_from_chat = False  # Track if last command was from chat
+
+        # Languages will be loaded from settings
+        self.languages = {}
+
+        # Build system prompt for decision-making (FIRST PARSE)
+        extended_prompt = self._build_extended_prompt()
+        simple_functions_context = (
+            self.context_builder.generate_simple_functions_context()
+        )
+
+        self.system_prompt = extended_prompt.format(
+            devices_context=self.devices_context,
+            simple_functions_context=simple_functions_context,
+        )
+
+    def _build_extended_prompt(self):
+        """
+        Build the extended smart home prompt with decision-making guidelines.
+        Composes from: base template + decision-making extension (with language tags injected).
+
+        @return Extended prompt template
+        """
+        # Build language tag list dynamically from configured languages
+        language_tags = "\n".join(
+            [
+                f'                "{name}": "{code}",'
+                for name, code in self.languages.items()
+            ]
+        )
+        if language_tags:
+            language_tags = language_tags.rstrip(
+                ","
+            )  # Remove trailing comma from last item
+        else:
+            # Fallback if no languages configured
+            language_tags = '                "English": "en"'
+
+        # Compose from three parts: base template + decision-making extension (with language tags)
+        extended_section = self.decision_making_extension.format(
+            language_tags=language_tags
+        )
+
+        return SMART_HOME_PROMPT_TEMPLATE + extended_section
+
+    def set_model(self, model_name: str):
+        """
+        Change the model used for inference.
+
+        @param model_name New model name
+        """
+        self.model = model_name
+
+    def set_system_prompt(self, prompt: str):
+        """
+        Override the system prompt.
+
+        @param prompt New system prompt
+        """
+        self.system_prompt = prompt
+
+    def send_message(
+        self,
+        user_message: str,
+        temperature: float = 0.1,
+        top_p: float = 1,
+        max_tokens: int = 4096,
+        message_type: str = "command",
+        from_chat: bool = False,
+        conversation_id: str = None,
+        original_text: str = None,
+    ):
+        """
+        Send message to Ollama for processing.
+
+        @param user_message The message to process (may include context for LLM)
+        @param temperature Sampling temperature
+        @param top_p Nucleus sampling parameter
+        @param max_tokens Maximum tokens to generate
+        @param message_type Either "command" for command parsing or "response" for processing function results
+        @param from_chat Whether this command originates from chat (tracked for response processing)
+        @param conversation_id Optional UUID of the conversation for message storage
+        @param original_text The original user text without LLM context (used for storage only)
+        @return Parsed JSON response
+        """
+        # Validate input
+        if not user_message or not user_message.strip():
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided"
+            )
+            return {"commands": []}
+
+        # Choose system prompt based on message type and origin
+        if message_type == "response":
+            # SECOND PARSE: Response generation with full context
+            # Add resume conversation and safety prompts
+            base_prompt = (
+                self.conversation_processor_prompt
+                if self.last_message_from_chat
+                else self.response_processor_prompt
+            )
+            
+            # Compose: base prompt + resume conversation + safety
+            system_prompt = base_prompt
+            if self.resume_conversation_prompt:
+                system_prompt += f"\n\n{self.resume_conversation_prompt}"
+            if self.safety_prompt:
+                system_prompt += f"\n\n{self.safety_prompt}"
+                
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (resume + safety prompts included)"
+            )
+        else:
+            # FIRST PARSE: Decision-making with minimal context
+            # Use smart_home_prompt_template with decision-making extension (already built)
+            system_prompt = self.system_prompt
+
+        # Build the prompt with context if available
+        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
+
+        # Use higher temperature for response processing to make it more creative
+        if message_type == "response":
+            temperature = 0.8  # More creative for processing Wikipedia/news responses
+            top_p = 0.90
+
+        # Send request to Ollama
+        response_data = self._send_to_ollama(
+            prompt, system_prompt, temperature, top_p, max_tokens
+        )
+
+        if response_data is None:
+            return {"commands": []}
+
+        parsed = self._parse_ollama_response(response_data)
+
+        self._handle_post_processing(
+            parsed,
+            message_type,
+            from_chat,
+            user_message,
+            original_text,
+            conversation_id,
+        )
+
+        return parsed
+
+    def send_message_streaming(
+        self,
+        user_message: str,
+        temperature: float = 0.8,
+        top_p: float = 0.90,
+        max_tokens: int = 4096,
+        message_type: str = "command",
+        from_chat: bool = False,
+        conversation_id: str = None,
+        original_text: str = None,
+    ):
+        """
+        Send message to Ollama for processing with streaming response.
+
+        @param user_message The message to process (may include context for LLM)
+        @param temperature Sampling temperature (default 0.8 for more creative NL responses)
+        @param top_p Nucleus sampling parameter
+        @param max_tokens Maximum tokens to generate
+        @param message_type Either "command" for command parsing or "response" for processing function results
+        @param from_chat Whether this command originates from chat (tracked for response processing)
+        @param conversation_id Optional UUID of the conversation for message storage
+        @param original_text The original user text without LLM context (used for storage only)
+        @yield Dict chunks with partial responses
+        """
+        # Validate input
+        if not user_message or not user_message.strip():
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided"
+            )
+            yield {"response": "", "done": True}
+            return
+
+        # Choose system prompt based on message type and origin
+        if message_type == "response":
+            # SECOND PARSE: Response generation with full context (streaming)
+            # Add resume conversation and safety prompts
+            base_prompt = (
+                self.conversation_processor_prompt
+                if self.last_message_from_chat
+                else self.response_processor_prompt
+            )
+            
+            # Compose: base prompt + resume conversation + safety
+            system_prompt = base_prompt
+            if self.resume_conversation_prompt:
+                system_prompt += f"\n\n{self.resume_conversation_prompt}"
+            if self.safety_prompt:
+                system_prompt += f"\n\n{self.safety_prompt}"
+                
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (streaming, resume + safety prompts included)"
+            )
+        else:
+            # FIRST PARSE: Decision-making with minimal context
+            # Use smart_home_prompt_template with decision-making extension (already built)
+            system_prompt = self.system_prompt
+
+        # Build the prompt with context if available
+        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
+
+        # Track from_chat for response processing
+        if message_type == "command" and from_chat:
+            self.last_message_from_chat = from_chat
+            self.last_user_message = original_text if original_text else user_message
+
+        # Send streaming request to Ollama
+        response_generator = self._send_to_ollama(
+            prompt, system_prompt, temperature, top_p, max_tokens, stream=True
+        )
+
+        if response_generator is None:
+            yield {"response": "", "done": True}
+            return
+
+        # Yield chunks as they arrive
+        full_response = ""
+        for chunk in response_generator:
+            if "response" in chunk:
+                full_response += chunk["response"]
+            # Always yield the chunk (includes done flag)
+            yield chunk
+
+        # Parse complete response and queue for embedding/storage
+        if conversation_id and original_text and full_response:
+            try:
+                # Try to parse as JSON to extract nl_response
+                parsed = json.loads(full_response)
+                nl_response = parsed.get("nl_response", full_response)
+            except json.JSONDecodeError:
+                # If not JSON, use full response
+                nl_response = full_response
+            
+            # Queue for embedding and storage
+            if nl_response and self.pg_client and self.embedding_client:
+                try:
+                    embedding_batch = {
+                        "user_message": original_text,
+                        "assistant_response": nl_response,
+                        "conversation_id": conversation_id,
+                    }
+                    self.embedding_client.queue_messages(embedding_batch)
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued streaming response for embedding and storage"
+                    )
+                except Exception as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
+                    )
+
+    def _build_prompt_with_context(
+        self, user_message: str, message_type: str, from_chat: bool
+    ):
+        """
+        Build the prompt with appropriate context.
+
+        @param user_message The user's message
+        @param message_type Type of message (command/response)
+        @param from_chat Whether from chat interface
+        @return Formatted prompt with context
+        """
+        prompt = user_message
+
+        if self.last_user_message:
+            if message_type == "command":
+                # Include last conversation in context for command parsing
+                context_prefix = f"Previous user message: {self.last_user_message}\n\nCurrent user message: "
+                prompt = context_prefix + user_message
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including previous context in prompt"
+                )
+            elif message_type == "response":
+                # Include last user message and response for response processing
+                context_prefix = f"Original user query: {self.last_user_message}\n\n"
+                prompt = context_prefix + user_message
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Including user query context in response processing"
+                )
+
+        return prompt
+
+    def _send_to_ollama(
+        self,
+        prompt: str,
+        system_prompt: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        stream: bool = False,
+    ):
+        """
+        Send request to Ollama server.
+
+        @param prompt User prompt
+        @param system_prompt System prompt
+        @param temperature Sampling temperature
+        @param top_p Nucleus sampling
+        @param max_tokens Max tokens to generate
+        @param stream Whether to stream responses (for generators)
+        @return Response data or None on error, or generator if stream=True
+        """
+        # Append safety prompt if enabled
+        if is_safety_enabled() and SAFETY_INSTRUCTION_PROMPT:
+            system_prompt = f"{system_prompt}\n\n{SAFETY_INSTRUCTION_PROMPT}"
+
+        url = f"{self.host}/api/generate"
+
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "system": system_prompt,
+            "options": {
+                "temperature": temperature,
+                "top_p": top_p,
+                "num_predict": max_tokens,
+            },
+            "stream": stream,
+            "reasoning_effort": "low",
+        }
+
+        try:
+            if stream:
+                # Return generator for streaming responses
+                response = requests.post(url, json=payload, timeout=60, stream=True)
+                response.raise_for_status()
+                return self._stream_response(response)
+            else:
+                # Regular non-streaming response
+                response = requests.post(url, json=payload, timeout=60)
+                response.raise_for_status()
+                return response.json()
+
+        except requests.exceptions.Timeout:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request timeout connecting to Ollama at {self.host}"
+            )
+            return {
+                "_timeout_detected": True,
+                "response": json.dumps(
+                    {
+                        "nl_response": "I'm sorry, the request timed out. The language model is taking too long to respond. This might be due to a very long conversation context. Please try again or start a new conversation.",
+                        "language": "en",
+                    }
+                ),
+            }
+
+        except requests.exceptions.ConnectionError as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Connection error to Ollama: {repr(e)}"
+            )
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Check if Ollama is running at {self.host}"
+            )
+            return None
+
+        except requests.exceptions.HTTPError as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] HTTP error from Ollama: {repr(e)}"
+            )
+            if hasattr(e.response, "status_code"):
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Status code: {e.response.status_code}"
+                )
+            return None
+
+        except requests.exceptions.RequestException as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request error: {repr(e)}"
+            )
+            return None
+
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error during request: {type(e).__name__}: {repr(e)}"
+            )
+            return None
+
+    def _stream_response(self, response):
+        """
+        Generator that yields streaming response chunks from Ollama.
+
+        @param response The requests Response object with stream=True
+        @yield Dict chunks containing response text
+        """
+        try:
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        chunk = json.loads(line.decode("utf-8"))
+                        yield chunk
+                    except json.JSONDecodeError as e:
+                        print(
+                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to parse streaming chunk: {repr(e)}"
+                        )
+                        continue
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error during streaming: {type(e).__name__}: {repr(e)}"
+            )
+            yield {"error": str(e)}
+
+    def _parse_ollama_response(self, data):
+        """
+        Parse response from Ollama server.
+
+        @param data Response data from Ollama
+        @return Parsed JSON response or error dict
+        """
+        # Extract response field
+        if "response" not in data:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No 'response' field in Ollama output"
+            )
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response keys: {list(data.keys())}"
+            )
+            return {"commands": []}
+
+        try:
+            output = str(data["response"])
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to extract response: {repr(e)}"
+            )
+            return {"commands": []}
+
+        if not output or not output.strip():
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Ollama returned empty response"
+            )
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] This may indicate Ollama is not properly loaded or the model is having issues"
+            )
+            return {"commands": []}
+
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Ollama response: {output[:100]}..."
+        )
+
+        try:
+            parsed = json.loads(output)
+
+            if not isinstance(parsed, dict):
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Response is not a dict"
+                )
+                return {"commands": []}
+
+            return parsed
+
+        except json.JSONDecodeError as e:
+            # Try to recover from double-brace errors ({{ instead of {)
+            if output and output.startswith("{{") and output.endswith("}}"):
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Detected double braces, stripping and retrying"
+                )
+                try:
+                    parsed = json.loads(output[1:-1])
+                    if isinstance(parsed, dict):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+
+            # If model returned plain text instead of JSON, treat it as an nl_response
+            if output and not output.strip().startswith("{"):
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model returned plain text instead of JSON, treating as nl_response"
+                )
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Text response: {output[:200]}..."
+                )
+                return {"nl_response": output.strip(), "language": "en"}
+
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to parse Ollama response as JSON: {repr(e)}"
+            )
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Output length: {len(output) if output else 0}"
+            )
+            if output:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Raw output (first 300 chars): {output[:300]}"
+                )
+            else:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Ollama returned EMPTY response - check if Ollama server is running and responding"
+                )
+            return {"commands": []}
+
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error parsing output: {repr(e)}"
+            )
+            return {"commands": []}
+
+    def _handle_post_processing(
+        self,
+        parsed,
+        message_type,
+        from_chat,
+        user_message,
+        original_text,
+        conversation_id,
+    ):
+        """
+        Handle post-processing after parsing response.
+
+        @param parsed Parsed response
+        @param message_type Type of message
+        @param from_chat Whether from chat
+        @param user_message User's message
+        @param original_text Original text without context
+        @param conversation_id Conversation UUID
+        """
+        # Queue embeddings when nl_response exists
+        text_to_save = original_text if original_text else user_message
+        if "nl_response" in parsed and (from_chat or self.last_message_from_chat):
+            nl_response_text = parsed.get("nl_response", "")
+            if nl_response_text and self.pg_client and self.embedding_client:
+                try:
+                    embedding_batch = {
+                        "user_message": text_to_save,
+                        "assistant_response": nl_response_text,
+                        "conversation_id": conversation_id,
+                    }
+                    self.embedding_client.queue_messages(embedding_batch)
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued message batch for embedding and storage (user_message + nl_response)"
+                    )
+
+                except Exception as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue messages for embedding: {repr(e)}"
+                    )
+
+        if message_type == "command":
+            self.last_user_message = user_message
+            self.last_message_from_chat = from_chat
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated context with current exchange (from_chat={from_chat})"
+            )
+        elif message_type == "response":
+            self.last_message_from_chat = False
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Reset chat origin flag after response processing"
+            )

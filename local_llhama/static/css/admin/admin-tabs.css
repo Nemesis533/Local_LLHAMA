@@ -1,0 +1,46 @@
+/**
+ * Admin Tabs Styles
+ * Tab navigation and content panels
+ */
+
+.tab-navigation {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #ecf0f1;
+}
+
+.tab-button {
+    padding: var(--space-md) var(--space-xl);
+    background: var(--bg-secondary);
+    border: none;
+    border-bottom: 4px solid transparent;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-tertiary);
+    transition: all var(--transition-base);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    border-bottom-color: var(--color-primary);
+}
+
+.tab-button.active {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border-bottom-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(224, 244, 255, 0.4);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}

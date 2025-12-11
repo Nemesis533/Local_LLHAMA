@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Local LLHAMA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-lg);
+            border-bottom: 3px solid var(--color-primary);
+        }
+        
+        .admin-header h1 {
+            margin: 0;
+            color: var(--text-primary);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .users-table-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border-light);
+            overflow: hidden;
+        }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .users-table th {
+            background: var(--color-primary);
+            color: var(--text-primary);
+            padding: var(--space-md);
+            text-align: left;
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: var(--font-size-sm);
+        }
+        
+        .users-table td {
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-primary);
+        }
+        
+        .users-table tr:hover {
+            background: var(--bg-hover);
+        }
+        
+        .permission-badge {
+            display: inline-block;
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-bold);
+            margin: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-yes {
+            background: var(--color-success);
+            color: var(--text-primary);
+        }
+        
+        .badge-no {
+            background: var(--color-danger);
+            color: var(--text-primary);
+        }
+        
+        .badge-admin {
+            background: var(--color-secondary);
+            color: var(--text-primary);
+        }
+        
+        .badge-warning {
+            background: var(--color-warning);
+            color: var(--text-primary);
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: var(--space-sm) var(--space-md);
+            font-size: var(--font-size-sm);
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .btn-edit {
+            background: var(--color-secondary);
+            color: var(--text-primary);
+        }
+        
+        .btn-reset {
+            background: var(--color-warning);
+            color: var(--text-primary);
+        }
+        
+        .btn-delete {
+            background: var(--color-danger);
+            color: var(--text-primary);
+        }
+        
+        .btn-small:hover {
+            opacity: 0.9;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            margin: 5% auto;
+            padding: var(--space-2xl);
+            border-radius: var(--radius-md);
+            max-width: 500px;
+            border: 3px solid var(--color-primary);
+        }
+        
+        .modal-header {
+            margin-bottom: var(--space-lg);
+            padding-bottom: var(--space-md);
+            border-bottom: 3px solid var(--color-primary);
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: var(--text-primary);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .form-group {
+            margin-bottom: var(--space-md);
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: var(--space-xs);
+            color: var(--text-secondary);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            font-size: var(--font-size-sm);
+            letter-spacing: 0.3px;
+        }
+        
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: var(--space-md);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-base);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        
+        .form-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(224, 244, 255, 0.2);
+        }
+        
+        .form-group-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .form-group-checkbox input {
+            margin-right: 8px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .password-display {
+            background: #fef5e7;
+            border: 2px solid #f39c12;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .password-display h3 {
+            margin: 0 0 10px 0;
+            color: #d68910;
+        }
+        
+        .password-value {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            color: #e74c3c;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        
+        .password-warning {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+        
+        /* Tab Navigation Styles */
+        .tab-navigation {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        .tab-button {
+            padding: var(--space-md) var(--space-xl);
+            background: var(--bg-secondary);
+            border: none;
+            border-bottom: 4px solid transparent;
+            cursor: pointer;
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-bold);
+            color: var(--text-tertiary);
+            transition: all var(--transition-base);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .tab-button:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+            border-bottom-color: var(--color-primary);
+        }
+        
+        .tab-button.active {
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            border-bottom-color: var(--color-primary);
+            box-shadow: 0 2px 8px rgba(224, 244, 255, 0.4);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Language Settings Styles */
+        .language-settings-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--space-2xl);
+            border: 2px solid var(--border-light);
+        }
+        
+        .language-settings-container h2 {
+            margin-top: 0;
+            color: var(--text-primary);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .language-settings-container code {
+            background: var(--bg-tertiary);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-family: 'Courier New', monospace;
+            color: var(--color-secondary);
+            border: 1px solid var(--border-light);
+        }
+
+        /* Preset Card Styles */
+        .preset-card {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-xl);
+            transition: all var(--transition-base);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preset-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 4px 16px rgba(224, 244, 255, 0.4);
+        }
+
+        .preset-card.recommended {
+            border-color: #4caf50;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f8f4 100%);
+        }
+
+        .preset-card.recommended::before {
+            content: "⭐ Most Used";
+            display: block;
+            background: #4caf50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            width: fit-content;
+        }
+
+        .preset-card h3 {
+            margin: 0 0 var(--space-md) 0;
+            color: var(--text-primary);
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .preset-card .preset-description {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--space-md);
+            line-height: 1.5;
+            height: 60px;
+            overflow-y: auto;
+            padding-right: var(--space-xs);
+        }
+
+        .preset-card .preset-specs {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .preset-card .preset-spec-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .preset-card .preset-spec-label {
+            font-weight: var(--font-weight-bold);
+            color: var(--text-secondary);
+            min-width: 120px;
+            text-transform: uppercase;
+            font-size: var(--font-size-xs);
+            letter-spacing: 0.3px;
+        }
+
+        .preset-card .preset-spec-value {
+            color: var(--color-secondary);
+            font-family: 'Courier New', monospace;
+            font-weight: var(--font-weight-medium);
+        }
+
+        .preset-card .preset-requirements {
+            background: var(--bg-tertiary);
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-md);
+            font-size: var(--font-size-sm);
+            border: 2px solid var(--border-light);
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preset-card .preset-requirements strong {
+            display: block;
+            margin-bottom: var(--space-xs);
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            font-size: var(--font-size-xs);
+        }
+        
+        .preset-card .preset-buttons-container {
+            margin-top: auto;
+        }
+
+        .preset-card .preset-apply-btn {
+            width: 100%;
+            padding: var(--space-md);
+            background: var(--color-primary);
+            color: var(--text-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-bold);
+            cursor: pointer;
+            transition: all var(--transition-base);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .preset-card .preset-apply-btn:hover {
+            background: var(--color-primary-dark);
+            box-shadow: 0 4px 12px rgba(224, 244, 255, 0.6);
+        }
+        
+        /* Active preset styles */
+        .preset-card.active {
+            border-color: var(--color-primary);
+            border-width: 4px;
+            box-shadow: 0 0 20px rgba(224, 244, 255, 0.6), 0 0 40px rgba(224, 244, 255, 0.3);
+            position: relative;
+            background: var(--bg-secondary);
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(224, 244, 255, 0.6), 0 0 40px rgba(224, 244, 255, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(224, 244, 255, 0.8), 0 0 60px rgba(224, 244, 255, 0.5);
+            }
+        }
+        
+        .preset-card.active::after {
+            content: "▣ ACTIVE";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--color-primary);
+            color: var(--text-primary);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-bold);
+            z-index: 1;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .preset-card.active .preset-apply-btn {
+            background: var(--color-gray-400);
+            cursor: default;
+        }
+        
+        .preset-card.active .preset-apply-btn:hover {
+            background: var(--color-gray-400);
+            box-shadow: none;
+        }
+        
+        /* Preset details expansion */
+        .preset-details-toggle {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            margin-top: var(--space-md);
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .preset-details-toggle:hover {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: var(--text-primary);
+        }
+        
+        .preset-details-toggle .toggle-icon {
+            transition: transform var(--transition-base);
+        }
+        
+        .preset-details-toggle.expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+        
+        .preset-details-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-top: var(--space-md);
+        }
+        
+        .preset-details-content.expanded {
+            max-height: 800px;
+        }
+        
+        .preset-settings-section {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+        }
+        
+        .preset-settings-section h4 {
+            color: var(--text-primary);
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--color-primary);
+            padding-bottom: var(--space-xs);
+        }
+        
+        .preset-setting-item {
+            display: flex;
+            justify-content: space-between;
+            padding: var(--space-xs) 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .preset-setting-item:last-child {
+            border-bottom: none;
+        }
+        
+        .preset-setting-label {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-bold);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .preset-setting-value {
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: 'Monaco', 'Courier New', monospace;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-word;
+        }
+        
+        /* Create New Preset Card */
+        .preset-card.create-new {
+            border: 3px dashed var(--color-primary);
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            cursor: pointer;
+            transition: all var(--transition-base);
+        }
+        
+        .preset-card.create-new:hover {
+            background: var(--bg-secondary);
+            border-color: var(--color-secondary);
+            transform: scale(1.02);
+        }
+        
+        .preset-card.create-new .create-icon {
+            font-size: 64px;
+            color: var(--color-primary);
+            margin-bottom: var(--space-md);
+        }
+        
+        .preset-card.create-new .create-text {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-bold);
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .preset-form-section {
+            margin-bottom: var(--space-xl);
+        }
+        
+        .preset-form-section h4 {
+            color: var(--text-primary);
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-md);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--color-primary);
+            padding-bottom: var(--space-xs);
+        }
+        
+        .language-mapping {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .language-mapping input[type="text"],
+        .language-mapping select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .language-mapping input[type="text"] {
+            width: 120px;
+            font-weight: 500;
+        }
+        
+        .language-mapping select {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .language-mapping .btn-danger {
+            background: #e74c3c;
+            margin-left: auto;
+        }
+        
+        .language-mapping .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+        }
+        
+        .btn-success:hover {
+            background: #229954;
+        }
+        
+        .save-status {
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .save-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .save-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* Prompt Editor Styles */
+        .prompt-editor {
+            margin-bottom: 25px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .prompt-header {
+            background: #34495e;
+            color: white;
+            padding: 12px 20px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .prompt-header:hover {
+            background: #2c3e50;
+        }
+        
+        .prompt-body {
+            padding: 20px;
+            background: white;
+        }
+        
+        .prompt-body label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        
+        .prompt-body textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+        
+        .prompt-body input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .prompt-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        
+        .template-variables {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .template-var-btn {
+            padding: 6px 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: monospace;
+            transition: background 0.2s;
+        }
+        
+        .template-var-btn:hover {
+            background: #2980b9;
+        }
+        
+        .template-var-info {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #2c3e50;
+        }
+        
+        .template-var-info code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>⚙️ Admin Panel</h1>
+            <div class="header-buttons">
+                <button class="btn" onclick="window.location.href='/'">Dashboard</button>
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-button active" onclick="switchTab('users')">◉ Users</button>
+            <button class="tab-button" onclick="switchTab('presets')">◈ Presets</button>
+            <button class="tab-button" onclick="switchTab('languages')">◐ Languages</button>
+            <button class="tab-button" onclick="switchTab('prompts')">◧ Prompts</button>
+            <button class="tab-button" onclick="switchTab('websearch')">◎ Web Search</button>
+        </div>
+
+        <!-- User Management Tab -->
+        <div id="users-tab" class="tab-content active">
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-primary" onclick="showCreateUserModal()">Create New User</button>
+            </div>
+            
+            <div class="users-table-container">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Status</th>
+                            <th>Permissions</th>
+                            <th>Created</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 20px;">Loading users...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Configuration Presets Tab -->
+        <div id="presets-tab" class="tab-content" style="display: none;">
+            <div class="language-settings-container">
+                <h2>⚙️ Configuration Presets</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Choose a preset optimized for your hardware and language requirements. Changes take effect after system restart.
+                </p>
+
+                <!-- Current Configuration -->
+                <div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0; color: #2e7d32;">📊 Current Configuration</h3>
+                        <button class="btn" style="background: #f44336; color: white; padding: 8px 16px; font-size: 14px;" onclick="restartSystem()">↻ Restart System</button>
+                    </div>
+                    <div id="current-config-display" style="font-family: monospace; font-size: 14px;">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Preset Cards -->
+                <div id="presets-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                    <!-- Presets will be loaded here -->
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                    <strong>▲ Important:</strong> After applying a preset, you must restart the Local LLHAMA system for changes to take effect. Use the restart button above to apply changes immediately.
+                </div>
+            </div>
+        </div>
+
+        <!-- Language Settings Tab -->
+        <div id="languages-tab" class="tab-content" style="display: none;">
+            <div class="language-settings-container">
+                <h2>Text-to-Speech Language Models</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Configure which voice model file to use for each language. Models must be present in the <code>piper_voices</code> directory.
+                </p>
+                
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="addLanguageMapping()">+ Add Language</button>
+                    <button class="btn btn-success" onclick="saveLanguageModels()">■ Save Changes</button>
+                </div>
+
+                <div id="language-mappings-container"></div>
+                
+                <div id="language-save-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Prompt Settings Tab -->
+        <div id="prompts-tab" class="tab-content" style="display: none;">
+            <div class="language-settings-container">
+                <h2>LLM Prompt Configuration</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Configure the system prompts that guide the LLM's behavior for different tasks.
+                </p>
+                
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-success" onclick="savePrompts()">■ Save All Prompts</button>
+                </div>
+
+                <div id="prompts-container"></div>
+                
+                <div id="prompts-save-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Web Search Tab -->
+        <div id="websearch-tab" class="tab-content" style="display: none;">
+            <div class="language-settings-container">
+                <h2>◈ Web Search Configuration</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Configure web search settings and API tokens for external services.
+                </p>
+                
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-success" onclick="saveWebSearchConfig()">■ Save Configuration</button>
+                </div>
+
+                <!-- General Settings -->
+                <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h3 style="margin-top: 0;">General Settings</h3>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="max-results">Maximum Results:</label>
+                        <input type="number" id="max-results" min="1" max="20" style="width: 100px;">
+                        <span style="color: #666; font-size: 13px; margin-left: 10px;">Number of search results to retrieve (1-20)</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="search-timeout">Timeout (seconds):</label>
+                        <input type="number" id="search-timeout" min="1" max="60" style="width: 100px;">
+                        <span style="color: #666; font-size: 13px; margin-left: 10px;">Maximum time to wait for search response (1-60)</span>
+                    </div>
+                </div>
+
+                <!-- API Tokens -->
+                <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h3 style="margin-top: 0;">API Tokens</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                        Configure API keys for external search services. Leave blank if not using these services.
+                    </p>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="newsdata-api-key">NewsData API Key:</label>
+                        <input type="password" id="newsdata-api-key" style="width: 400px; max-width: 100%;" placeholder="Enter NewsData API key">
+                        <button type="button" class="btn-small" style="margin-left: 10px;" onclick="togglePasswordVisibility('newsdata-api-key')">👁 Show</button>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            Get your key at <a href="https://newsdata.io" target="_blank">newsdata.io</a>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="google-api-key">Google Search API Key:</label>
+                        <input type="password" id="google-api-key" style="width: 400px; max-width: 100%;" placeholder="Enter Google API key (optional)">
+                        <button type="button" class="btn-small" style="margin-left: 10px;" onclick="togglePasswordVisibility('google-api-key')">👁 Show</button>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            For advanced Google search features
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allowed Websites -->
+                <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h3 style="margin-top: 0;">Allowed Websites</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                        Configure which websites can be used for information retrieval.
+                    </p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-primary btn-small" onclick="addWebsite()">➕ Add Website</button>
+                    </div>
+                    
+                    <div id="websites-container"></div>
+                </div>
+                
+                <div id="websearch-save-status" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New User</h2>
+            </div>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="newUsername">Username:</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newIsAdmin">
+                    <label for="newIsAdmin">Admin Privileges</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newCanDashboard" checked>
+                    <label for="newCanDashboard">Can Access Dashboard</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="newCanChat" checked>
+                    <label for="newCanChat">Can Access Chat</label>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn" onclick="closeModal('createUserModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+            <div id="newPasswordDisplay" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Edit Permissions Modal -->
+    <div id="editPermissionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Permissions: <span id="editUsername"></span></h2>
+            </div>
+            <form id="editPermissionsForm">
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editIsAdmin">
+                    <label for="editIsAdmin">Admin Privileges</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editCanDashboard">
+                    <label for="editCanDashboard">Can Access Dashboard</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editCanChat">
+                    <label for="editCanChat">Can Access Chat</label>
+                </div>
+                
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="editIsActive">
+                    <label for="editIsActive">Account Active</label>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn" onclick="closeModal('editPermissionsModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div id="resetPasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Password Reset</h2>
+            </div>
+            <div id="resetPasswordDisplay"></div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-primary" onclick="closeModal('resetPasswordModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="{{ url_for('static', filename='admin-main.js') }}"></script>
+</body>
+</html>

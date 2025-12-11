@@ -1,0 +1,82 @@
+/**
+ * Header & Navigation
+ * Top navigation bar and header components - Zune Style
+ */
+
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 3px solid var(--color-primary);
+  padding: var(--space-lg) var(--space-xl);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.header-title h1 {
+  font-size: var(--font-size-3xl);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.5px;
+}
+
+.header-nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+#status-image {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* Navigation buttons - Zune Style */
+.nav-btn {
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-secondary);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: all var(--transition-base);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nav-btn:hover {
+  background: #c090ff;
+  box-shadow: 0 4px 12px rgba(212, 165, 255, 0.6);
+}
+
+.logout-btn {
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-danger);
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.logout-btn:hover {
+  background: #ffa0ad;
+  box-shadow: 0 4px 12px rgba(255, 184, 194, 0.6);
+}

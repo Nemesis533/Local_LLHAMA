@@ -1,0 +1,179 @@
+/**
+ * Button Styles
+ * All button variants and states
+ */
+
+/* Generic button - Zune Style */
+.btn {
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn:hover {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 12px rgba(224, 244, 255, 0.6);
+}
+
+/* Save button */
+.btn-save, .btn-success {
+  background: var(--color-success);
+  color: var(--text-primary);
+}
+
+.btn-save:hover, .btn-success:hover {
+  background: #a0e8c5;
+  box-shadow: 0 4px 12px rgba(184, 244, 211, 0.6);
+}
+
+/* Primary button */
+.btn-primary {
+  background: var(--color-secondary);
+  color: var(--text-primary);
+}
+
+.btn-primary:hover {
+  background: #c090ff;
+  box-shadow: 0 4px 12px rgba(212, 165, 255, 0.6);
+}
+
+/* Restart button */
+.btn-restart {
+  background: var(--color-danger);
+  color: var(--text-primary);
+}
+
+.btn-restart:hover {
+  background: #ffa0ad;
+  box-shadow: 0 4px 12px rgba(255, 184, 194, 0.6);
+}
+
+/* Icon button */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-icon:hover {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 12px rgba(224, 244, 255, 0.6);
+}
+
+/* Send button (chat/prompt) */
+.send-btn,
+.send-chat-btn,
+#send-prompt-btn {
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.send-chat-btn:hover:not(:disabled),
+#send-prompt-btn:hover {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 12px rgba(224, 244, 255, 0.6);
+}
+
+.send-chat-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Modal action buttons */
+.btn-cancel {
+  padding: 10px 20px;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: all var(--transition-base);
+}
+
+.btn-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.btn-submit {
+  padding: 10px 20px;
+  border: none;
+  background: var(--color-primary);
+  color: var(--text-inverse);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  transition: background var(--transition-base);
+}
+
+.btn-submit:hover {
+  background: var(--color-primary-dark);
+}
+
+/* Delete/danger buttons */
+.delete-event-btn,
+.event-delete-btn {
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.delete-event-btn:hover,
+.event-delete-btn:hover {
+  background: var(--color-danger);
+  color: var(--text-inverse);
+  border-color: var(--color-danger);
+}
+
+/* Settings action buttons */
+.settings-actions {
+  display: flex;
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-light);
+  justify-content: flex-end;
+}
+
+.btn-save,
+.btn-restart {
+  padding: var(--space-sm) var(--space-xl);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  border: 2px solid;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-slow);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

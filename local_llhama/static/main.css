@@ -1,0 +1,22 @@
+/**
+ * Main Stylesheet
+ * Imports all modular CSS files in correct order
+ */
+
+/* 1. Variables & Design Tokens */
+@import url('css/variables.css');
+
+/* 2. Base & Reset */
+@import url('css/base.css');
+
+/* 3. Layout */
+@import url('css/layout.css');
+
+/* 4. Components */
+@import url('css/header.css');
+@import url('css/buttons.css');
+@import url('css/dashboard.css');
+@import url('css/chat.css');
+@import url('css/calendar.css');
+@import url('css/modal.css');
+@import url('css/scrollbar.css');

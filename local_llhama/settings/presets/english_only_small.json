@@ -1,0 +1,65 @@
+{
+  "name": "English-Only Small",
+  "description": "Lightweight English-only setup for memory constrained environments. Recommended for domotics only more than general purpose use.",
+  "requirements": {
+    "gpu_count": 1,
+    "vram_per_gpu": "8GB",
+    "languages": ["en"]
+  },
+  "settings": {
+    "SettingLoaderClass": {
+      "ollama_model": {
+        "value": "qwen3:8b",
+        "type": "str"
+      },
+      "ollama_embedding_model": {
+        "value": "embeddinggemma",
+        "type": "str"
+      },
+      "allow_internet_searches": {
+        "value": true,
+        "type": "bool"
+      }
+    },
+    "AudioTranscriptionClass": {
+      "whisper_model": {
+        "value": "small",
+        "type": "str"
+      }
+    },
+    "TextToSpeech": {
+      "language_models": {
+        "value": {
+          "en": "en_US-amy-medium.onnx"
+        },
+        "type": "dict"
+      }
+    },
+    "ChatHandler": {
+      "max_tokens": {
+        "value": 2048,
+        "type": "int"
+      },
+      "default_context_words": {
+        "value": 200,
+        "type": "int"
+      },
+      "min_context_words": {
+        "value": 50,
+        "type": "int"
+      },
+      "context_reduction_factor": {
+        "value": 0.5,
+        "type": "float"
+      }
+    },
+    "OllamaClient": {
+      "languages": {
+        "value": {
+          "English": "en"
+        },
+        "type": "dict"
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+/**
+ * CSS Variables & Color Palette
+ * Central design tokens for consistent theming
+ */
+
+:root {
+  /* Zune-Inspired Primary Colors - Light Zircon Palette */
+  --color-primary: #e0f4ff;
+  --color-primary-dark: #b8e3ff;
+  --color-primary-light: #f0f9ff;
+  
+  /* Secondary Colors */
+  --color-secondary: #d4a5ff;
+  --color-accent: #ffc2d4;
+  --color-success: #b8f4d3;
+  --color-warning: #ffe4b8;
+  --color-danger: #ffb8c2;
+  --color-info: #c2e4ff;
+  
+  /* Semantic Colors */
+  --color-error: #ffb8c2;
+  --color-error-light: #ffd4dc;
+  
+  /* Neutral Grays - Light Theme */
+  --color-gray-50: #f9f9f9;
+  --color-gray-100: #f0f0f0;
+  --color-gray-200: #e8e8e8;
+  --color-gray-300: #d8d8d8;
+  --color-gray-400: #b8b8b8;
+  --color-gray-500: #9a9a9a;
+  --color-gray-600: #7a7a7a;
+  --color-gray-700: #5a5a5a;
+  --color-gray-800: #3a3a3a;
+  --color-gray-900: #2a2a2a;
+  
+  /* Slate Grays - Light Theme */
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f5f5f5;
+  --color-slate-200: #eeeeee;
+  --color-slate-300: #e0e0e0;
+  --color-slate-400: #bdbdbd;
+  --color-slate-500: #9e9e9e;
+  --color-slate-600: #757575;
+  --color-slate-700: #616161;
+  --color-slate-800: #424242;
+  --color-slate-900: #212121;
+  
+  /* Background Colors - Light Theme */
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e8e8e8;
+  --bg-hover: #f0f0f0;
+  
+  /* Text Colors - Dark on Light */
+  --text-primary: #2a2a2a;
+  --text-secondary: #4a4a4a;
+  --text-tertiary: #6a6a6a;
+  --text-muted: #8a8a8a;
+  --text-inverse: #ffffff;
+  
+  /* Log Message Colors */
+  --log-main: #e0f4ff;
+  --log-user: #c2e4ff;
+  --log-llm: #d4a5ff;
+  --log-supervisor: #ffc2d4;
+  --log-http: #b0b0b0;
+  
+  /* Event Type Colors */
+  --event-reminder: #ffe4b8;
+  --event-appointment: #c2e4ff;
+  --event-alarm: #ffb8c2;
+  
+  /* Border Colors */
+  --border-light: #e0e0e0;
+  --border-medium: #d0d0d0;
+  --border-dark: #c0c0c0;
+  
+  /* Shadow Colors */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+  
+  /* Spacing Scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  
+  /* Border Radius - Minimal/Sharp Zune Style */
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-full: 0px;
+  
+  /* Typography - Bold Zune Style */
+  --font-family: 'Segoe UI', 'Arial', sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 0.95rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* Z-Index Scale */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 1000;
+  --z-tooltip: 2000;
+}

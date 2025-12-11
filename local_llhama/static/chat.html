@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM Chat Interface</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header with logout -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-title">
+          <img id="status-image" src="/static/images/llm.png" alt="Status" onerror="this.style.display='none';" />
+          <h1>LLM Chat Interface</h1>
+          <div id="model-info" class="model-info">
+            <span class="model-label">Model:</span>
+            <span id="model-name" class="model-name">Loading...</span>
+          </div>
+        </div>
+        <div class="header-nav">
+          <button id="admin-btn" class="nav-btn" style="display: none;" onclick="window.location.href='/admin'">Admin Panel</button>
+          <button id="logout-btn" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-layout">
+      <!-- Sidebar for chat history (placeholder) -->
+      <aside class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <h2>Chat History</h2>
+          <button id="new-chat-btn" class="btn-icon" title="Start New Chat">+</button>
+        </div>
+        <div id="chat-history" class="chat-history-list">
+          <p class="placeholder-text">Loading conversations...</p>
+        </div>
+      </aside>
+
+      <!-- Main chat area -->
+      <main class="chat-main">
+        <!-- Chat messages display -->
+        <div class="chat-messages" id="chat-messages">
+          <div class="welcome-message">
+            <h3>Welcome to the LLM Chat Interface</h3>
+            <p>Start a conversation by typing a message below. Your requests will be processed through the full system pipeline including simple functions.</p>
+          </div>
+        </div>
+
+        <!-- Chat input area -->
+        <div class="chat-input-container">
+          <textarea 
+            id="chat-input" 
+            class="chat-input" 
+            placeholder="Type your message here..." 
+            rows="3"
+            maxlength="2000"
+          ></textarea>
+          <button id="send-chat-btn" class="send-btn">Send</button>
+        </div>
+      </main>
+      
+      <!-- Calendar sidebar -->
+      <aside class="calendar-sidebar">
+        <div class="calendar-header">
+          <h2>My Calendar</h2>
+          <button id="add-event-btn" class="btn-icon" title="Add Event">+</button>
+        </div>
+        <div id="calendar-events" class="calendar-events">
+          <p class="loading-text">Loading events...</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+  
+  <!-- Add Event Modal -->
+  <div id="add-event-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Add Calendar Event</h2>
+      <form id="add-event-form">
+        <div class="form-group">
+          <label for="event-title">Title*</label>
+          <input type="text" id="event-title" required maxlength="200">
+        </div>
+        <div class="form-group">
+          <label for="event-type">Type*</label>
+          <select id="event-type">
+            <option value="reminder">Reminder</option>
+            <option value="appointment">Appointment</option>
+            <option value="alarm">Alarm</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="event-datetime">Date & Time*</label>
+          <input type="datetime-local" id="event-datetime" required>
+        </div>
+        <div class="form-group">
+          <label for="event-description">Description</label>
+          <textarea id="event-description" rows="3" maxlength="500"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="event-repeat">Repeat</label>
+          <select id="event-repeat">
+            <option value="none">None</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" id="cancel-event-btn">Cancel</button>
+          <button type="submit" class="btn-submit">Create Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/socket.io.min.js"></script>
+  <script>
+    // Check user permissions and show appropriate buttons
+    fetch('/check-auth')
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated) {
+          if (data.is_admin) {
+            document.getElementById('admin-btn').style.display = 'block';
+          }
+          // Dashboard button will be shown by /api/current_user call in chat.js
+        }
+      });
+  </script>
+  <script src="/static/chat.js?v=4"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "chat": {
+    "description": "Chat and conversation management settings",
+    "max_full_conversations": {
+      "description": "Maximum number of recent conversations to load with full message history. Older conversations will load metadata only for performance.",
+      "value": 40
+    },
+    "history_exchanges": {
+      "description": "Number of recent user-assistant exchanges to keep in memory for conversation context (affects in-memory context, not database storage)",
+      "value": 3
+    }
+  },
+  "hardware": {
+    "cuda_device": {
+      "description": "CUDA device to use for GPU acceleration. Options: 'auto' (automatic detection), 'cpu' (CPU only), or specific GPU index like 'cuda:0', 'cuda:1'",
+      "value": "auto"
+    },
+    "description": "Hardware and GPU configuration settings"
+  },
+  "home_assistant": {
+    "allowed_domains": {
+      "description": "List of Home Assistant device domains that are allowed to be controlled",
+      "value": [
+        "light",
+        "climate",
+        "switch",
+        "fan",
+        "media_player",
+        "thermostat"
+      ]
+    },
+    "allowed_entities": {
+      "description": "Explicit list of entity IDs that are allowed to be controlled. If empty, all entities in allowed_domains (except exclusions) are permitted.",
+      "value": [
+        "light.kitchen_light",
+        "light.desk_light",
+        "light.couch_light",
+        "climate.as35pbphra_pre",
+        "climate.as25pbphra_pre"
+      ]
+    },
+    "description": "Home Assistant integration configuration",
+    "exclusion_dict": {
+      "description": "Dictionary of entity name patterns to exclude from device discovery",
+      "value": {
+        "exclude_name1": "APC1400",
+        "exclude_name2": "Trust1500",
+        "exclude_name3": "EATON"
+      }
+    }
+  },
+  "safety": {
+    "description": "Safety and content moderation settings",
+    "safety_prompt_enabled": {
+      "description": "Enable or disable the safety instruction prompt that ensures safe and appropriate responses",
+      "value": true
+    }
+  }
+}

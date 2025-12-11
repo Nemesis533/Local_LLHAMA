@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Local LLHAMA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Header -->
+        <div class="admin-header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <h1>◈ Admin Panel</h1>
+                <button class="btn" style="background: #f44336; color: white; padding: 6px 12px; font-size: 13px;" onclick="restartSystem()">↻ Restart</button>
+            </div>
+            <div class="header-buttons">
+                <button class="btn" onclick="window.location.href='/chat'">Chat</button>
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-button active" onclick="switchTab('users')">◉ Users</button>
+            <button class="tab-button" onclick="switchTab('presets')">◧ Presets</button>
+            <button class="tab-button" onclick="switchTab('model')">◆ Model</button>
+            <button class="tab-button" onclick="switchTab('languages')">◐ Languages</button>
+            <button class="tab-button" onclick="switchTab('prompts')">◧ Prompts</button>
+            <button class="tab-button" onclick="switchTab('websearch')">◎ Web Search</button>
+            <button class="tab-button" onclick="switchTab('system-settings')">⚙ System</button>
+        </div>
+
+        <!-- Tab Content Panels -->
+        {% include 'admin/users-tab.html' %}
+        {% include 'admin/presets-tab.html' %}
+        {% include 'admin/model-tab.html' %}
+        {% include 'admin/languages-tab.html' %}
+        {% include 'admin/prompts-tab.html' %}
+        {% include 'admin/websearch-tab.html' %}
+        {% include 'admin/system-settings-tab.html' %}
+    </div>
+
+    <!-- Modals -->
+    {% include 'admin/modals.html' %}
+
+    <script type="module" src="{{ url_for('static', filename='admin-main.js') }}"></script>
+</body>
+</html>
