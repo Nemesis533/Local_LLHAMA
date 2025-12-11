@@ -107,9 +107,19 @@ To simplify usage, configurations have been created an tested onvarious configur
 
 ## Installation
 
-1. **Clone the repository**
+### Quick Install (Recommended)
 
-2. **Install dependencies:**
+```bash
+git clone https://github.com/Nemesis533/Local_LLHAMA.git
+cd Local_LLHAMA
+./local_LLM_installer.sh
+```
+
+Follow the on-screen instructions to configure database and environment.
+
+### Manual Install
+
+1. **Install dependencies:**
 
 ```bash
 pip install -r requirements.txt
@@ -117,18 +127,18 @@ pip install -r requirements.txt
 
 Requires Python 3.10+ (3.12 recommended).
 
-3. **Setup Ollama Server:**
+2. **Setup Database:**
 
-Install and configure Ollama on a local or remote machine:
+See [DATABASE_SETUP.md](DATABASE_SETUP.md) for PostgreSQL configuration.
+
+3. **Setup Ollama:**
+
 ```bash
-# Install Ollama (see https://ollama.ai for instructions)
 curl -fsSL https://ollama.com/install.sh | sh
-
-# Pull your preferred model
-ollama pull llama2  # or any other model
+ollama pull qwen2.5:14b  # or your preferred model
 ```
 
-4. **Configure environment variables:**
+4. **Configure environment:**
 
 ```bash
 cp .env.example .env
