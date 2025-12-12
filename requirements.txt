@@ -14,7 +14,7 @@ asyncpg==0.29.0
 # torch is installed separately via installer script (Python 3.11 + torch 2.1.2 compatible)
 openai-whisper==20231117
 openwakeword==0.6.0
-piper-tts==1.2.0
+piper-tts==1.0.0
 pyaudio==0.2.14
 pygame==2.5.2
 numpy==1.26.4
