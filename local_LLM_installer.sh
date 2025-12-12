@@ -40,6 +40,41 @@ read -p "Press Enter to continue or Ctrl+C to cancel..."
 echo
 sleep 1
 
+# Determine installation directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "Installer is running from: $SCRIPT_DIR"
+echo ""
+
+# Check if we're already in a Local_LLHAMA directory
+if [[ "$(basename "$SCRIPT_DIR")" == "Local_LLHAMA" ]] || [ -f "$SCRIPT_DIR/local_llhama/Run_System.py" ]; then
+    echo "Detected Local_LLHAMA repository in current location."
+    INSTALL_DIR="$SCRIPT_DIR"
+else
+    echo "This doesn't appear to be a Local_LLHAMA repository."
+    read -p "Enter installation directory [~/Local_LLHAMA]: " CUSTOM_DIR
+    INSTALL_DIR="${CUSTOM_DIR:-$HOME/Local_LLHAMA}"
+    
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo "Directory doesn't exist. Please clone the repository first:"
+        echo "  git clone https://github.com/Nemesis533/Local_LLHAMA.git $INSTALL_DIR"
+        exit 1
+    fi
+fi
+
+echo "Installation directory: $INSTALL_DIR"
+echo ""
+
+# Change to installation directory
+cd "$INSTALL_DIR" || exit 1
+echo "Working directory: $(pwd)"
+echo ""
+
+# Verify required files exist
+if [ ! -f "requirements.txt" ]; then
+    echo "ERROR: requirements.txt not found in $INSTALL_DIR"
+    echo "Please ensure you're running this installer from the Local_LLHAMA repository."
+    exit 1
+fi
 
 # Check if Python 3.11 is installed
 echo "Checking for Python 3.11 installation..."
@@ -247,14 +282,41 @@ if ! command -v ollama &> /dev/null; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Installing Ollama..."
-        curl -fsSL https://ollama.com/install.sh | sh
-        if [ $? -ne 0 ]; then
-            echo "WARNING: Ollama installation failed. You can install it manually from: https://ollama.ai"
+        
+        # Try snap first (recommended method)
+        if command -v snap &> /dev/null; then
+            echo "Installing Ollama via snap..."
+            sudo snap install ollama
+            if [ $? -eq 0 ]; then
+                echo "Ollama installed successfully via snap."
+            else
+                echo "Snap installation failed. Trying alternative method..."
+                curl -fsSL https://ollama.com/install.sh | sh
+                if [ $? -ne 0 ]; then
+                    echo "WARNING: Ollama installation failed. You can install it manually:"
+                    echo "  sudo snap install ollama"
+                    echo "  OR visit: https://ollama.ai"
+                else
+                    echo "Ollama installed successfully."
+                fi
+            fi
         else
-            echo "Ollama installed successfully."
+            # Fallback to curl script if snap not available
+            echo "Snap not available. Using official install script..."
+            curl -fsSL https://ollama.com/install.sh | sh
+            if [ $? -ne 0 ]; then
+                echo "WARNING: Ollama installation failed. Install manually:"
+                echo "  Install snap: sudo apt install snapd"
+                echo "  Then: sudo snap install ollama"
+                echo "  OR visit: https://ollama.ai"
+            else
+                echo "Ollama installed successfully."
+            fi
         fi
     else
-        echo "Skipping Ollama installation. You can install it later from: https://ollama.ai"
+        echo "Skipping Ollama installation. You can install it later:"
+        echo "  sudo snap install ollama"
+        echo "  OR visit: https://ollama.ai"
     fi
 else
     echo "Ollama found."
