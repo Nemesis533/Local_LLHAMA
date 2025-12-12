@@ -163,9 +163,9 @@ Presets are complete configuration packages that set LLM models, Whisper models,
 
 **Available Presets:**
 
-- **english_only_small** - Lightweight English-only setup for memory-constrained environments (8GB VRAM, Qwen3:8B)
+- **english_only_small** - Lightweight English-only setup for memory-constrained environments (8GB VRAM, qwen3:8b-q4_K_M)
 - **english_only_large** - High-quality English with large model for better performance (16GB VRAM, GPT-OSS:20B)
-- **multi_lingual_small** - Balanced multilingual for single GPU systems (16GB VRAM, Qwen3:14B, 6 languages)
+- **multi_lingual_small** - Balanced multilingual for single GPU systems (16GB VRAM, qwen3:14B-q4_K_M, 6 languages)
 - **multi_lingual_large** - High-performance multilingual for multi-GPU setups (1x24GB VRAM or 16+6 GB VRAM with 2 GPUs, GPT-OSS:20B, 6 languages)
 
 Each preset configures:
