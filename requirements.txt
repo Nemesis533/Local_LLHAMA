@@ -11,7 +11,7 @@ psycopg2-binary==2.9.9
 asyncpg==0.29.0
 
 # Audio processing
-torch==2.1.2  # Required by openai-whisper
+# torch is installed separately via installer script (Python 3.11 + torch 2.1.2 compatible)
 openai-whisper==20231117
 openwakeword==0.6.0
 piper-tts==1.2.0
@@ -24,3 +24,4 @@ psutil==5.9.8
 requests==2.31.0
 beautifulsoup4==4.12.3
 python-dotenv==1.0.1
+colorama==0.4.6
