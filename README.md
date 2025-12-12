@@ -337,6 +337,8 @@ Open discussions before submitting major PRs.
 ## Future Work
 
 **Recently Completed:**
+- One-command installation with automatic dependency handling
+- Interactive setup wizard for initial configuration
 - Configuration preset system with hardware-optimized defaults
 - ChatHandler configurable parameters (max_tokens, context windows)
 - Admin panel preset management with create/apply workflow
@@ -354,15 +356,17 @@ Open discussions before submitting major PRs.
 Create an **easy-to-install, easy-to-configure package** that serves as a complete cloud-free alternative to proprietary AI platforms. Focus on simplified deployment, hardware adaptability through presets, and intuitive configuration.
 
 **Next Steps:**
+0.7
 - System conversation memory and lookup
-- Package distribution (pip/apt installable)
-- One-command installation with automatic dependency handling
-- Interactive setup wizard for initial configuration
 - Auto-detection of hardware capabilities with preset recommendations
 - Improved documentation and quickstart guides
+0.8
 - Streamlined custom function integration
 - Enhanced error handling and recovery
+0.9
 - Test coverage expansion
+1.0
+- Package distribution (pip/apt installable)
 
 
 ## Known Bugs
