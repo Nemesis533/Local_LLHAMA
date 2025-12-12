@@ -354,6 +354,7 @@ Open discussions before submitting major PRs.
 Create an **easy-to-install, easy-to-configure package** that serves as a complete cloud-free alternative to proprietary AI platforms. Focus on simplified deployment, hardware adaptability through presets, and intuitive configuration.
 
 **Next Steps:**
+- System conversation memory and lookup
 - Package distribution (pip/apt installable)
 - One-command installation with automatic dependency handling
 - Interactive setup wizard for initial configuration
