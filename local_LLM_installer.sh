@@ -2,8 +2,7 @@
 
 # ============================================================================
 # Local_LLHAMA Installer
-# Version: 0.6 Alpha
-# 
+# Version: 0.65 Alpha
 # Copyright (c) 2025 Nicola Zanarini
 # Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
 # https://creativecommons.org/licenses/by/4.0/
@@ -12,7 +11,7 @@
 # Intro splash and package disclaimer
 printf "\n============================================\n"
 printf "Local_LLHAMA Installer\n"
-printf "Version: 0.6 Alpha\n"
+printf "Version: 0.65 Alpha\n"
 printf "============================================\n\n"
 printf "This installer may install the following system packages:\n\n"
 printf "OPTIONAL (you will be asked):\n"
