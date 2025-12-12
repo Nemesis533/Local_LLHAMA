@@ -9,7 +9,7 @@
       "type": "str"
     },
     "ollama_model": {
-      "value": "qwen3:8b-q4_K_M",
+      "value": "gpt-oss:20b",
       "type": "str"
     },
     "ollama_embedding_model": {

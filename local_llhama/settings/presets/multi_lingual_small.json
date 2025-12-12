@@ -9,7 +9,7 @@
   "settings": {
     "SettingLoaderClass": {
       "ollama_model": {
-        "value": "qwen3:8b",
+        "value": "qwen3:14B-q4_K_M",
         "type": "str"
       },
       "ollama_embedding_model": {
