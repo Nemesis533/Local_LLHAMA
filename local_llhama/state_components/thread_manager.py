@@ -6,7 +6,7 @@ Manages lifecycle of background worker threads.
 
 import threading
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class ThreadManager:

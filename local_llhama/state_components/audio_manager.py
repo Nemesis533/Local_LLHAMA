@@ -23,14 +23,14 @@ class AudioComponentManager:
         @param language_models Dictionary mapping language codes to TTS model filenames.
         @param whisper_model Whisper model name to use (e.g., 'turbo', 'medium', 'small').
         """
-        from ..Audio_Input import (
+        from ..audio_input import (
             AudioRecorderClass,
             AudioTranscriptionClass,
             NoiseFloorMonitor,
             WakeWordListener,
         )
-        from ..Audio_Output import SoundPlayer, TextToSpeech
-        from ..Shared_Logger import LogLevel
+        from ..audio_output import SoundPlayer, TextToSpeech
+        from ..shared_logger import LogLevel
 
         log_prefix = "[Audio Manager]"
         print(f"{log_prefix} [{LogLevel.INFO.name}] Initializing audio components...")

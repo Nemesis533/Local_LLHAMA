@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from .auth.calendar_manager import CalendarManager
 
 # === Custom Imports ===
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 
 
 class SimpleFunctions:

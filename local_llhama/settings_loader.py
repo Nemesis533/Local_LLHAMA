@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 # === Custom Imports ===
 from .ollama import OllamaClient
-from .PostgreSQL_Client import PostgreSQLClient
+from .postgresql_client import PostgreSQLClient
 from .settings.PresetLoader import PresetLoader
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 from .state_components.conversation_loader import ConversationLoader
 
 

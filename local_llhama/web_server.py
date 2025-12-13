@@ -16,7 +16,7 @@ from flask_socketio import SocketIO
 
 # Import authentication
 from .auth import AuthManager
-from .PostgreSQL_Client import PostgreSQLClient
+from .postgresql_client import PostgreSQLClient
 
 # Import blueprints from the routes package
 from .routes import (
@@ -34,7 +34,7 @@ from .routes.calendar_routes import init_calendar_routes
 from .routes.chat_history_routes import chat_history_bp, init_chat_history_routes
 
 # Import LogLevel
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 from .state_components.conversation_loader import ConversationLoader
 
 

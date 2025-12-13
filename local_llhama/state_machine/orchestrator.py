@@ -10,10 +10,10 @@ import time
 from queue import Empty
 
 # === Custom Imports ===
-from ..Audio_Output import SoundActions
+from ..audio_output import SoundActions
 from ..home_assistant import HomeAssistantClient
 from ..ollama import OllamaClient
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 # === Component Imports ===
 from ..state_components import (

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class PresetLoader:

@@ -26,7 +26,7 @@ Usage:
 import json
 import os
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 from .ha_client_core import HAClientCore, HARequestHandler
 from .ha_command_executor import HACommandExecutor
 from .ha_device_manager import HADeviceManager

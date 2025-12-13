@@ -14,7 +14,7 @@ from typing import List, Optional
 import requests
 
 # === Custom Imports ===
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class EmbeddingClient:

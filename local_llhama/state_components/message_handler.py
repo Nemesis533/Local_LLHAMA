@@ -7,7 +7,7 @@ Handles inter-process message communication with web server and other components
 import multiprocessing as mp
 from queue import Empty
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class MessageHandler:

@@ -13,7 +13,7 @@ import requests
 from dotenv import load_dotenv
 
 # === Custom Imports ===
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class HARequestHandler:

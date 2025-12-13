@@ -5,7 +5,7 @@ Manages conversation history, context windows, and database persistence
 for the ChatHandler component.
 """
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class ChatContextManager:
@@ -170,7 +170,7 @@ class ChatContextManager:
         
         # Build prompt combining cached persistent context + in-memory history
         if persistent_context:
-            from ..LLM_Prompts import RESUME_CONVERSATION_PROMPT
+            from ..llm_prompts import RESUME_CONVERSATION_PROMPT
             
             # Start with persistent context from DB (cached)
             prompt = f"{RESUME_CONVERSATION_PROMPT}\n\n{persistent_context}"

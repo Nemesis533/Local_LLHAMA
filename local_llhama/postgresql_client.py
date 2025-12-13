@@ -14,7 +14,7 @@ import asyncpg
 from psycopg2 import extras, pool
 
 from .error_handler import ErrorHandler
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 
 
 class PostgreSQLClient:
