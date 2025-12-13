@@ -9,7 +9,7 @@ import sys
 # Add the parent directory to the path to import local_llhama
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from local_llhama.Simple_Functions import SimpleFunctions
+from local_llhama.simple_functions import SimpleFunctions
 
 
 def test_web_search():

@@ -11,7 +11,7 @@ import whisper
 from openwakeword.model import Model
 
 # === Custom Imports ===
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 
 
 class AudioTranscriptionClass:

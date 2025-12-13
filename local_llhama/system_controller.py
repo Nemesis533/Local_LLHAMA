@@ -13,11 +13,11 @@ import time
 
 from .error_handler import ErrorHandler
 from .home_assistant import HomeAssistantClient
-from .PostgreSQL_Client import PostgreSQLClient
+from .postgresql_client import PostgreSQLClient
 
 # === Custom Imports ===
-from .Settings_Loader import SettingLoaderClass
-from .Shared_Logger import LogLevel
+from .settings_loader import SettingLoaderClass
+from .shared_logger import LogLevel
 from .state_machine import StateMachineInstance
 
 
@@ -66,7 +66,7 @@ class LocalLLHamaSystemController:
         self.loader = loader
 
         # Reload prompts with system settings
-        from .LLM_Prompts import reload_prompts
+        from .llm_prompts import reload_prompts
 
         reload_prompts(
             settings_loader=loader, system_settings=loader.get_system_settings()

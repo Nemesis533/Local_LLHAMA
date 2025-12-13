@@ -5,7 +5,7 @@ Handles login verification, session management, and password operations.
 
 import bcrypt
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 from .db_manager import DatabaseManager
 
 

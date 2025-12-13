@@ -16,12 +16,12 @@ from multiprocessing import Process
 
 import local_llhama
 
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 from .state_machine import State
-from .System_Controller import LocalLLHamaSystemController
+from .system_controller import LocalLLHamaSystemController
 
 # === Custom Imports ===
-from .Web_Server import LocalLLHAMA_WebService
+from .web_server import LocalLLHAMA_WebService
 
 # === Configuration ===
 warnings.filterwarnings("ignore", category=RuntimeWarning)

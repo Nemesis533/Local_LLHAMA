@@ -11,7 +11,7 @@ import json
 import requests
 
 # === Custom Imports ===
-from ..LLM_Prompts import (
+from ..llm_prompts import (
     CONVERSATION_PROCESSOR_PROMPT,
     RESPONSE_PROCESSOR_PROMPT,
     RESUME_CONVERSATION_PROMPT,
@@ -20,7 +20,7 @@ from ..LLM_Prompts import (
     SMART_HOME_PROMPT_TEMPLATE,
     is_safety_enabled,
 )
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 from .ollama_context_builders import ContextBuilder
 from .ollama_embeddings import EmbeddingClient
 

@@ -12,9 +12,9 @@ from datetime import datetime, timedelta
 from queue import Empty
 
 # === Custom Imports ===
-from ..Audio_Output import SoundActions
+from ..audio_output import SoundActions
 from ..ollama import OllamaClient
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 from .core_state import State
 
 

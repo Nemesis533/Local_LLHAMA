@@ -5,7 +5,7 @@ Processes voice commands using LLM and handles command parsing.
 """
 
 from ..ollama import OllamaClient
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class CommandProcessor:

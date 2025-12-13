@@ -8,8 +8,8 @@ import os
 import bcrypt
 from dotenv import load_dotenv
 
-from ..PostgreSQL_Client import PostgreSQLClient
-from ..Shared_Logger import LogLevel
+from ..postgresql_client import PostgreSQLClient
+from ..shared_logger import LogLevel
 
 
 class User:

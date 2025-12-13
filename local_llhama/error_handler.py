@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable, Tuple, Type
 
-from .Shared_Logger import LogLevel
+from .shared_logger import LogLevel
 
 
 class ErrorHandler:

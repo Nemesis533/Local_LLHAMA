@@ -12,7 +12,7 @@ from queue import Empty
 
 from .chat_context_manager import ChatContextManager
 from ..ollama import OllamaClient
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class ChatHandler:

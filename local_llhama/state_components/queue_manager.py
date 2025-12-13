@@ -6,7 +6,7 @@ Manages all queues used by the state machine for inter-thread communication.
 
 from queue import Empty, Queue
 
-from ..Shared_Logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 class QueueManager:

@@ -1,7 +1,7 @@
 import os
 
-from .Runtime_Supervisor import LocalLLHamaSupervisor
-from .Shared_Logger import LogLevel, shared_logger
+from .runtime_supervisor import LocalLLHamaSupervisor
+from .shared_logger import LogLevel, shared_logger
 
 
 def main():

@@ -9,8 +9,8 @@ retrieval from Home Assistant.
 import requests
 
 # === Custom Imports ===
-from ..Shared_Logger import LogLevel
-from ..Simple_Functions import SimpleFunctions
+from ..shared_logger import LogLevel
+from ..simple_functions import SimpleFunctions
 from .ha_validators import HADataFormatter, HAEntityFilter
 
 

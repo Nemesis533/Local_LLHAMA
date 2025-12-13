@@ -8,8 +8,8 @@ Handles fetching conversations, messages, and embedding summaries for LLM contex
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from ..PostgreSQL_Client import PostgreSQLClient
-from ..Shared_Logger import LogLevel
+from ..postgresql_client import PostgreSQLClient
+from ..shared_logger import LogLevel
 
 
 class ConversationMessage:
