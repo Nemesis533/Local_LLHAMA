@@ -53,10 +53,16 @@ The system now includes comprehensive configuration management as well as preset
 - Per-user calendar with automatic notifications, both voical and in chat
 - Unified interface for all event types; each users sees only their calendar, the admin can only see voice-created events.
 
+**Semantic Memory Search**
+- Vector-based conversation history search using Ollama embeddings
+- Hybrid search combining semantic similarity with keyword matching
+- Wikipedia fallback to memory when articles not found
+- Per-user private memory with configurable similarity threshold
+
 **Web & Information via Free/Open APIs**
 - Real-time news via GDELT API
 - Weather queries via Open-Meteo API
-- Wikipedia API integration 
+- Wikipedia API integration with memory fallback
 - You can replace/add/change these with whatever you want
 
 **Web Interface**
@@ -71,6 +77,7 @@ The system now includes comprehensive configuration management as well as preset
 
 ## Latest Additions
 
+- **Semantic Memory Search** - Vector embeddings + keyword matching for conversational context retrieval with Wikipedia fallback
 - **Dual-Pipeline Architecture** - Voice and chat both share LLM capabilities, optimized for their respective UX patterns
 - **Real-time Chat Interface** - Multi-user WebSocket communication with persistent message history
 - **Per-User Context** - Conversation history tracking (last 3 exchanges) for contextual, aware responses
@@ -78,7 +85,7 @@ The system now includes comprehensive configuration management as well as preset
 - **Admin Panel** - User management, permissions assignment, password reset
 - **Markdown Chat Rendering** - Bold, italic, code blocks with syntax highlighting
 - **Role-Based Access Control** - Granular permissions (admin, dashboard access, chat access)
-- **Reponse Streaming and Optimized Context** - Contect passing has been optimized to maintain proper command/context handlign while keeping a reasonable lenght conversational context.
+- **Response Streaming and Optimized Context** - Context passing has been optimized to maintain proper command/context handling while keeping a reasonable length conversational context.
 
 
 ## System Requirements
