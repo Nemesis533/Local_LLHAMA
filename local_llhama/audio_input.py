@@ -327,29 +327,41 @@ class WakeWordListener:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
+        self.ready_event = threading.Event()  # Signal when ready to detect wake words
 
     def pause(self):
         """
         @brief Pause wake word detection to free audio device.
         """
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PAUSE requested, clearing pause_event")
         self.pause_event.clear()
         print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection paused"
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection paused, pause_event is now: {self.pause_event.is_set()}"
         )
 
     def resume(self):
         """
         @brief Resume wake word detection.
         """
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RESUME requested, setting pause_event")
         self.pause_event.set()
         print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection resumed"
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection resumed, pause_event is now: {self.pause_event.is_set()}"
         )
 
     def listen_for_wake_word(self, result_queue):
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word listener thread started")
+        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] stop_event is set: {self.stop_event.is_set()}")
+        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] pause_event is set: {self.pause_event.is_set()}")
+        
+        iteration_count = 0
         while not self.stop_event.is_set():
+            iteration_count += 1
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Main loop iteration {iteration_count}, stop_event: {self.stop_event.is_set()}, pause_event: {self.pause_event.is_set()}")
+            
             # Wait if paused
             if not self.pause_event.is_set():
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Paused, sleeping...")
                 time.sleep(0.1)
                 continue
 
@@ -357,12 +369,16 @@ class WakeWordListener:
             mic_stream = None
 
             try:
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Loading OpenWakeWord model...")
                 owwModel = Model(inference_framework="tflite")
+                print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] OpenWakeWord model loaded successfully")
                 CHUNK = 1280
 
                 # Initialize PyAudio with error handling
                 try:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Initializing PyAudio...")
                     audio = pyaudio.PyAudio()
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] PyAudio initialized")
                 except OSError as e:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}"
@@ -378,6 +394,7 @@ class WakeWordListener:
 
                 # Open microphone stream with error handling
                 try:
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Opening microphone stream...")
                     mic_stream = audio.open(
                         format=pyaudio.paInt16,
                         channels=1,
@@ -385,24 +402,27 @@ class WakeWordListener:
                         input=True,
                         frames_per_buffer=CHUNK,
                     )
+                    print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Microphone stream opened")
                 except OSError as e:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}"
                     )
-                    # Don't terminate - let garbage collector handle it
                     time.sleep(5)  # Wait before retry
                     continue
                 except Exception as e:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected stream error: {type(e).__name__}: {e}"
                     )
-                    # Don't terminate - let garbage collector handle it
                     time.sleep(5)
                     continue
 
                 print(
-                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection started"
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection active and listening..."
                 )
+                
+                # Signal that we're ready to detect wake words
+                self.ready_event.set()
+                
                 cooldown_time = 2
                 ignore_rms_window = 3
                 last_detection_time = 0
@@ -458,21 +478,41 @@ class WakeWordListener:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Wake word listener error: {type(e).__name__}: {e}"
                 )
+                import traceback
+                traceback.print_exc()
             finally:
-                # Cleanup
+                print(f"{self.class_prefix_message} [{LogLevel.DEBUG.name}] Entering finally block for cleanup")
+                # Clear ready flag since we're no longer listening
+                self.ready_event.clear()
+                # Cleanup resources
                 if mic_stream:
                     try:
                         mic_stream.stop_stream()
                         mic_stream.close()
-                    except:
-                        pass
-                # Don't terminate PyAudio - it's a global shutdown
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error closing mic stream: {e}")
+                
+                if audio:
+                    try:
+                        audio.terminate()
+                    except Exception as e:
+                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error terminating audio: {e}")
+                
                 # Allow time for device cleanup
-                time.sleep(0.3)
+                time.sleep(0.5)
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Finally block completed")
 
-                # Wait before retry if not stopping and not paused
-                if not self.stop_event.is_set() and self.pause_event.is_set():
+            # Wait before retry if not stopping
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] After finally, checking if should retry. stop_event: {self.stop_event.is_set()}, pause_event: {self.pause_event.is_set()}")
+            if not self.stop_event.is_set():
+                if self.pause_event.is_set():
                     print(
                         f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Restarting wake word detection in 3 seconds..."
                     )
                     time.sleep(3)
+                else:
+                    # If paused, wait briefly before checking again
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Paused, will check again after brief sleep")
+                    time.sleep(0.5)
+        
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word listener thread stopped")

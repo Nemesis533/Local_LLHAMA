@@ -691,12 +691,12 @@ class SimpleFunctions:
 
     def find_in_memory(self, query, user_id, limit=3):
         """
-        Find most similar messages using vector similarity search.
+        Find most similar messages using vector similarity search with pgvector.
 
-        @param query Text query to search for in past conversations
-        @param user_id User ID to filter messages by
-        @param limit Number of similar messages to return (default 3)
-        @return List of dicts with message content and similarity score
+        @param query: Text query to search for in past conversations
+        @param user_id: User ID to filter messages by
+        @param limit: Number of similar messages to return (default 3)
+        @return: List of dicts with message content and similarity score
         """
         if not self.pg_client or not query:
             return {"error": True, "message": "No query provided for memory search."}
@@ -711,57 +711,53 @@ class SimpleFunctions:
         try:
             import requests
 
-            ollama_url = (
-                self.ollama_host
-                if self.ollama_host.startswith("http")
-                else f"http://{self.ollama_host}"
-            )
+            ollama_url = self.ollama_host if self.ollama_host.startswith("http") else f"http://{self.ollama_host}"
             response = requests.post(
                 f"{ollama_url}/api/embeddings",
                 json={"model": self.ollama_embedding_model, "prompt": query},
                 timeout=30,
             )
-            if response.status_code != 200:
-                return {
-                    "error": True,
-                    "message": "Could not generate embedding for search.",
-                }
+            response.raise_for_status()
             embedding = response.json().get("embedding")
             if not embedding:
-                return {
-                    "error": True,
-                    "message": "Could not generate embedding for search.",
-                }
+                return {"error": True, "message": "Could not generate embedding for search."}
         except Exception as e:
-            print(
-                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}"
-            )
-            return {
-                "error": True,
-                "message": "Could not generate embedding for search.",
-            }
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}")
+            return {"error": True, "message": "Could not generate embedding for search."}
 
         try:
-            # Hybrid search: vector similarity + keyword matching for better accuracy
-            query = """
+            # Parse comma-separated keywords
+            keywords = [kw.strip() for kw in query.split(',') if kw.strip()]
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}")
+
+            # Build keyword search conditions for each keyword (AND logic)
+            keyword_conditions = []
+            keyword_params = []
+            for keyword in keywords:
+                keyword_conditions.append("m.content ILIKE %s")
+                keyword_params.append(f"%{keyword}%")
+            keyword_where = " AND ".join(keyword_conditions) if keyword_conditions else "1=1"
+
+            # Hybrid search: vector similarity + keyword matching
+            sql_query = f"""
             WITH vector_search AS (
                 SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
-                       1 - (me.vector <=> %s::vector) AS similarity
+                    1 - (me.vector <=> %s::vector) AS similarity
                 FROM messages m
                 JOIN message_embeddings me ON m.id = me.message_id
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE c.user_id = %s
-                  AND m.role = 'user'
-                  AND (1 - (me.vector <=> %s::vector)) >= %s
+                AND m.role = 'user'
+                AND (1 - (me.vector <=> %s::vector)) >= %s
             ),
             keyword_search AS (
                 SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
-                       0.9 AS similarity  -- Exact match gets boosted to 90%
+                    0.9 AS similarity
                 FROM messages m
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE c.user_id = %s
-                  AND m.role = 'user'
-                  AND m.content ILIKE %s
+                AND m.role = 'user'
+                AND ({keyword_where})
             ),
             combined AS (
                 SELECT id, content, role, created_at, conversation_id, MAX(similarity) as similarity
@@ -778,79 +774,60 @@ class SimpleFunctions:
                 c.similarity,
                 m_next.content as assistant_content
             FROM combined c
-            LEFT JOIN messages m_next ON m_next.conversation_id = c.conversation_id 
-                AND m_next.created_at > c.created_at 
+            LEFT JOIN LATERAL (
+                SELECT m_next.content
+                FROM messages m_next
+                WHERE m_next.conversation_id = c.conversation_id
+                AND m_next.created_at > c.created_at
                 AND m_next.role = 'assistant'
-                AND m_next.created_at = (
-                    SELECT MIN(created_at) 
-                    FROM messages 
-                    WHERE conversation_id = c.conversation_id 
-                    AND created_at > c.created_at 
-                    AND role = 'assistant'
-                )
+                ORDER BY m_next.created_at ASC
+                LIMIT 1
+            ) m_next ON TRUE
             ORDER BY c.similarity DESC
             LIMIT %s
             """
 
-            embedding_str = f"[{','.join(map(str, embedding))}]"
-            keyword_pattern = f"%{query}%"
-
-            results = self.pg_client.execute_query(
-                query,
-                (
-                    embedding_str,
-                    user_id,
-                    embedding_str,
-                    self.similarity_threshold,
-                    user_id,
-                    keyword_pattern,
-                    limit,
-                ),
+            # Build params tuple: embedding, user_id, embedding, threshold, user_id, keyword_params..., limit
+            params_tuple = (
+                embedding,
+                user_id,
+                embedding,
+                self.similarity_threshold,
+                user_id,
+                *keyword_params,
+                limit,
             )
 
-            filtered_results = (
-                [
-                    {
-                        "user_message": row[0],
-                        "assistant_response": (
-                            row[3] if len(row) > 3 and row[3] else None
-                        ),
-                        "created_at": row[1],
-                        "similarity": float(row[2]),
-                    }
-                    for row in results
-                ]
-                if results
-                else []
-            )
+            # Debug for mismatch
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}")
 
-            # Log filtering results
+            results = self.pg_client.execute_query(sql_query, params_tuple)
+
+            filtered_results = []
+            for row in results or []:
+                if len(row) < 3:
+                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Skipping malformed row: {row}")
+                    continue
+                filtered_results.append({
+                    "user_message": row[0],
+                    "created_at": row[1],
+                    "similarity": float(row[2]),
+                    "assistant_response": row[3] if len(row) > 3 and row[3] else None,
+                })
+
             if filtered_results:
-                print(
-                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}"
-                )
+                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
                 for idx, result in enumerate(filtered_results, 1):
-                    print(
-                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}"
-                    )
+                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}")
+                return filtered_results
 
-            # If no results meet threshold, return helpful message
-            if not filtered_results:
-                return {
-                    "error": True,
-                    "message": f"No memories found with similarity above {self.similarity_threshold:.2f}. This topic may not have been discussed before.",
-                }
-
-            return filtered_results
+            return {"error": True, "message": f"No memories found with similarity above {self.similarity_threshold:.2f}."}
 
         except Exception as e:
-            print(
-                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}"
-            )
-            return {
-                "error": True,
-                "message": "This topic was not discussed before or could not be found in previous conversations. Reply naturally",
-            }
+            import traceback
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}")
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Traceback:\n{traceback.format_exc()}")
+            return {"error": True, "message": "Could not find previous messages for this topic."}
 
     def _replace_target_with_entity_id(self, command):
         """
