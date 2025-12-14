@@ -206,8 +206,8 @@ def get_web_search_config():
     Get current web search configuration.
     """
     service = current_app.config["SERVICE_INSTANCE"]
-    
-    if service.loader and hasattr(service.loader, 'web_search_config'):
+
+    if service.loader and hasattr(service.loader, "web_search_config"):
         config_data = service.loader.web_search_config
         return {"status": "ok", "config": config_data}
     else:
@@ -215,14 +215,16 @@ def get_web_search_config():
         config_file = Path(
             "/home/llhama-usr/Local_LLHAMA/local_llhama/settings/web_search_config.json"
         )
-        
+
         if config_file.exists():
             with open(config_file, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
             return {"status": "ok", "config": config_data}
         else:
             return (
-                jsonify({"status": "error", "message": "Web search config file not found"}),
+                jsonify(
+                    {"status": "error", "message": "Web search config file not found"}
+                ),
                 404,
             )
 
@@ -253,7 +255,7 @@ def update_web_search_config():
         )
 
     service = current_app.config["SERVICE_INSTANCE"]
-    
+
     config_file = Path(
         "/home/llhama-usr/Local_LLHAMA/local_llhama/settings/web_search_config.json"
     )
@@ -261,9 +263,9 @@ def update_web_search_config():
     # Save to file
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
-    
+
     # Update loader's web_search_config if loader is available
-    if service.loader and hasattr(service.loader, 'web_search_config'):
+    if service.loader and hasattr(service.loader, "web_search_config"):
         service.loader.web_search_config = config
 
     return {

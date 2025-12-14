@@ -309,9 +309,9 @@ class LocalLLHAMA_WebService:
                 if target_sid in self.connected_clients:
                     try:
                         self.socketio.emit(
-                            "streaming_chunk", 
-                            {"chunk": chunk_text, "complete": is_complete}, 
-                            room=target_sid
+                            "streaming_chunk",
+                            {"chunk": chunk_text, "complete": is_complete},
+                            room=target_sid,
                         )
                     except Exception as e:
                         print(
@@ -328,7 +328,7 @@ class LocalLLHAMA_WebService:
                     self.socketio.emit(
                         "streaming_chunk",
                         {"chunk": chunk_text, "complete": is_complete},
-                        room=sid
+                        room=sid,
                     )
                 except Exception as e:
                     print(
@@ -487,7 +487,7 @@ class LocalLLHAMA_WebService:
 
                 if isinstance(message, dict):
                     message_type = message.get("type")
-                    
+
                     if message_type == "web_ui_message":
                         message_data = message.get("data")
                         client_id = message.get("client_id")
@@ -498,14 +498,18 @@ class LocalLLHAMA_WebService:
                                 print(
                                     f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit: {repr(e)}"
                                 )
-                    
+
                     elif message_type == "streaming_chunk":
                         chunk_text = message.get("data")
                         client_id = message.get("client_id")
                         is_complete = message.get("complete", False)
                         if chunk_text is not None:
                             try:
-                                self.emit_streaming_chunk(chunk_text, client_id=client_id, is_complete=is_complete)
+                                self.emit_streaming_chunk(
+                                    chunk_text,
+                                    client_id=client_id,
+                                    is_complete=is_complete,
+                                )
                             except Exception as e:
                                 print(
                                     f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit streaming chunk: {repr(e)}"

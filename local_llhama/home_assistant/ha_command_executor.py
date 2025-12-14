@@ -203,11 +203,11 @@ class HACommandExecutor:
         # Inject user_id for calendar functions
         if simple_action == "add_event" and user_id is not None:
             extra_data["user_id"] = user_id
-        
+
         # Inject user_id for memory search functions
         if simple_action == "find_in_memory" and user_id is not None:
             extra_data["user_id"] = user_id
-        
+
         # Inject user_id for Wikipedia to enable memory fallback
         if simple_action == "get_wikipedia_summary" and user_id is not None:
             extra_data["user_id"] = user_id

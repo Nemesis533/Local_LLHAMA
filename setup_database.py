@@ -7,7 +7,7 @@ This script can be run during initial setup or to reset the database.
 
 Usage:
     python3 setup_database.py [--reset]
-    
+
 Options:
     --reset     Drop all existing tables and recreate (WARNING: DATA LOSS!)
 
@@ -18,9 +18,10 @@ Requirements:
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 
@@ -45,14 +46,16 @@ def check_postgres_connection(env_vars):
             capture_output=True,
             text=True,
         )
-        
+
         if result.returncode != 0:
             print(f"✗ PostgreSQL server is not ready: {result.stderr}")
             return False
-        
-        print(f"✓ PostgreSQL server is running at {env_vars['host']}:{env_vars['port']}")
+
+        print(
+            f"✓ PostgreSQL server is running at {env_vars['host']}:{env_vars['port']}"
+        )
         return True
-        
+
     except FileNotFoundError:
         print("✗ pg_isready command not found. Is PostgreSQL installed?")
         return False
@@ -64,28 +67,33 @@ def check_database_exists(env_vars):
         result = subprocess.run(
             [
                 "psql",
-                "-h", env_vars["host"],
-                "-p", str(env_vars["port"]),
-                "-U", env_vars["user"],
-                "-lqt"
+                "-h",
+                env_vars["host"],
+                "-p",
+                str(env_vars["port"]),
+                "-U",
+                env_vars["user"],
+                "-lqt",
             ],
             env={**os.environ, "PGPASSWORD": env_vars["password"]},
             capture_output=True,
             text=True,
         )
-        
+
         databases = [line.split("|")[0].strip() for line in result.stdout.split("\n")]
         exists = env_vars["database"] in databases
-        
+
         if exists:
             print(f"✓ Database '{env_vars['database']}' exists")
         else:
             print(f"✗ Database '{env_vars['database']}' does not exist")
             print(f"\nTo create it, run:")
-            print(f"  createdb -h {env_vars['host']} -p {env_vars['port']} -U {env_vars['user']} {env_vars['database']}")
-        
+            print(
+                f"  createdb -h {env_vars['host']} -p {env_vars['port']} -U {env_vars['user']} {env_vars['database']}"
+            )
+
         return exists
-        
+
     except Exception as e:
         print(f"✗ Error checking database: {e}")
         return False
@@ -98,25 +106,30 @@ def run_sql_file(env_vars, sql_file):
         result = subprocess.run(
             [
                 "psql",
-                "-h", env_vars["host"],
-                "-p", str(env_vars["port"]),
-                "-U", env_vars["user"],
-                "-d", env_vars["database"],
-                "-f", sql_file,
+                "-h",
+                env_vars["host"],
+                "-p",
+                str(env_vars["port"]),
+                "-U",
+                env_vars["user"],
+                "-d",
+                env_vars["database"],
+                "-f",
+                sql_file,
             ],
             env={**os.environ, "PGPASSWORD": env_vars["password"]},
             capture_output=True,
             text=True,
         )
-        
+
         if result.returncode != 0:
             print(f"✗ Error executing SQL file:")
             print(result.stderr)
             return False
-        
+
         print(result.stdout)
         return True
-        
+
     except Exception as e:
         print(f"✗ Error running SQL file: {e}")
         return False
@@ -127,7 +140,7 @@ def main():
     print("=" * 60)
     print("Local_LLHAMA Database Setup")
     print("=" * 60)
-    
+
     # Check for reset flag
     reset_mode = "--reset" in sys.argv
     if reset_mode:
@@ -136,43 +149,43 @@ def main():
         if response.lower() != "yes":
             print("Setup cancelled.")
             sys.exit(0)
-    
+
     # Load environment variables
     print("\nLoading configuration from .env...")
     env_vars = load_env()
-    
+
     if not env_vars["password"]:
         print("✗ PG_PASSWORD not found in .env file")
         sys.exit(1)
-    
+
     print(f"✓ Configuration loaded")
     print(f"  Database: {env_vars['database']}")
     print(f"  User: {env_vars['user']}")
     print(f"  Host: {env_vars['host']}:{env_vars['port']}")
-    
+
     # Check PostgreSQL connection
     print("\nChecking PostgreSQL server...")
     if not check_postgres_connection(env_vars):
         sys.exit(1)
-    
+
     # Check if database exists
     print("\nChecking database...")
     if not check_database_exists(env_vars):
         sys.exit(1)
-    
+
     # Find SQL initialization file
     sql_file = Path(__file__).parent / "init_database.sql"
     if not sql_file.exists():
         print(f"\n✗ SQL file not found: {sql_file}")
         sys.exit(1)
-    
+
     print(f"\n✓ Found initialization script: {sql_file.name}")
-    
+
     # Run SQL initialization
     print("\nInitializing database schema...")
     if not run_sql_file(env_vars, str(sql_file)):
         sys.exit(1)
-    
+
     print("\n" + "=" * 60)
     print("✓ Database setup complete!")
     print("=" * 60)

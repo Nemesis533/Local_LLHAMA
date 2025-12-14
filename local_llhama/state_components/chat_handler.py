@@ -10,9 +10,9 @@ import threading
 import time
 from queue import Empty
 
-from .chat_context_manager import ChatContextManager
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
+from .chat_context_manager import ChatContextManager
 
 
 class ChatHandler:
@@ -198,10 +198,10 @@ class ChatHandler:
     def _parse_with_llm(self, text, client_id, conversation_id=None):
         """
         @brief Parse text with LLM and return structured output.
-        
+
         Uses MINIMAL context (only last command from OllamaClient) to prevent
         context pollution during structured JSON output.
-        
+
         @param text User message to parse
         @param client_id Client identifier
         @param conversation_id Optional conversation identifier
@@ -333,7 +333,7 @@ class ChatHandler:
                 for r in simple_function_results
                 if r.get("display_name")
             ]
-            
+
             # Send display message to show what's being processed
             if display_names:
                 status_message = ", ".join(display_names)
@@ -345,15 +345,12 @@ class ChatHandler:
             # This ensures the DB saves the user's actual question, not the conversion instruction
             llm_input = f"Convert these function results into a natural language response in {language} language: {simple_function_results}"
             original_user_query = self.pending_user_queries.get(client_id, "")
-            
+
             # Use streaming if from chat, otherwise regular response
             if conversation_id and isinstance(self.command_llm, OllamaClient):
                 # Streaming response for chat
                 self._handle_simple_function_streaming(
-                    llm_input, 
-                    original_user_query, 
-                    client_id, 
-                    conversation_id
+                    llm_input, original_user_query, client_id, conversation_id
                 )
             else:
                 # Non-streaming fallback
@@ -368,7 +365,9 @@ class ChatHandler:
                 if nl_output and nl_output.get("nl_response"):
                     nl_message = nl_output.get("nl_response")
                     message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                    self.message_handler.send_to_web_server(message, client_id=client_id)
+                    self.message_handler.send_to_web_server(
+                        message, client_id=client_id
+                    )
 
                     # Store interaction in history
                     if client_id in self.pending_user_queries:
@@ -380,7 +379,9 @@ class ChatHandler:
                     # Fallback
                     fallback_msg = str(simple_function_results)
                     message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
-                    self.message_handler.send_to_web_server(message, client_id=client_id)
+                    self.message_handler.send_to_web_server(
+                        message, client_id=client_id
+                    )
 
         except Exception as e:
             print(
@@ -393,7 +394,7 @@ class ChatHandler:
     ):
         """
         Handle simple function result conversion with streaming.
-        
+
         SECOND PARSE: Now we add full conversation context for natural response generation.
 
         @param llm_input The conversion prompt for the LLM
@@ -403,17 +404,19 @@ class ChatHandler:
         """
         try:
             # Add full conversation context for response generation
-            context_prompt, used_persistent = self.context_manager.get_context_for_prompt(
-                client_id, original_user_query
+            context_prompt, used_persistent = (
+                self.context_manager.get_context_for_prompt(
+                    client_id, original_user_query
+                )
             )
-            
+
             # Combine context with function result conversion instruction
             prompt_with_context = f"{context_prompt}\n\n{llm_input}"
-            
+
             print(
                 f"{self.log_prefix} [{LogLevel.INFO.name}] Generating response with full context (response generation phase)"
             )
-            
+
             # Stream the response conversion - accumulate full response first
             full_response = ""
             for chunk in self.command_llm.send_message_streaming(
@@ -439,12 +442,10 @@ class ChatHandler:
             # Now stream the extracted nl_response character by character for smooth display
             chunk_size = 5  # Send a few characters at a time for smooth streaming
             for i in range(0, len(nl_response), chunk_size):
-                chunk_text = nl_response[i:i+chunk_size]
-                is_complete = (i + chunk_size >= len(nl_response))
+                chunk_text = nl_response[i : i + chunk_size]
+                is_complete = i + chunk_size >= len(nl_response)
                 self.message_handler.send_streaming_chunk(
-                    chunk_text, 
-                    client_id=client_id,
-                    is_complete=is_complete
+                    chunk_text, client_id=client_id, is_complete=is_complete
                 )
 
             # Store interaction in history
@@ -476,12 +477,10 @@ class ChatHandler:
             # Stream the nl_response character by character for smooth display
             chunk_size = 5  # Send a few characters at a time for smooth streaming
             for i in range(0, len(nl_response), chunk_size):
-                chunk_text = nl_response[i:i+chunk_size]
-                is_complete = (i + chunk_size >= len(nl_response))
+                chunk_text = nl_response[i : i + chunk_size]
+                is_complete = i + chunk_size >= len(nl_response)
                 self.message_handler.send_streaming_chunk(
-                    chunk_text, 
-                    client_id=client_id,
-                    is_complete=is_complete
+                    chunk_text, client_id=client_id, is_complete=is_complete
                 )
 
             # Store interaction in history
@@ -515,7 +514,9 @@ class ChatHandler:
                 structured_output = self.command_llm.parse_with_llm(prompt)
                 self._handle_nl_response(structured_output, client_id)
                 if structured_output.get("nl_response"):
-                    self.context_manager.add_to_history(client_id, text, structured_output["nl_response"])
+                    self.context_manager.add_to_history(
+                        client_id, text, structured_output["nl_response"]
+                    )
                 return
 
             # Stream the response - accumulate full response first, then extract and stream nl_response
@@ -542,12 +543,10 @@ class ChatHandler:
             # Now stream the extracted nl_response character by character for smooth display
             chunk_size = 5  # Send a few characters at a time for smooth streaming
             for i in range(0, len(nl_response), chunk_size):
-                chunk_text = nl_response[i:i+chunk_size]
-                is_complete = (i + chunk_size >= len(nl_response))
+                chunk_text = nl_response[i : i + chunk_size]
+                is_complete = i + chunk_size >= len(nl_response)
                 self.message_handler.send_streaming_chunk(
-                    chunk_text, 
-                    client_id=client_id,
-                    is_complete=is_complete
+                    chunk_text, client_id=client_id, is_complete=is_complete
                 )
 
             # Store interaction in history
