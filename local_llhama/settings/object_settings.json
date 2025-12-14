@@ -67,6 +67,12 @@
       "type": "float"
     }
   },
+  "SimpleFunctions": {
+    "similarity_threshold": {
+      "value": 0.6,
+      "type": "float"
+    }
+  },
   "_system": {
     "active_preset": {
       "value": "multi_lingual_large",

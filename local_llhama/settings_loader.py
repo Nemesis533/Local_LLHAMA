@@ -50,6 +50,7 @@ class SettingLoaderClass:
         self.settings_file = f"{self.base_path}{self.json_path}"
         self.system_settings = {}
         self.assistant_name = ""  # Assistant name from settings
+        self.web_search_config = {}  # Web search configuration
 
         # Initialize preset loader
         self.preset_loader = PresetLoader(base_path)
@@ -78,13 +79,6 @@ class SettingLoaderClass:
         elif len(ha_token) < 20:
             warnings.append(
                 "HA_TOKEN seems too short - verify it's a valid Long-Lived Access Token"
-            )
-
-        # Check for Ollama IP (warning only, since it may not be used)
-        ollama_ip = os.getenv("OLLAMA_IP", "").strip()
-        if not ollama_ip:
-            warnings.append(
-                "OLLAMA_IP not set - Ollama integration will use default or may fail"
             )
 
         # Check for allowed IP prefixes
@@ -170,6 +164,9 @@ class SettingLoaderClass:
 
             # Load system settings
             self.system_settings = self._load_system_settings()
+            
+            # Load web search config
+            self.web_search_config = self._load_web_search_config()
 
             print(
                 f"{self.class_prefix_message} {LogLevel.INFO} Settings loaded successfully from {self.settings_file}"
@@ -338,6 +335,40 @@ class SettingLoaderClass:
             )
             raise
 
+    def _load_web_search_config(self):
+        """Load web search configuration from web_search_config.json file."""
+        try:
+            config_file = f"{self.base_path}/settings/web_search_config.json"
+
+            if not os.path.exists(config_file):
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Web search config file not found: {config_file}"
+                )
+                # Return default configuration
+                return {
+                    "allowed_websites": [],
+                    "max_results": 3,
+                    "timeout": 10,
+                    "api_tokens": {},
+                }
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded web search config")
+            return data
+
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error loading web search config: {e}"
+            )
+            # Return default configuration on error
+            return {
+                "allowed_websites": [],
+                "max_results": 3,
+                "timeout": 10,
+                "api_tokens": {},
+            }
+
     def get_system_settings(self):
         """Get the loaded system settings."""
         return self.system_settings
@@ -424,13 +455,13 @@ class SettingLoaderClass:
             )
             pg_client = None
 
-        # Load ollama_ip from environment variable if not set in JSON
-        ollama_ip = self.ollama_ip or os.getenv("OLLAMA_IP", "").strip()
+        # Load ollama host from system_settings.json or object_settings
+        ollama_ip = self.get_system_setting("ollama", "host") or self.ollama_ip
 
         if not ollama_ip:
             error_msg = (
-                "OLLAMA_IP is not configured.\n"
-                "Please set OLLAMA_IP in your .env file (e.g., OLLAMA_IP=192.168.88.239:11434)"
+                "Ollama host is not configured.\n"
+                "Please set ollama.host in system_settings.json (e.g., 192.168.88.239:11434)"
             )
             print(f"{self.class_prefix_message} {LogLevel.CRITICAL} {error_msg}")
             raise ValueError(error_msg)

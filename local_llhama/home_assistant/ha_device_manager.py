@@ -57,12 +57,14 @@ class HADeviceManager:
         self.entity_map = {}
         self.simple_functions = None
 
-    def initialize(self, allow_internet_searches=True, pg_client=None):
+    def initialize(self, allow_internet_searches=True, pg_client=None, ha_client=None, settings_loader=None):
         """
         Initialize the device manager by fetching HA data.
 
         @param allow_internet_searches Enable internet searches in simple functions
         @param pg_client PostgreSQL client for simple functions
+        @param ha_client HomeAssistantClient instance for ollama config
+        @param settings_loader SettingLoaderClass instance for web search config
         """
         # Get home location and validate
         home_location = self.get_home_location()
@@ -76,6 +78,9 @@ class HADeviceManager:
             home_location,
             allow_internet_searches=allow_internet_searches,
             pg_client=pg_client,
+            ollama_host=ha_client.ollama_host if ha_client else None,
+            ollama_embedding_model=ha_client.ollama_embedding_model if ha_client else None,
+            settings_loader=settings_loader,
         )
 
         # Fetch domain actions from Home Assistant API
