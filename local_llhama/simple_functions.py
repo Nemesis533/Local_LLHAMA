@@ -7,15 +7,16 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+from . import simple_functions_helpers as helpers
 from .auth.calendar_manager import CalendarManager
 
 # === Custom Imports ===
 from .error_handler import ErrorHandler
 from .shared_logger import LogLevel
-from . import simple_functions_helpers as helpers
-from . import simple_functions_helpers as helpers
 
 CLASS_PREFIX_MESSAGE = "[SimpleFunctions]"
+
+
 class SimpleFunctions:
     """
     @class SimpleFunctions
@@ -51,11 +52,17 @@ class SimpleFunctions:
         self.pg_client = pg_client
         self.ollama_host = ollama_host
         self.ollama_embedding_model = ollama_embedding_model or "nomic-embed-text"
-        self.similarity_threshold = 0.5  # Default threshold for memory search similarity
+        self.similarity_threshold = (
+            0.5  # Default threshold for memory search similarity
+        )
         self.settings_loader = settings_loader
 
         # Load web search configuration from settings loader
-        self.web_search_config = settings_loader.web_search_config if settings_loader else self._load_web_search_config()
+        self.web_search_config = (
+            settings_loader.web_search_config
+            if settings_loader
+            else self._load_web_search_config()
+        )
 
         # Load API keys from config or environment
         api_tokens = self.web_search_config.get("api_tokens", {})
@@ -72,13 +79,11 @@ class SimpleFunctions:
 
         # Initialize calendar manager with PostgreSQL client
         self.calendar = CalendarManager(pg_client)
-        
+
         # Common headers for HTTP requests
         self.headers = {
             "User-Agent": "LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)"
         }
-
-
 
     def _load_web_search_config(self) -> dict:
         """
@@ -124,7 +129,9 @@ class SimpleFunctions:
                 f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Failed to parse JSON - {e}"
             )
         except Exception as e:
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Unexpected error: {e}")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Unexpected error: {e}"
+            )
 
         return {}
 
@@ -160,15 +167,17 @@ class SimpleFunctions:
         # Validate inputs
         if not helpers.check_internet_access(self.allow_internet_searches):
             return "Internet searches are currently disabled in system settings."
-        
+
         error_msg = helpers.validate_input(topic, "topic")
         if error_msg:
             return error_msg
 
         # Get Wikipedia URLs from config
         wiki_base_url = helpers.get_config_url(self.web_search_config, "wikipedia", "")
-        wikimedia_base_url = helpers.get_config_url(self.web_search_config, "wikimedia", "")
-        
+        wikimedia_base_url = helpers.get_config_url(
+            self.web_search_config, "wikimedia", ""
+        )
+
         # Normalize topic for initial request
         topic_formatted = "_".join(topic.strip().split())
 
@@ -176,10 +185,14 @@ class SimpleFunctions:
             # Step 1: Get canonical page title
             summary_url = f"{wiki_base_url}/page/summary/{topic_formatted}"
             timeout = self.web_search_config.get("timeout", 10)
-            summary_data = helpers.make_http_request(summary_url, self.headers, timeout=timeout)
-            
+            summary_data = helpers.make_http_request(
+                summary_url, self.headers, timeout=timeout
+            )
+
             if not summary_data or not summary_data.get("title"):
-                return helpers.wikipedia_fallback_to_memory(topic, user_id, self.pg_client, self.find_in_memory)
+                return helpers.wikipedia_fallback_to_memory(
+                    topic, user_id, self.pg_client, self.find_in_memory
+                )
 
             canonical_title = summary_data.get("title").replace(" ", "_")
 
@@ -191,14 +204,20 @@ class SimpleFunctions:
 
             # Parse and extract text
             soup = BeautifulSoup(html_resp.text, "html.parser")
-            
+
             # Remove unwanted elements
-            for element in soup(["script", "style", "nav", "footer", "header", "table", "figure"]):
+            for element in soup(
+                ["script", "style", "nav", "footer", "header", "table", "figure"]
+            ):
                 element.decompose()
 
             # Get the first few paragraphs
             paragraphs = soup.find_all("p", limit=3)
-            text_parts = [p.get_text(separator=" ", strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20]
+            text_parts = [
+                p.get_text(separator=" ", strip=True)
+                for p in paragraphs
+                if len(p.get_text(strip=True)) > 20
+            ]
 
             if text_parts:
                 summary_text = " ".join(text_parts)
@@ -211,12 +230,22 @@ class SimpleFunctions:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
-                return helpers.wikipedia_fallback_to_memory(topic, user_id, self.pg_client, self.find_in_memory)
-            ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia HTTP error")
-            return "Wikipedia information not available at the moment, please try later."
+                return helpers.wikipedia_fallback_to_memory(
+                    topic, user_id, self.pg_client, self.find_in_memory
+                )
+            ErrorHandler.log_error(
+                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia HTTP error"
+            )
+            return (
+                "Wikipedia information not available at the moment, please try later."
+            )
         except Exception as e:
-            ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "Wikipedia fetch error")
-            return "Wikipedia information not available at the moment, please try later."
+            ErrorHandler.log_error(
+                CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "Wikipedia fetch error"
+            )
+            return (
+                "Wikipedia information not available at the moment, please try later."
+            )
 
     def get_news_summary(self, query=None):
         """
@@ -342,7 +371,9 @@ class SimpleFunctions:
             return "Home coordinates not available."
 
         # Get Open-Meteo weather URL from config
-        weather_url = helpers.get_config_url(self.web_search_config, "open-meteo weather", "")
+        weather_url = helpers.get_config_url(
+            self.web_search_config, "open-meteo weather", ""
+        )
 
         timeout = self.web_search_config.get("timeout", 10)
         params = {"latitude": lat, "longitude": lon, "current_weather": True}
@@ -565,7 +596,9 @@ class SimpleFunctions:
         @return Tuple of (latitude, longitude) or (None, None) if not found.
         """
         # Get Open-Meteo geocoding URL from config
-        geocoding_url = helpers.get_config_url(self.web_search_config, "open-meteo geocoding", "")
+        geocoding_url = helpers.get_config_url(
+            self.web_search_config, "open-meteo geocoding", ""
+        )
 
         url = geocoding_url
         timeout = self.web_search_config.get("timeout", 10)
@@ -596,7 +629,9 @@ class SimpleFunctions:
             return f"Could not find location: {place}"
 
         # Get Open-Meteo weather URL from config
-        weather_url = helpers.get_config_url(self.web_search_config, "open-meteo weather", "")
+        weather_url = helpers.get_config_url(
+            self.web_search_config, "open-meteo weather", ""
+        )
 
         timeout = self.web_search_config.get("timeout", 10)
         params = {"latitude": lat, "longitude": lon, "current_weather": True}
@@ -657,51 +692,55 @@ class SimpleFunctions:
     def find_in_memory(self, query, user_id, limit=3):
         """
         Find most similar messages using vector similarity search.
-        
+
         @param query Text query to search for in past conversations
         @param user_id User ID to filter messages by
         @param limit Number of similar messages to return (default 3)
         @return List of dicts with message content and similarity score
         """
         if not self.pg_client or not query:
-            return {
-                "error": True,
-                "message": "No query provided for memory search."
-            }
-        
+            return {"error": True, "message": "No query provided for memory search."}
+
         if not self.ollama_host:
             return {
                 "error": True,
-                "message": "Ollama host not configured for memory search."
+                "message": "Ollama host not configured for memory search.",
             }
-        
+
         # Generate embedding from query using Ollama
         try:
             import requests
-            ollama_url = self.ollama_host if self.ollama_host.startswith("http") else f"http://{self.ollama_host}"
+
+            ollama_url = (
+                self.ollama_host
+                if self.ollama_host.startswith("http")
+                else f"http://{self.ollama_host}"
+            )
             response = requests.post(
                 f"{ollama_url}/api/embeddings",
                 json={"model": self.ollama_embedding_model, "prompt": query},
-                timeout=30
+                timeout=30,
             )
             if response.status_code != 200:
                 return {
                     "error": True,
-                    "message": "Could not generate embedding for search."
+                    "message": "Could not generate embedding for search.",
                 }
             embedding = response.json().get("embedding")
             if not embedding:
                 return {
                     "error": True,
-                    "message": "Could not generate embedding for search."
+                    "message": "Could not generate embedding for search.",
                 }
         except Exception as e:
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}"
+            )
             return {
                 "error": True,
-                "message": "Could not generate embedding for search."
+                "message": "Could not generate embedding for search.",
             }
-        
+
         try:
             # Hybrid search: vector similarity + keyword matching for better accuracy
             query = """
@@ -752,46 +791,65 @@ class SimpleFunctions:
             ORDER BY c.similarity DESC
             LIMIT %s
             """
-            
+
             embedding_str = f"[{','.join(map(str, embedding))}]"
             keyword_pattern = f"%{query}%"
-            
+
             results = self.pg_client.execute_query(
-                query, 
-                (embedding_str, user_id, embedding_str, self.similarity_threshold, 
-                 user_id, keyword_pattern, limit)
+                query,
+                (
+                    embedding_str,
+                    user_id,
+                    embedding_str,
+                    self.similarity_threshold,
+                    user_id,
+                    keyword_pattern,
+                    limit,
+                ),
             )
-            
-            filtered_results = [
-                {
-                    "user_message": row[0],
-                    "assistant_response": row[3] if len(row) > 3 and row[3] else None,
-                    "created_at": row[1],
-                    "similarity": float(row[2])
-                }
-                for row in results
-            ] if results else []
-            
+
+            filtered_results = (
+                [
+                    {
+                        "user_message": row[0],
+                        "assistant_response": (
+                            row[3] if len(row) > 3 and row[3] else None
+                        ),
+                        "created_at": row[1],
+                        "similarity": float(row[2]),
+                    }
+                    for row in results
+                ]
+                if results
+                else []
+            )
+
             # Log filtering results
             if filtered_results:
-                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
+                print(
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}"
+                )
                 for idx, result in enumerate(filtered_results, 1):
-                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}")
-            
+                    print(
+                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}"
+                    )
+
             # If no results meet threshold, return helpful message
             if not filtered_results:
                 return {
                     "error": True,
-                    "message": f"No memories found with similarity above {self.similarity_threshold:.2f}. This topic may not have been discussed before."
+                    "message": f"No memories found with similarity above {self.similarity_threshold:.2f}. This topic may not have been discussed before.",
                 }
-            
+
             return filtered_results
-            
+
         except Exception as e:
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}"
+            )
             return {
                 "error": True,
-                "message": "This topic was not discussed before or could not be found in previous conversations. Reply naturally"
+                "message": "This topic was not discussed before or could not be found in previous conversations. Reply naturally",
             }
 
     def _replace_target_with_entity_id(self, command):

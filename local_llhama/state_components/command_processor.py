@@ -16,7 +16,7 @@ class CommandProcessor:
     def __init__(self, command_llm, log_prefix=""):
         self.command_llm = command_llm
         self.log_prefix = log_prefix
-        
+
         # Track last voice command (not for chat/WebUI commands)
         self.last_voice_command = None
 
@@ -33,7 +33,7 @@ class CommandProcessor:
 
         # Store client_id for use in response routing
         self.current_client_id = client_id
-        
+
         # Build prompt with previous voice command context (only for vocal commands, not chat)
         prompt = transcription
         if not from_webui and self.last_voice_command:
@@ -46,7 +46,7 @@ class CommandProcessor:
             structured_output = self.command_llm.parse_with_llm(prompt)
         else:
             structured_output = self.command_llm.send_message(prompt)
-        
+
         # Store this command for next time (only if it's a voice command, not chat)
         if not from_webui:
             self.last_voice_command = transcription

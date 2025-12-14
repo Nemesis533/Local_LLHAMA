@@ -44,7 +44,7 @@ class ChatContextManager:
 
         self.first_message_after_load = {}
 
-        # Adaptive context window management 
+        # Adaptive context window management
         self.context_word_limits = {}
 
         # Context window configuration
@@ -72,9 +72,12 @@ class ChatContextManager:
                 # Conversation changed - clear context cache and in-memory history
                 if client_id in self.conversation_history:
                     del self.conversation_history[client_id]
-                
+
                 # Clear cached persistent context for this client
-                if hasattr(self, '_persistent_context_cache') and client_id in self._persistent_context_cache:
+                if (
+                    hasattr(self, "_persistent_context_cache")
+                    and client_id in self._persistent_context_cache
+                ):
                     del self._persistent_context_cache[client_id]
 
                 print(
@@ -127,13 +130,13 @@ class ChatContextManager:
         @return tuple of (prompt, used_persistent_context)
         """
         conversation_id = self.client_conversations.get(client_id)
-        
+
         # Cache persistent context per client after first load
-        if not hasattr(self, '_persistent_context_cache'):
+        if not hasattr(self, "_persistent_context_cache"):
             self._persistent_context_cache = {}
-        
+
         persistent_context = self._persistent_context_cache.get(client_id)
-        
+
         # Load full context from DB if not already cached
         if persistent_context is None and self.conversation_loader and conversation_id:
             try:
@@ -152,7 +155,7 @@ class ChatContextManager:
                 if persistent_context:
                     # Cache it for subsequent messages
                     self._persistent_context_cache[client_id] = persistent_context
-                    
+
                     context_chars = len(persistent_context)
                     context_words = len(persistent_context.split())
                     print(
@@ -167,25 +170,27 @@ class ChatContextManager:
                 print(
                     f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to load conversation context: {repr(e)}"
                 )
-        
+
         # Build prompt combining cached persistent context + in-memory history
         if persistent_context:
             from ..llm_prompts import RESUME_CONVERSATION_PROMPT
-            
+
             # Start with persistent context from DB (cached)
             prompt = f"{RESUME_CONVERSATION_PROMPT}\n\n{persistent_context}"
-            
+
             # Add recent in-memory history if available
             if (
                 client_id in self.conversation_history
                 and self.conversation_history[client_id]
             ):
                 history = self.conversation_history[client_id]
-                prompt += "\n\n---\n\nMost recent interactions (after the above history):\n"
+                prompt += (
+                    "\n\n---\n\nMost recent interactions (after the above history):\n"
+                )
                 for interaction in history:
                     prompt += f"User: {interaction['user']}\n"
                     prompt += f"Assistant: {interaction['assistant']}\n"
-                
+
                 print(
                     f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context + {len(history)} in-memory interactions"
                 )
@@ -193,11 +198,11 @@ class ChatContextManager:
                 print(
                     f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context only"
                 )
-            
+
             # Add current message
             prompt += f"\n---\n\nThis is the user's next message: {text}"
             return prompt, True
-        
+
         # No persistent context - use only in-memory history
         elif (
             client_id in self.conversation_history
@@ -276,7 +281,12 @@ class ChatContextManager:
             del self.first_message_after_load[client_id]
         if client_id in self.context_word_limits:
             del self.context_word_limits[client_id]
-        if hasattr(self, '_persistent_context_cache') and client_id in self._persistent_context_cache:
+        if (
+            hasattr(self, "_persistent_context_cache")
+            and client_id in self._persistent_context_cache
+        ):
             del self._persistent_context_cache[client_id]
 
-        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Cleared data for client {client_id}")
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Cleared data for client {client_id}"
+        )

@@ -164,7 +164,7 @@ class SettingLoaderClass:
 
             # Load system settings
             self.system_settings = self._load_system_settings()
-            
+
             # Load web search config
             self.web_search_config = self._load_web_search_config()
 
@@ -324,7 +324,9 @@ class SettingLoaderClass:
 
             with open(settings_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded system settings")
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded system settings"
+            )
             return data
 
         except FileNotFoundError:
@@ -354,7 +356,9 @@ class SettingLoaderClass:
 
             with open(config_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded web search config")
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded web search config"
+            )
             return data
 
         except Exception as e:
@@ -852,7 +856,7 @@ class SettingLoaderClass:
         print(
             f"{self.class_prefix_message} {LogLevel.INFO} ChatHandler config: max_tokens={config['max_tokens']}, "
             f"default_context_words={config['default_context_words']}, min_context_words={config['min_context_words']}, "
-            f"history_exchanges={config['history_exchanges']}"        
+            f"history_exchanges={config['history_exchanges']}"
             f"context_reduction_factor={config['context_reduction_factor']}"
         )
         return config

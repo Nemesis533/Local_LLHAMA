@@ -42,7 +42,9 @@ class HomeAssistantClient:
     to provide a simple API for interacting with Home Assistant.
     """
 
-    def __init__(self, ollama_host=None, ollama_embedding_model=None, settings_loader=None):
+    def __init__(
+        self, ollama_host=None, ollama_embedding_model=None, settings_loader=None
+    ):
         """Initialize the Home Assistant client facade."""
         self.class_prefix_message = "[HomeAssistant]"
         self.ollama_host = ollama_host
@@ -154,7 +156,9 @@ class HomeAssistantClient:
         @param allow_internet_searches Enable internet searches in simple functions
         @param pg_client PostgreSQL client for simple functions
         """
-        self.device_manager.initialize(allow_internet_searches, pg_client, self, self.settings_loader)
+        self.device_manager.initialize(
+            allow_internet_searches, pg_client, self, self.settings_loader
+        )
 
         # Expose entity map and domain actions for backward compatibility
         self.entity_map = self.device_manager.entity_map
