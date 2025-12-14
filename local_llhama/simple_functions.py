@@ -691,26 +691,23 @@ class SimpleFunctions:
 
     def find_in_memory(self, query, user_id, limit=3):
         """
-        Find most similar messages using vector similarity search with pgvector.
+        Find most similar messages using vector similarity search with pgvector
+        and keyword matching.
 
         @param query: Text query to search for in past conversations
         @param user_id: User ID to filter messages by
         @param limit: Number of similar messages to return (default 3)
-        @return: List of dicts with message content and similarity score
+        @return: Formatted string describing found memories or error message
         """
         if not self.pg_client or not query:
-            return {"error": True, "message": "No query provided for memory search."}
+            return "No query provided for memory search."
 
         if not self.ollama_host:
-            return {
-                "error": True,
-                "message": "Ollama host not configured for memory search.",
-            }
+            return "Ollama host not configured for memory search."
 
         # Generate embedding from query using Ollama
         try:
             import requests
-
             ollama_url = self.ollama_host if self.ollama_host.startswith("http") else f"http://{self.ollama_host}"
             response = requests.post(
                 f"{ollama_url}/api/embeddings",
@@ -720,23 +717,24 @@ class SimpleFunctions:
             response.raise_for_status()
             embedding = response.json().get("embedding")
             if not embedding:
-                return {"error": True, "message": "Could not generate embedding for search."}
+                return "Could not generate embedding for search."
         except Exception as e:
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}")
-            return {"error": True, "message": "Could not generate embedding for search."}
+            return "Could not generate embedding for search."
 
         try:
-            # Parse comma-separated keywords
-            keywords = [kw.strip() for kw in query.split(',') if kw.strip()]
+            import re
+            # Extract alphanumeric keywords from query, lowercase for matching
+            keywords = re.findall(r'\w+', query.lower())
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}")
 
-            # Build keyword search conditions for each keyword (AND logic)
+            # Build keyword search conditions (OR logic: match any keyword)
             keyword_conditions = []
             keyword_params = []
             for keyword in keywords:
-                keyword_conditions.append("m.content ILIKE %s")
+                keyword_conditions.append("LOWER(m.content) ILIKE %s")
                 keyword_params.append(f"%{keyword}%")
-            keyword_where = " AND ".join(keyword_conditions) if keyword_conditions else "1=1"
+            keyword_where = " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
 
             # Hybrid search: vector similarity + keyword matching
             sql_query = f"""
@@ -752,7 +750,9 @@ class SimpleFunctions:
             ),
             keyword_search AS (
                 SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
-                    0.9 AS similarity
+                    0.5 + 0.1 * (
+                        {" + ".join([f"(LOWER(m.content) LIKE %s)::int" for _ in keywords])}
+                    ) AS similarity
                 FROM messages m
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE c.user_id = %s
@@ -787,18 +787,19 @@ class SimpleFunctions:
             LIMIT %s
             """
 
-            # Build params tuple: embedding, user_id, embedding, threshold, user_id, keyword_params..., limit
+            # Build params tuple
             params_tuple = (
-                embedding,
+                embedding,                 # vector_search embedding
                 user_id,
-                embedding,
+                embedding,                 # vector_search threshold comparison
                 self.similarity_threshold,
+                *keyword_params,           # keyword LIKE params for keyword_search similarity calculation
                 user_id,
-                *keyword_params,
+                *keyword_params,           # keyword LIKE params for WHERE clause
                 limit,
             )
 
-            # Debug for mismatch
+            # Debug
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}")
 
             results = self.pg_client.execute_query(sql_query, params_tuple)
@@ -819,15 +820,32 @@ class SimpleFunctions:
                 print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
                 for idx, result in enumerate(filtered_results, 1):
                     print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}")
-                return filtered_results
+                
+                # Format results as a natural language string
+                response_parts = [f"I found {len(filtered_results)} relevant memory/memories from our past conversations:"]
+                
+                for idx, result in enumerate(filtered_results, 1):
+                    timestamp = result['created_at'].strftime("%B %d, %Y") if hasattr(result['created_at'], 'strftime') else str(result['created_at'])
+                    similarity_pct = int(result['similarity'] * 100)
+                    
+                    response_parts.append(f"\n{idx}. (Similarity: {similarity_pct}%)")
+                    response_parts.append(f"   You asked: \"{result['user_message']}\"")
+                    
+                    if result.get('assistant_response'):
+                        response_parts.append(f"   I responded: \"{result['assistant_response']}\"")
+                    
+                    response_parts.append(f"   (from {timestamp})")
+                
+                return "\n".join(response_parts)
 
-            return {"error": True, "message": f"No memories found with similarity above {self.similarity_threshold:.2f}."}
+            return f"No memories found with similarity above {self.similarity_threshold:.2f}."
 
         except Exception as e:
             import traceback
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}")
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Traceback:\n{traceback.format_exc()}")
-            return {"error": True, "message": "Could not find previous messages for this topic."}
+            return "Could not find previous messages for this topic."
+
 
     def _replace_target_with_entity_id(self, command):
         """

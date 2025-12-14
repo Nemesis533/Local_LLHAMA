@@ -67,36 +67,14 @@ def wikipedia_fallback_to_memory(
     )
     memory_results = find_in_memory_func(query=topic, user_id=user_id, limit=3)
 
-    if isinstance(memory_results, list) and memory_results:
-        # Filter results that contain the topic word
-        topic_lower = topic.lower()
-        relevant_results = [
-            r
-            for r in memory_results
-            if topic_lower in r["user_message"].lower()
-            or (
-                r.get("assistant_response")
-                and topic_lower in r["assistant_response"].lower()
-            )
-        ]
+    # find_in_memory now returns a formatted string
+    if isinstance(memory_results, str):
+        # If it's an error message or "no memories found", return Wikipedia error
+        if "No memories found" in memory_results or "not configured" in memory_results or "No query provided" in memory_results or "Could not" in memory_results:
+            return f"No Wikipedia page found for: {topic}"
+        
+        # Otherwise, prepend context and return the memory results
+        return f"No '{topic}' on Wikipedia, but here's what we discussed before:\n\n{memory_results}"
 
-        # Use filtered results if any contain the topic, otherwise use all
-        final_results = relevant_results if relevant_results else memory_results
-
-        response = (
-            f"No '{topic}' on Wikipedia, but here's what we discussed before:\n\n"
-        )
-        for idx, result in enumerate(final_results, 1):
-            response += f"{idx}. User asked: \\\"{result['user_message']}\\\" (relevance: {result['similarity']:.0%})\n"
-            if result.get("assistant_response"):
-                assistant_text = result["assistant_response"]
-                if len(assistant_text) > 200:
-                    assistant_text = assistant_text[:197] + "..."
-                response += f"   Assistant said: {assistant_text}\n\n"
-        return response
-    elif isinstance(memory_results, dict) and memory_results.get("error"):
-        return (
-            f"No Wikipedia page found for: {topic}. {memory_results.get('message', '')}"
-        )
-
+    # Fallback in case old format is still somehow returned
     return f"No Wikipedia page found for: {topic}"
