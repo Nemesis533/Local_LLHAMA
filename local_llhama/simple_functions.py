@@ -10,9 +10,12 @@ from dotenv import load_dotenv
 from .auth.calendar_manager import CalendarManager
 
 # === Custom Imports ===
+from .error_handler import ErrorHandler
 from .shared_logger import LogLevel
+from . import simple_functions_helpers as helpers
+from . import simple_functions_helpers as helpers
 
-
+CLASS_PREFIX_MESSAGE = "[SimpleFunctions]"
 class SimpleFunctions:
     """
     @class SimpleFunctions
@@ -27,6 +30,9 @@ class SimpleFunctions:
         command_schema_path=None,
         allow_internet_searches=True,
         pg_client=None,
+        ollama_host=None,
+        ollama_embedding_model=None,
+        settings_loader=None,
     ):
         """
         @brief Initialize with home location.
@@ -34,14 +40,22 @@ class SimpleFunctions:
         @param command_schema_path Optional path to command schema file.
         @param allow_internet_searches Whether to allow internet-based searches (Wikipedia, news, etc.)
         @param pg_client PostgreSQL_Client instance for calendar operations.
+        @param ollama_host Ollama server host URL (e.g., "192.168.1.1:11434")
+        @param ollama_embedding_model Ollama embedding model name (e.g., "embeddinggemma")
+        @param settings_loader SettingLoaderClass instance for loading web search config
         """
         load_dotenv()
 
         self.home_location = home_location
         self.allow_internet_searches = allow_internet_searches
+        self.pg_client = pg_client
+        self.ollama_host = ollama_host
+        self.ollama_embedding_model = ollama_embedding_model or "nomic-embed-text"
+        self.similarity_threshold = 0.5  # Default threshold for memory search similarity
+        self.settings_loader = settings_loader
 
-        # Load web search configuration
-        self.web_search_config = self._load_web_search_config()
+        # Load web search configuration from settings loader
+        self.web_search_config = settings_loader.web_search_config if settings_loader else self._load_web_search_config()
 
         # Load API keys from config or environment
         api_tokens = self.web_search_config.get("api_tokens", {})
@@ -58,6 +72,13 @@ class SimpleFunctions:
 
         # Initialize calendar manager with PostgreSQL client
         self.calendar = CalendarManager(pg_client)
+        
+        # Common headers for HTTP requests
+        self.headers = {
+            "User-Agent": "LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)"
+        }
+
+
 
     def _load_web_search_config(self) -> dict:
         """
@@ -73,7 +94,7 @@ class SimpleFunctions:
                 return json.load(file)
         except Exception as e:
             print(
-                f"[SimpleFunctions] [{LogLevel.WARNING.name}] Failed to load web search config: {e}"
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Failed to load web search config: {e}"
             )
             # Return default configuration
             return {
@@ -96,14 +117,14 @@ class SimpleFunctions:
             return command_schema
         except FileNotFoundError:
             print(
-                f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] File not found: {filepath}"
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] File not found: {filepath}"
             )
         except json.JSONDecodeError as e:
             print(
-                f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Failed to parse JSON - {e}"
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Failed to parse JSON - {e}"
             )
         except Exception as e:
-            print(f"[SimpleFunctions] [{LogLevel.CRITICAL.name}] Unexpected error: {e}")
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Unexpected error: {e}")
 
         return {}
 
@@ -120,86 +141,64 @@ class SimpleFunctions:
                 return method(*args, **kwargs)
             else:
                 print(
-                    f"[SimpleFunctions] [{LogLevel.WARNING.name}] {function_name} exists but is not callable."
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] {function_name} exists but is not callable."
                 )
         else:
             print(
-                f"[SimpleFunctions] [{LogLevel.WARNING.name}] No function named {function_name} found."
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] No function named {function_name} found."
             )
 
-    def get_wikipedia_summary(self, topic=None):
+    def get_wikipedia_summary(self, topic=None, user_id=None):
         """
         @brief Fetch a short introductory summary from Wikipedia for a given topic.
+        Falls back to memory search if Wikipedia doesn't have the article.
 
         @param topic Topic/article name as a string.
+        @param user_id Optional user ID for memory search fallback.
         @return Summary string or error message.
         """
-        if not self.allow_internet_searches:
+        # Validate inputs
+        if not helpers.check_internet_access(self.allow_internet_searches):
             return "Internet searches are currently disabled in system settings."
-
-        error_message = (
-            "Wikipedia information not available at the moment, please try later."
-        )
-
-        if not topic:
-            return "Please specify a topic."
-
-        headers = {
-            "User-Agent": "LLHAMA-Assistant/1.0 (https://github.com/Nemesis533/Local_LLHAMA)"
-        }
+        
+        error_msg = helpers.validate_input(topic, "topic")
+        if error_msg:
+            return error_msg
 
         # Get Wikipedia URLs from config
-        wiki_base_url = "https://en.wikipedia.org/api/rest_v1"  # default
-        wikimedia_base_url = (
-            "https://api.wikimedia.org/core/v1/wikipedia/en/page"  # default
-        )
-
-        for site in self.web_search_config.get("allowed_websites", []):
-            site_name = site.get("name", "").lower()
-            if site_name == "wikipedia":
-                wiki_base_url = site.get("url", wiki_base_url)
-            elif site_name == "wikimedia":
-                wikimedia_base_url = site.get("url", wikimedia_base_url)
-
-        timeout = self.web_search_config.get("timeout", 10)
-
+        wiki_base_url = helpers.get_config_url(self.web_search_config, "wikipedia", "")
+        wikimedia_base_url = helpers.get_config_url(self.web_search_config, "wikimedia", "")
+        
         # Normalize topic for initial request
         topic_formatted = "_".join(topic.strip().split())
 
         try:
-            # Step 1: Get canonical page title from summary endpoint
+            # Step 1: Get canonical page title
             summary_url = f"{wiki_base_url}/page/summary/{topic_formatted}"
-            summary_resp = requests.get(summary_url, headers=headers, timeout=timeout)
-            summary_resp.raise_for_status()
-            summary_data = summary_resp.json()
+            timeout = self.web_search_config.get("timeout", 10)
+            summary_data = helpers.make_http_request(summary_url, self.headers, timeout=timeout)
+            
+            if not summary_data or not summary_data.get("title"):
+                return helpers.wikipedia_fallback_to_memory(topic, user_id, self.pg_client, self.find_in_memory)
+
             canonical_title = summary_data.get("title").replace(" ", "_")
 
-            if not canonical_title:
-                return f"No Wikipedia page found for: {topic}"
-
-            # Step 2: Fetch HTML using canonical title
-            # Use Wikimedia API for HTML content
+            # Step 2: Fetch HTML content
             html_url = f"{wikimedia_base_url}/{canonical_title}/html"
-            html_resp = requests.get(html_url, headers=headers, timeout=timeout)
+            timeout = self.web_search_config.get("timeout", 10)
+            html_resp = requests.get(html_url, headers=self.headers, timeout=timeout)
             html_resp.raise_for_status()
 
-            html_content = html_resp.text
-            soup = BeautifulSoup(html_content, "html.parser")
-
+            # Parse and extract text
+            soup = BeautifulSoup(html_resp.text, "html.parser")
+            
             # Remove unwanted elements
-            for element in soup(
-                ["script", "style", "nav", "footer", "header", "table", "figure"]
-            ):
+            for element in soup(["script", "style", "nav", "footer", "header", "table", "figure"]):
                 element.decompose()
 
-            # Get the first few paragraphs (introduction)
+            # Get the first few paragraphs
             paragraphs = soup.find_all("p", limit=3)
-            text_parts = []
-
-            for p in paragraphs:
-                text = p.get_text(separator=" ", strip=True)
-                if text and len(text) > 20:  # Skip very short paragraphs
-                    text_parts.append(text)
+            text_parts = [p.get_text(separator=" ", strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20]
 
             if text_parts:
                 summary_text = " ".join(text_parts)
@@ -212,10 +211,12 @@ class SimpleFunctions:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
-                return f"No Wikipedia page found for: {topic}"
-            return error_message
-        except Exception:
-            return error_message
+                return helpers.wikipedia_fallback_to_memory(topic, user_id, self.pg_client, self.find_in_memory)
+            ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia HTTP error")
+            return "Wikipedia information not available at the moment, please try later."
+        except Exception as e:
+            ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "Wikipedia fetch error")
+            return "Wikipedia information not available at the moment, please try later."
 
     def get_news_summary(self, query=None):
         """
@@ -237,11 +238,7 @@ class SimpleFunctions:
             max_results = self.web_search_config.get("max_results", 5)
 
             # Get GDELT URL from config
-            gdelt_url = "https://api.gdeltproject.org/api/v2/doc/doc"  # default
-            for site in self.web_search_config.get("allowed_websites", []):
-                if "gdelt" in site.get("name", "").lower():
-                    gdelt_url = site.get("url", gdelt_url)
-                    break
+            gdelt_url = helpers.get_config_url(self.web_search_config, "gdelt", "")
 
             params = {
                 "query": query,
@@ -345,11 +342,7 @@ class SimpleFunctions:
             return "Home coordinates not available."
 
         # Get Open-Meteo weather URL from config
-        weather_url = "https://api.open-meteo.com/v1/forecast"  # default
-        for site in self.web_search_config.get("allowed_websites", []):
-            if site.get("name", "").lower() == "open-meteo weather":
-                weather_url = site.get("url", weather_url)
-                break
+        weather_url = helpers.get_config_url(self.web_search_config, "open-meteo weather", "")
 
         timeout = self.web_search_config.get("timeout", 10)
         params = {"latitude": lat, "longitude": lon, "current_weather": True}
@@ -572,11 +565,7 @@ class SimpleFunctions:
         @return Tuple of (latitude, longitude) or (None, None) if not found.
         """
         # Get Open-Meteo geocoding URL from config
-        geocoding_url = "https://geocoding-api.open-meteo.com/v1/search"  # default
-        for site in self.web_search_config.get("allowed_websites", []):
-            if site.get("name", "").lower() == "open-meteo geocoding":
-                geocoding_url = site.get("url", geocoding_url)
-                break
+        geocoding_url = helpers.get_config_url(self.web_search_config, "open-meteo geocoding", "")
 
         url = geocoding_url
         timeout = self.web_search_config.get("timeout", 10)
@@ -607,11 +596,7 @@ class SimpleFunctions:
             return f"Could not find location: {place}"
 
         # Get Open-Meteo weather URL from config
-        weather_url = "https://api.open-meteo.com/v1/forecast"  # default
-        for site in self.web_search_config.get("allowed_websites", []):
-            if site.get("name", "").lower() == "open-meteo weather":
-                weather_url = site.get("url", weather_url)
-                break
+        weather_url = helpers.get_config_url(self.web_search_config, "open-meteo weather", "")
 
         timeout = self.web_search_config.get("timeout", 10)
         params = {"latitude": lat, "longitude": lon, "current_weather": True}
@@ -668,6 +653,146 @@ class SimpleFunctions:
             if action_name in entity_info.get("actions", []):
                 return entity_info.get("display_name")
         return None
+
+    def find_in_memory(self, query, user_id, limit=3):
+        """
+        Find most similar messages using vector similarity search.
+        
+        @param query Text query to search for in past conversations
+        @param user_id User ID to filter messages by
+        @param limit Number of similar messages to return (default 3)
+        @return List of dicts with message content and similarity score
+        """
+        if not self.pg_client or not query:
+            return {
+                "error": True,
+                "message": "No query provided for memory search."
+            }
+        
+        if not self.ollama_host:
+            return {
+                "error": True,
+                "message": "Ollama host not configured for memory search."
+            }
+        
+        # Generate embedding from query using Ollama
+        try:
+            import requests
+            ollama_url = self.ollama_host if self.ollama_host.startswith("http") else f"http://{self.ollama_host}"
+            response = requests.post(
+                f"{ollama_url}/api/embeddings",
+                json={"model": self.ollama_embedding_model, "prompt": query},
+                timeout=30
+            )
+            if response.status_code != 200:
+                return {
+                    "error": True,
+                    "message": "Could not generate embedding for search."
+                }
+            embedding = response.json().get("embedding")
+            if not embedding:
+                return {
+                    "error": True,
+                    "message": "Could not generate embedding for search."
+                }
+        except Exception as e:
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}")
+            return {
+                "error": True,
+                "message": "Could not generate embedding for search."
+            }
+        
+        try:
+            # Hybrid search: vector similarity + keyword matching for better accuracy
+            query = """
+            WITH vector_search AS (
+                SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
+                       1 - (me.vector <=> %s::vector) AS similarity
+                FROM messages m
+                JOIN message_embeddings me ON m.id = me.message_id
+                JOIN conversations c ON m.conversation_id = c.id
+                WHERE c.user_id = %s
+                  AND m.role = 'user'
+                  AND (1 - (me.vector <=> %s::vector)) >= %s
+            ),
+            keyword_search AS (
+                SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
+                       0.9 AS similarity  -- Exact match gets boosted to 90%
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.id
+                WHERE c.user_id = %s
+                  AND m.role = 'user'
+                  AND m.content ILIKE %s
+            ),
+            combined AS (
+                SELECT id, content, role, created_at, conversation_id, MAX(similarity) as similarity
+                FROM (
+                    SELECT * FROM vector_search
+                    UNION ALL
+                    SELECT * FROM keyword_search
+                ) all_results
+                GROUP BY id, content, role, created_at, conversation_id
+            )
+            SELECT 
+                c.content as user_content,
+                c.created_at,
+                c.similarity,
+                m_next.content as assistant_content
+            FROM combined c
+            LEFT JOIN messages m_next ON m_next.conversation_id = c.conversation_id 
+                AND m_next.created_at > c.created_at 
+                AND m_next.role = 'assistant'
+                AND m_next.created_at = (
+                    SELECT MIN(created_at) 
+                    FROM messages 
+                    WHERE conversation_id = c.conversation_id 
+                    AND created_at > c.created_at 
+                    AND role = 'assistant'
+                )
+            ORDER BY c.similarity DESC
+            LIMIT %s
+            """
+            
+            embedding_str = f"[{','.join(map(str, embedding))}]"
+            keyword_pattern = f"%{query}%"
+            
+            results = self.pg_client.execute_query(
+                query, 
+                (embedding_str, user_id, embedding_str, self.similarity_threshold, 
+                 user_id, keyword_pattern, limit)
+            )
+            
+            filtered_results = [
+                {
+                    "user_message": row[0],
+                    "assistant_response": row[3] if len(row) > 3 and row[3] else None,
+                    "created_at": row[1],
+                    "similarity": float(row[2])
+                }
+                for row in results
+            ] if results else []
+            
+            # Log filtering results
+            if filtered_results:
+                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
+                for idx, result in enumerate(filtered_results, 1):
+                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}")
+            
+            # If no results meet threshold, return helpful message
+            if not filtered_results:
+                return {
+                    "error": True,
+                    "message": f"No memories found with similarity above {self.similarity_threshold:.2f}. This topic may not have been discussed before."
+                }
+            
+            return filtered_results
+            
+        except Exception as e:
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}")
+            return {
+                "error": True,
+                "message": "This topic was not discussed before or could not be found in previous conversations. Reply naturally"
+            }
 
     def _replace_target_with_entity_id(self, command):
         """

@@ -82,7 +82,15 @@ class LocalLLHamaSystemController:
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Setting up Home Assistant"
         )
         start = time.time()
-        ha_client = HomeAssistantClient()
+        
+        # Get ollama host from system settings (same logic as in load_llm_models)
+        ollama_host = loader.get_system_setting("ollama", "host") or loader.ollama_ip
+        
+        ha_client = HomeAssistantClient(
+            ollama_host=ollama_host,
+            ollama_embedding_model=loader.ollama_embedding_model,
+            settings_loader=loader,
+        )
         loader.apply([ha_client])
         ha_client.initialize_HA(
             allow_internet_searches=loader.allow_internet_searches,

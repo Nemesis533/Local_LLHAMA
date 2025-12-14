@@ -43,7 +43,7 @@ class OllamaClient:
         model: str = "qwen3-14b",
         pg_client=None,
         conversation_loader=None,
-        embedding_model: str = "nomic-embed-text",
+        embedding_model: str = "nomic-embed-text",        
     ):
         """
         Initialize Ollama client with connection details.
@@ -82,6 +82,7 @@ class OllamaClient:
         # Context management - keep only last request and response
         self.last_user_message = None
         self.last_message_from_chat = False  # Track if last command was from chat
+        self.last_user_embedding = None  # Store embedding of last user question
 
         # Languages will be loaded from settings
         self.languages = {}
@@ -198,6 +199,11 @@ class OllamaClient:
             # Use smart_home_prompt_template with decision-making extension (already built)
             system_prompt = self.system_prompt
 
+        # Generate embedding for user question once
+        if message_type == "command" and self.embedding_client:
+            text_to_embed = original_text if original_text else user_message
+            self.last_user_embedding = self.embedding_client._get_embedding_from_ollama(text_to_embed)
+
         # Build the prompt with context if available
         prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
 
@@ -283,6 +289,11 @@ class OllamaClient:
             # FIRST PARSE: Decision-making with minimal context
             # Use smart_home_prompt_template with decision-making extension (already built)
             system_prompt = self.system_prompt
+
+        # Generate embedding for user question once
+        if message_type == "command" and self.embedding_client:
+            text_to_embed = original_text if original_text else user_message
+            self.last_user_embedding = self.embedding_client._get_embedding_from_ollama(text_to_embed)
 
         # Build the prompt with context if available
         prompt = self._build_prompt_with_context(user_message, message_type, from_chat)

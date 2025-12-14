@@ -132,10 +132,12 @@ class HAClientCore:
     and provides the request handler for making API calls to Home Assistant.
     """
 
-    def __init__(self):
+    def __init__(self,ollama_host):
         """Initialize the core client with configuration from environment."""
         # Load environment variables
         load_dotenv()
+
+        self.ollama_host = ollama_host
 
         # Load sensitive configuration from environment variables
         self.base_url = os.getenv("HA_BASE_URL", "")
