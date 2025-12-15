@@ -76,7 +76,7 @@
   "find_in_memory": {
     "entity_id": "find_in_memory",
     "actions": ["find_in_memory"],
-    "description": "Search previous conversations for similar messages when user references past interactions. Use when detecting phrases like 'you told me before', 'like last time', 'we discussed', 'you said earlier', etc. Always return comma separated keywords for the query",
+    "description": "Search when user references past interactions like 'you told me before', 'like last time', 'we discussed', 'you said earlier', etc. Always return comma separated keywords for the query",
     "display_name": "Searching Previous Conversations...",
     "example": {"action": "find_in_memory", "target": "find_in_memory", "data": {"query": "recipe,cake"}},
     "parameters": {
