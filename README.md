@@ -372,6 +372,7 @@ Create an **easy-to-install, easy-to-configure package** that serves as a comple
 - Enhanced error handling and recovery
 0.9
 - Test coverage expansion
+- Contextual Model Swapping
 1.0
 - Package distribution (pip/apt installable)
 

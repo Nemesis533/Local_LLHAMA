@@ -27,8 +27,12 @@ class ThreadManager:
         @param daemon Whether thread is a daemon
         @return Thread object
         """
+        print(f"[ThreadManager] [{LogLevel.CRITICAL.name}] Registering thread '{name}' with target: {target}")
+        print(f"[ThreadManager] [{LogLevel.CRITICAL.name}] Args: {args}, Daemon: {daemon}")
         thread = threading.Thread(target=target, args=args, daemon=daemon)
+        print(f"[ThreadManager] [{LogLevel.CRITICAL.name}] Thread object created: {thread}")
         thread.start()
+        print(f"[ThreadManager] [{LogLevel.CRITICAL.name}] Thread.start() called, is_alive: {thread.is_alive()}")
         self.threads[name] = thread
         return thread
 
