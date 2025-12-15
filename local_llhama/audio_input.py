@@ -328,6 +328,17 @@ class WakeWordListener:
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.ready_event = threading.Event()  # Signal when ready to detect wake words
+        
+        # Load OpenWakeWord model once during initialization
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading OpenWakeWord model...")
+        self.owwModel = Model(inference_framework="tflite")
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] OpenWakeWord model loaded successfully")
+        self.CHUNK = 1280
+        
+        # Initialize PyAudio once
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio...")
+        self.audio = pyaudio.PyAudio()
+        print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
 
     def pause(self):
         """
@@ -344,12 +355,30 @@ class WakeWordListener:
         @brief Resume wake word detection.
         """
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] RESUME requested, setting pause_event")
+        
+        # Clear any stale wake word detections from the queue
+        if hasattr(self, 'result_queue'):
+            while not self.result_queue.empty():
+                try:
+                    self.result_queue.get_nowait()
+                except:
+                    break
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Cleared stale wake word detections from queue")
+        
+        # Reset OpenWakeWord model's internal prediction buffer to prevent false triggers
+        if hasattr(self, 'owwModel') and hasattr(self.owwModel, 'prediction_buffer'):
+            for model_name in self.owwModel.prediction_buffer.keys():
+                self.owwModel.prediction_buffer[model_name].clear()
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Cleared OpenWakeWord model prediction buffer")
+        
         self.pause_event.set()
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection resumed, pause_event is now: {self.pause_event.is_set()}"
         )
 
     def listen_for_wake_word(self, result_queue):
+        # Store queue reference for clearing on resume
+        self.result_queue = result_queue
         
         while not self.stop_event.is_set():
           
@@ -365,43 +394,18 @@ class WakeWordListener:
             if not self.pause_event.is_set():
                 continue
 
-            audio = None
             mic_stream = None
 
             try:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading OpenWakeWord model...")
-                owwModel = Model(inference_framework="tflite")
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] OpenWakeWord model loaded!")
-                CHUNK = 1280
-
-                # Initialize PyAudio with error handling
-                try:
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio...")
-                    audio = pyaudio.PyAudio()
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
-
-                except OSError as e:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}"
-                    )
-                    time.sleep(5)  # Wait before retry
-                    continue
-                except Exception as e:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected PyAudio error: {type(e).__name__}: {e}"
-                    )
-                    time.sleep(5)
-                    continue
-
-                # Open microphone stream with error handling
+                # Open microphone stream with error handling (PyAudio already initialized in __init__)
                 try:
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening microphone stream...")
-                    mic_stream = audio.open(
+                    mic_stream = self.audio.open(
                         format=pyaudio.paInt16,
                         channels=1,
                         rate=16000,
                         input=True,
-                        frames_per_buffer=CHUNK,
+                        frames_per_buffer=self.CHUNK,
                     )
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully!")
                 except OSError as e:
@@ -431,9 +435,9 @@ class WakeWordListener:
                 # Main detection loop - exit if stopped OR paused
                 while not self.stop_event.is_set() and self.pause_event.is_set():
                     try:
-                        audio_data = mic_stream.read(CHUNK, exception_on_overflow=False)
+                        audio_data = mic_stream.read(self.CHUNK, exception_on_overflow=False)
                         np_audio = np.frombuffer(audio_data, dtype=np.int16)
-                        prediction = owwModel.predict(np_audio)
+                        prediction = self.owwModel.predict(np_audio)
 
                         current_time = time.time()
 
@@ -442,8 +446,8 @@ class WakeWordListener:
                                 audio_data
                             )
 
-                        for mdl in owwModel.prediction_buffer.keys():
-                            scores = list(owwModel.prediction_buffer[mdl])
+                        for mdl in self.owwModel.prediction_buffer.keys():
+                            scores = list(self.owwModel.prediction_buffer[mdl])
                             last_scores = scores[-5:]
                             avg_score = (
                                 sum(last_scores) / len(last_scores)
@@ -485,19 +489,13 @@ class WakeWordListener:
                 # Clear ready flag since we're no longer listening
                 self.ready_event.clear()
                 
-                # Cleanup resources
+                # Cleanup resources (only close mic stream, keep PyAudio alive)
                 if mic_stream:
                     try:
                         mic_stream.stop_stream()
                         mic_stream.close()
                     except Exception as e:
                         print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error closing mic stream: {e}")
-                
-                if audio:
-                    try:
-                        audio.terminate()
-                    except Exception as e:
-                        print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error terminating audio: {e}")
                 
                 # Allow time for device cleanup
                 time.sleep(0.5)
