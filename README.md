@@ -3,6 +3,8 @@
 ![Status](https://img.shields.io/badge/status-alpha-yellow)
 ![License](https://img.shields.io/badge/license-CC%20BY%204.0-blue)
 
+**Now on version 0.7** 
+
 **Local_LLAMA** is a local-first, multilingual, LLM-powered voice and chat assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/) and custom function calling. 
 Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. 
 As an independent system that runs on base Linux and interfaces with HA (or potentially other domotics systems) via API, it bypasses many compatibility restrictions that running similar systems in HA have (e.g., smart-speaker compatibility).
@@ -367,10 +369,7 @@ Open discussions before submitting major PRs.
 Create an **easy-to-install, easy-to-configure package** that serves as a complete cloud-free alternative to proprietary AI platforms. Focus on simplified deployment, hardware adaptability through presets, and intuitive configuration.
 
 **Next Steps:**
-0.7
-- System conversation memory and lookup
-- Auto-detection of hardware capabilities with preset recommendations
-- Improved documentation and quickstart guides
+
 0.8
 - Streamlined custom function integration
 - Automation creation via function calling
