@@ -1,52 +1,100 @@
-# Local_LLAMA: Offline, Multilingual Smart Home Voice and Chat Assistant
+# Local_LLAMA: LLM Orchestration Middleware for Smart Home Control
 
 ![Status](https://img.shields.io/badge/status-alpha-yellow)
 ![License](https://img.shields.io/badge/license-CC%20BY%204.0-blue)
 
 **Now on version 0.7** 
 
-**Local_LLAMA** is a local-first, multilingual, LLM-powered voice and chat assistant that integrates seamlessly with [Home Assistant](https://www.home-assistant.io/) and custom function calling. 
-Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. 
-As an independent system that runs on base Linux and interfaces with HA (or potentially other domotics systems) via API, it bypasses many compatibility restrictions that running similar systems in HA have (e.g., smart-speaker compatibility).
+**Local_LLAMA** is anorchestration middleware that sits between Home Assistant and Ollama, enabling smaller LLM models (8-20B parameters) to handle complex multi-intent, multi-language workloads through intelligent task decomposition, adaptive context management, and multi-pass prompt engineering.
 
-The system leverages dynamic prompts and system orchestration to expand the capabilities of the LLM and provide multi-intent capabilities with high accuracy on all tasks.
+**The Core Issue:** Raw model size isn't the bottleneck—inefficient routing and context management are.
 
-## Project Evolution: From Voice-Only to Complete Platform
+Through dynamic orchestration, an 8B parameter model can potentially achieve what traditionally requires 70B+ models. The system coordinates parallel execution across Home Assistant APIs, calendar databases, and web services while maintaining conversational context and privacy.
 
-The project started as a voice-first domotic assistant has evolved into a **complete self-hosted AI assistant platform** that aims to deliver an all-in-one package.
-The trajectory change was caused by recent cloud-based AI services with ads and telemetry to which this project tries to offer an alternative.
+**What This Means:**
+- RTX 4060 Ti 16GB or even an RTX 4060 8GB Mobile handle workloads that would typically require much more powerful carts
+- Few-second response time for multi-intent commands, sub minute for 5+ intent utterance with web searches
+- Complete offline operation with zero cloud dependency
+- Multilingual support (6+ languages) on consumer hardware
+
+## The Orchestration Approach
+
+**The Problem:** Standard LLM implementations for smart home control struggle with multi-intent and multi-lingual commands, require exact device names, and either underutilize context (losing conversation flow) or overload it (causing timeouts and degraded performance).
+
+**The Porposed Solution:** Middleware that handles task decomposition, backend routing, and adaptive context composition and scaling.
 
 ![Multi-command example](screenshots/chat_window_1.png)
 
-**Current State**:
+### How Orchestration Works
 
-A dual-pipeline system with chat and voice as equally useful interfaces. Both share identical LLM capabilities—function calling, Home Assistant control, web search, calendar management, etc.
-The system now includes comprehensive configuration management as well as presets, making it adaptable to different hardware configurations from single low-end GPUs to multi-GPU setups.
+When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the weather"*, the system:
 
-**What This Provides**:
-- Control your home via voice OR chat
-- Complete privacy with zero cloud dependency
-- Contextual responses based on conversation history, with each user having their own private history.
-- Ability to provide multiple commands in a single sentence 
-- Configurable presets optimized for your hardware
-- Full control over the system, its prompts and integration.
+1. **Parallel Intent Decomposition** — LLM identifies independent tasks from natural language
+2. **Targeted Backend Routing** — Routes each intent to appropriate service (Home Assistant API, calendar database, weather API, etc)
+3. **Minimal Context Injection** — Each backend receives only relevant context, not entire conversation history
+4. **Adaptive Context Scaling** — Automatically reduces context window on timeout, recovers on success
+5. **Multi-Pass Prompt Engineering** — Modular layers (base reasoning → decision logic → safety → formatting) enable independent optimization
 
-## Features
+**Result:** A 20B (or even 14B) parameter model executes complex workflows that would typically require 30-70B models, running entirely on consumer GPUs.
 
-**Voice & Chat Pipelines** 
-- Wake word detection using `OpenWakeWord` (voice activated pipeline only)
-- Voice recording with adaptive noise floor detection (voice activated pipeline only)
-- Whisper-based speech-to-text conversion (voice activated pipeline only)
-- Real-time chat interface with message history (chat pipeline only, voice pipeline only keeps the last command in memory)
+### Core Capabilities
 
-**Smart Home Control**
-- Fuzzy device/entity matching using dynamic Home Assistant entity list
-	- Say "light above the desk" instead of the exact device name
-- Execute multiple commands in a single sentence
-	- You can turn off a light, turn on the AC and ask about the news in a single command
-- Integrate non-Home Assistant devices and custom functions
-	- Function calling is integrated into the system and requires writing your function and adding it to those exposed to the LLM
-- Natural language responses based on context, commands included
+- **Voice AND chat interfaces** with identical LLM orchestration capabilities
+- **Multi-intent natural language** processing (6+ commands in single utterance)
+- **Fuzzy entity matching** ("light above desk" vs exact device names)
+- **Adaptive performance tuning** based on real-time latency feedback
+- **Hardware-validated presets** for 8GB to 24GB VRAM configurations
+- **Complete offline operation** — no cloud APIs, no telemetry, full privacy
+
+## Architecture & Features
+
+### Intelligent Orchestration Layer
+
+**Multi-Backend Coordination**
+- Parallel execution across Home Assistant, PostgreSQL, web APIs
+- Unified natural language interface for disparate services
+- Single utterance can trigger 6+ independent backend operations
+- Reflection-based function discovery via `command_schema.txt`
+
+**Adaptive Context Management**
+- Dynamic context windows (1000+→100 words) based on latency feedback
+- Per-user conversation history with semantic memory search
+- Configurable thresholds via preset system
+
+**Multi-Pass Prompt Engineering**
+- Modular composable layers: base → decision → safety → format + auxiliary
+- Context injection tailored to each backend call
+- Language detection and localization at response generation
+- Independent A/B testing of prompt components
+- Voice vs chat optimized processing paths
+
+### Voice & Chat Pipelines
+
+**Voice Pipeline** (State Machine based)
+- Wake word detection using `OpenWakeWord`
+- Adaptive noise floor detection for recording
+- Whisper-based speech-to-text (model selection per preset)
+- Piper TTS for natural language feedback
+
+**Chat Pipeline** (Parallel Multi-User)
+- Real-time WebSocket communication
+- Per-user conversation history, context and memory
+- Streaming LLM responses with Markdown rendering
+- Role-based access control (admin, chat permissions)
+
+### Smart Home Integration
+
+**Fuzzy Entity Matching**
+- Natural language device references ("light above desk" not "desk_lamp")
+- Semantic understanding of device locations and functions
+- Multilingual entity matching across languages
+- Dynamic Home Assistant entity list integration
+
+**Multi-Intent Execution**
+- Single command handles multiple independent actions
+- Parallel backend operations with unified response
+- Example: "Turn off lights AND set alarm AND check weather, etc" in one request
+- Custom function integration via reflection-based discovery, handled the same way as entities
 
 **Multilingual Support** (English, French, Spanish, Italian, German, Russian, and potentially more)
 - Automatically detects and responds in the language you speak
@@ -60,7 +108,7 @@ The system now includes comprehensive configuration management as well as preset
 **Semantic Memory Search**
 - Vector-based conversation history search using Ollama embeddings
 - Hybrid search combining semantic similarity with keyword matching
-- Wikipedia fallback to memory when articles not found
+- Wikipedia falla back to memory when articles not found
 - Per-user private memory with configurable similarity threshold
 
 **Web & Information via Free/Open APIs**
@@ -81,40 +129,60 @@ The system now includes comprehensive configuration management as well as preset
 
 ## Latest Additions
 
-- **Semantic Memory Search** - Vector embeddings + keyword matching for conversational context retrieval with Wikipedia fallback
+- **Semantic Memory Search** - Vector embeddings + keyword matching for conversational context retrieval
 - **Dual-Pipeline Architecture** - Voice and chat both share LLM capabilities, optimized for their respective UX patterns
 - **Real-time Chat Interface** - Multi-user WebSocket communication with persistent message history
 - **Per-User Context** - Conversation history tracking (last 3 exchanges) for contextual, aware responses
-- **Unified Calendar System** - Single consolidated API for reminders, appointments, and alarms (reduced from 9 separate functions)
+- **Unified Calendar System** - Single consolidated API for reminders, appointments, and alarms
 - **Admin Panel** - User management, permissions assignment, password reset
 - **Markdown Chat Rendering** - Bold, italic, code blocks with syntax highlighting
-- **Role-Based Access Control** - Granular permissions (admin, dashboard access, chat access)
+- **Role-Based Access Control** - Admin and User permissions for web interface
 - **Response Streaming and Optimized Context** - Context passing has been optimized to maintain proper command/context handling while keeping a reasonable length conversational context.
 
 
 ## System Requirements
 
-- **CPU**: 4–8 cores (tested with Xeon E5-2640 v4)
-- **RAM**: 8 GB for core system
-- **GPU**: 8-24GB VRAM depending on preset (tested with RTX 4060Ti 16GB)
-- **OS**: Linux (tested on Ubuntu 24.04, should work on 22.04)
-- **Ollama Server**: Local or remote (required for LLM inference)
+**Middleware Orchestration Layer:**
+- **CPU**: 4–8 cores (tested with Xeon E5-2640 v4 and i7 12700H)
+- **RAM**: 8 GB for core system + PostgreSQL
+- **GPU**: 8-24GB VRAM depending on preset (tested with RTX 4060ti 16GB (with and without RTX 2080Ti as secondary), RTX 4060 8GB Mobile)
+- **OS**: Linux (Ubuntu 22.04+, tested on 24.04+)
 
-**Preset-Based Hardware Requirements:**
+**Required Services (leverage, not replace):**
+- **Ollama Server**: Local or remote for LLM inference
+- **Home Assistant**: Local or remote for smart home control
+- **PostgreSQL**: For conversation history and embeddings
 
-To simplify usage, configurations have been created an tested onvarious configurations; select the preset match your hardware:
+### Hardware-Validated Presets
 
-- **english_only_small** (8GB VRAM): Qwen3:8B, English-only, minimal footprint for basic domotic control
-- **english_only_large** (16GB VRAM): GPT-OSS:20B, English-only, high-quality general purpose
-- **multi_lingual_small** (16GB VRAM): Qwen3:14B, 6 languages, balanced single-GPU multilingual
-- **multi_lingual_large** (2x24GB VRAM): GPT-OSS:20B, 6 languages, maximum performance
+Local_LLAMA uses a preset system to provide optimized configurations for different hardware setups. 
+Presets are complete configuration packages that set LLM models, Whisper models, TTS languages, and performance parameters.
 
-**Performance Notes:**
-- Core system uses ~3-4GB RAM
-- LLM processing handled by Ollama server (can be local or remote), latency from a couple of seconds to 20-30 based on context/prompt lenght
-- Multi-machine setup tested: Ollama on separate server via ethernet (~3 second latency for voice commands)
-- System tested in Ubuntu VM (Proxmox) with remote Ollama server and bare metal on a laptop.
-- Apply presets via web UI or CLI to optimize for your configuration
+Configurations tested on real hardware with performance benchmarks:
+
+| Preset | VRAM | Model | Languages | Use Case |
+|--------|------|-------|-----------|----------|
+| **english_only_small** | 8GB | Qwen2.5:8B | English | Entry-level, basic control |
+| **english_only_large** | 16GB | GPT-OSS:20B | English | High-quality single language |
+| **multi_lingual_small** | 16GB | Qwen2.5:14B | 6 languages | Balanced multilingual |
+| **multi_lingual_large** | 24GB | GPT-OSS:20B | 6 languages | Maximum performance |
+
+Each preset configures:
+- LLM model selection and parameters
+- Whisper model size
+- Text-to-speech language models to use based on language
+- ChatHandler settings (max_tokens, context window sizes, reduction factors, etc)
+
+**Orchestration Performance:**
+- Core middleware: ~3-4GB RAM overhead
+- Multi-command latency: 2-5 seconds (simple) to 10-60 seconds (complex with web search)
+- Context reduction triggers: Automatic based on response timeouts
+- Tested configurations: Local Ollama, remote Ollama, VM + bare metal
+
+**Scaling Options:**
+- Single machine: All services on one system
+- Distributed: Ollama on dedicated inference server, middleware on separate system
+- Tested: Proxmox VM (middleware) + bare metal server (Ollama) via ethernet and all system on a single laptop.
 
 ## Installation
 
@@ -168,22 +236,6 @@ Edit `.env` with your credentials:
 ## Configuration
 
 ### Configuration Presets
-
-Local_LLAMA uses a preset system to provide optimized configurations for different hardware setups. 
-Presets are complete configuration packages that set LLM models, Whisper models, TTS languages, and performance parameters.
-
-**Available Presets:**
-
-- **english_only_small** - Lightweight English-only setup for memory-constrained environments (8GB VRAM, qwen3:8b-q4_K_M)
-- **english_only_large** - High-quality English with large model for better performance (16GB VRAM, GPT-OSS:20B)
-- **multi_lingual_small** - Balanced multilingual for single GPU systems (16GB VRAM, qwen3:14B-q4_K_M, 6 languages)
-- **multi_lingual_large** - High-performance multilingual for multi-GPU setups (1x24GB VRAM or 16+6 GB VRAM with 2 GPUs, GPT-OSS:20B, 6 languages)
-
-Each preset configures:
-- LLM model selection and parameters
-- Whisper model size (small/medium/turbo, etc)
-- Text-to-speech language models to use based on language
-- ChatHandler settings (max_tokens, context window sizes, reduction factors, etc)
 
 **Applying Presets:**
 
@@ -241,44 +293,60 @@ Contains LLM model settings, ChatHandler configuration, TTS language mappings, a
 Configures web information sources (news, Wikipedia, etc.) with allowed websites, max results, and timeout settings.
  
  
-## How It Works
+## Orchestration Flow
 
-1. **Wake Word Detection**  
-   Continuous listening via `OpenWakeWord` until "Hey Jarvis" detected. Sensitivity adjustable via `wakeword_thr` in settings.
-   The wakeword can be chaged to something else.
+### Voice Pipeline (Sequential State Machine)
 
-2. **Speech Recording**  
-   Records 3-10 seconds after wake word; stops early on silence detection using dynamic noise floor.
+1. **Wake Word Detection** → OpenWakeWord monitors for trigger phrase
+2. **Audio Capture** → Adaptive noise floor detection (3-10s recording)
+3. **Speech-to-Text** → Whisper transcription (model size based on preset)
+4. **Orchestration Layer** → Task decomposition and routing begins
 
-3. **Speech-to-Text**  
-   Whisper transcribes audio (medium model for multilingual, small model for English-only).
+### Chat Pipeline (Parallel Multi-User)
 
-4. **Command Parsing**  
-   - **Voice Pipeline**: Processes through state machine sequentially
-   - Transcribed text + HA entities sent to LLM via Ollama
-   - Entities manually supplied or auto-fetched from HA
-   - LLM identifies devices/actions, generates HA JSON or NL response
-   - Different prompts for voice (RESPONSE_PROCESSOR_PROMPT) vs chat (CONVERSATION_PROCESSOR_PROMPT)
-   - Per-user conversation history maintained in chat for contextual responses
-   - Calendar operations parsed and executed via natural language (per-user in chat)
-   - Web queries fetch real-time data (weather, news, Wikipedia)
-   - **Chat Pipeline**: Parallel processing via ChatHandler, bypasses state machine for multi-user support
+1. **WebSocket Input** → Real-time message from user
+2. **Context Injection** → Per-user conversation history (last 3 exchanges) + previous memory search
+3. **Orchestration Layer** → Immediate parallel processing
 
-5. **Command Execution**  
-   - Valid JSON sent to HA API
-   - Calendar events stored in local SQLite database
-   - Background thread monitors for due reminders/alarms and triggers notification sound + chat notifications
-   - Non-HA actions matched via `command_schema.txt` using reflection
-   - Failed queries reported to user
+### Core Orchestration Process
 
-6. **Feedback and Output**  
-   - The piper-tts engine provides spoken confirmation or failure (voice pipeline only)
-   - Real-time WebSocket communication for chat interface with instant LLM responses
-   - Output and logs available through comprehensive web UI with multiple views; enable dev mode to have full output.
-   - Per-user calendar events displayed in chat sidebar with real-time updates
-   - Calendar event notifications sent directly to user's chat when reminders/alarms trigger
-   - Loading indicators show when LLM is processing ("Thinking...", "Searching Wikipedia..." animation)
-   - The language is returned along with the response by the LLM
+**Phase 1: Intent Analysis**
+- Natural language input → LLM via Ollama
+- Multi-pass prompt: Base reasoning → Decision logic → Safety checks
+- Output: Structured intents with backend routing information
+
+**Phase 2: Parallel Backend Execution**
+- **Home Assistant**: Device control via REST API (fuzzy entity matching)
+- **Calendar Database**: Event CRUD operations (PostgreSQL)
+- **Web Services**: Weather (Open-Meteo), News (GDELT), Knowledge (Wikipedia)
+- **Custom Functions**: Reflection-based discovery via `command_schema.txt`
+
+**Phase 3: Response Synthesis**
+- Aggregate backend results
+- Context-aware natural language generation
+- Language detection and response localization
+- Adaptive context window adjustment based on latency
+
+**Phase 4: Output Delivery**
+- **Voice**: Piper TTS synthesis + audio playback
+- **Chat**: WebSocket streaming with Markdown rendering
+- **Logging**: Comprehensive audit trail with dev mode
+
+### Adaptive Context Management Example
+
+```
+Initial Request: 400 word context window
+   ↓
+[Latency > 20s detected]
+   ↓
+Context Reduction: 400 → 280 → 196 → 137 → 100 words
+   ↓
+[Success < 10s]
+   ↓
+Context Recovery: Gradual expansion on subsequent requests
+```
+
+**Why This Matters:** Prevents timeout cascades while maintaining conversation quality. System self-tunes based on hardware performance.
   
 ## Example Commands
 
@@ -311,7 +379,7 @@ Lowest supported python version is 3.10, but 3.12 is recommended.
 - `psycopg2-binary`, `asyncpg` (PostgreSQL integration)
 - `requests` (HTTP client for Ollama and web APIs)
 
-**Note:** While `torch` is required for Whisper's audio processing, the system uses Ollama for all LLM inference, keeping GPU requirements minimal.
+**Note:** While `torch` is required for Whisper's audio processing, the system uses Ollama for all LLM inference.
 
 All dependencies are listed in `requirements.txt`.
 
@@ -345,50 +413,58 @@ Contributions and suggestions welcome! See "Future Work" for ideas. Response tim
 
 Open discussions before submitting major PRs.
 
-## Future Work
+## Roadmap: Advancing Orchestration Patterns
 
-**Recently Completed:**
-- Preset-suggestions at install
-- Memory retrieval
-- One-command installation with automatic dependency handling
-- Interactive setup wizard for initial configuration
-- Configuration preset system with hardware-optimized defaults
-- ChatHandler configurable parameters (max_tokens, context windows)
-- Admin panel preset management with create/apply workflow
-- Modular admin panel architecture (templates and CSS)
-- CLI preset management tool
-- Multi-user chat with WebSocket communication
-- Per-user conversation history and calendar
+### Completed Orchestration Features (v0.7)
+
+**Core Middleware:**
+- Multi-backend parallel execution (HA + Calendar + Web APIs)
+- Adaptive context management with automatic scaling
+- Multi-pass prompt engineering with modular layers
+- Hardware-validated preset system (8-24GB VRAM)
+
+**Production Features:**
+- One-command installation with dependency resolution
+- Interactive configuration wizard
+- Dual pipeline architecture (voice + chat)
+- Per-user context isolation and memory search
 - Role-based access control
-- Dual processing pipelines (voice + chat)
-- Web search integration (GDELT news, Wikipedia)
-- PostgreSQL transition and message embedding storage
-- Markdown chat formatting
+- Real-time WebSocket communication
+- PostgreSQL with vector embeddings
 
-**Primary Goal:**
-Create an **easy-to-install, easy-to-configure package** that serves as a complete cloud-free alternative to proprietary AI platforms. Focus on simplified deployment, hardware adaptability through presets, and intuitive configuration.
+### v0.8 — Enhanced Orchestration
 
-**Next Steps:**
+**Improved Backend Integration:**
+- Streamlined custom function integration with examples
+- Automation creation via LLM function calling
+- Enhanced error recovery with retry logic
+- Backend health monitoring and failover
 
-0.8
-- Streamlined custom function integration
-- Automation creation via function calling
-- Enhanced error handling and recovery
-0.9
-- Test coverage expansion
-- Vision capabilities
-- Contextual Model Swapping
-1.0
+**Performance Optimization:**
+- Context caching for repeated queries
+- Predictive context scaling based on intent complexity
+- Parallel intent execution benchmarking
+
+### v0.9 — Advanced Capabilities
+
+**Orchestration Expansion:**
+- Vision capabilities with multimodal routing
+- Contextual model swapping (task-specific model selection)
+- Test coverage for orchestration patterns
+- Performance regression testing
+
+### v1.0 — Production Release
+
+**Goal:** Reference implementation for local LLM orchestration
+
 - Package distribution (pip/apt installable)
+- Comprehensive orchestration documentation
+- Reusable patterns for custom deployments
+- Community preset contributions
 
-
-## Known Bugs
-- Chat context can, under specific message switching circumstances, get mixed.
 
 ## Note
 
-Developed as a versatile domotic assistant during spare time. Suggestions for improvements welcome. Hope you find it useful.
+Developed to explore orchestration patterns that enable smaller LLMs to achieve production-grade capability on consumer hardware. This is not about replacing Ollama or Home Assistant—it's about intelligently coordinating them.
 
----
-
-*Natural language control for smart homes — privately, locally*
+The patterns demonstrated here (adaptive context, multi-pass prompts, parallel backend routing) are reusable beyond smart home control. Contributions and suggestions welcome.

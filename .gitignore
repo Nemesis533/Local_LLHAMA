@@ -228,3 +228,4 @@ local_llhama/data/*.db.backup
 # Wiki
 
 Local_LLHAMA.wiki/
+README_original_backup.md
