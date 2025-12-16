@@ -2,7 +2,7 @@
 
 # ============================================================================
 # Local_LLHAMA Installer Launcher
-# Version: 0.65 Alpha
+# Version: 0.7 Alpha
 # Copyright (c) 2025 Nicola Zanarini
 # Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
 # https://creativecommons.org/licenses/by/4.0/
@@ -17,7 +17,7 @@ INSTALLER_PATH="$SCRIPT_DIR/install/install.sh"
 # Display header
 printf "\n============================================\n"
 printf "Local_LLHAMA Installer\n"
-printf "Version: 0.65 Alpha\n"
+printf "Version: 0.7 Alpha\n"
 printf "============================================\n\n"
 
 # Check if the modular installer exists
