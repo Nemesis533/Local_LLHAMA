@@ -7,6 +7,8 @@
 Designed for privacy, flexibility, and natural interaction, it allows users to control smart home devices using natural language — all without relying on the cloud or requiring exact device names. 
 As an independent system that runs on base Linux and interfaces with HA (or potentially other domotics systems) via API, it bypasses many compatibility restrictions that running similar systems in HA have (e.g., smart-speaker compatibility).
 
+The system leverages dynamic prompts and system orchestration to expand the capabilities of the LLM and provide multi-intent capabilities with high accuracy on all tasks.
+
 ## Project Evolution: From Voice-Only to Complete Platform
 
 The project started as a voice-first domotic assistant has evolved into a **complete self-hosted AI assistant platform** that aims to deliver an all-in-one package.
@@ -344,6 +346,8 @@ Open discussions before submitting major PRs.
 ## Future Work
 
 **Recently Completed:**
+- Preset-suggestions at install
+- Memory retrieval
 - One-command installation with automatic dependency handling
 - Interactive setup wizard for initial configuration
 - Configuration preset system with hardware-optimized defaults
@@ -369,9 +373,11 @@ Create an **easy-to-install, easy-to-configure package** that serves as a comple
 - Improved documentation and quickstart guides
 0.8
 - Streamlined custom function integration
+- Automation creation via function calling
 - Enhanced error handling and recovery
 0.9
 - Test coverage expansion
+- Vision capabilities
 - Contextual Model Swapping
 1.0
 - Package distribution (pip/apt installable)
