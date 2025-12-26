@@ -1,13 +1,40 @@
 {
+  "audio": {
+    "description": "Audio input and output configuration",
+    "input_device_index": {
+      "description": "Microphone device index to use for audio input. Set to null for system default.",
+      "value": 0
+    },
+    "sample_rate": {
+      "description": "Audio sample rate in Hz (common values: 16000, 44100, 48000)",
+      "value": 16000
+    },
+    "noise_floor_multiplier": {
+      "description": "Multiplier applied to noise floor when determining silence threshold (0.1-2.0)",
+      "value": 0.5
+    },
+    "noise_monitor_window_seconds": {
+      "description": "Duration in seconds for noise floor monitoring window",
+      "value": 5
+    },
+    "output_device_index": {
+      "description": "Speaker device index to use for audio output. Set to null for system default.",
+      "value": 0
+    },
+    "silence_window_seconds": {
+      "description": "Duration in seconds to monitor for silence before stopping recording",
+      "value": 2
+    }
+  },
   "chat": {
     "description": "Chat and conversation management settings",
-    "max_full_conversations": {
-      "description": "Maximum number of recent conversations to load with full message history. Older conversations will load metadata only for performance.",
-      "value": 40
-    },
     "history_exchanges": {
       "description": "Number of recent user-assistant exchanges to keep in memory for conversation context (affects in-memory context, not database storage)",
       "value": 3
+    },
+    "max_full_conversations": {
+      "description": "Maximum number of recent conversations to load with full message history. Older conversations will load metadata only for performance.",
+      "value": 40
     }
   },
   "hardware": {
@@ -61,29 +88,6 @@
     "safety_prompt_enabled": {
       "description": "Enable or disable the safety instruction prompt that ensures safe and appropriate responses",
       "value": true
-    }
-  },
-  "audio": {
-    "description": "Audio input and output configuration",
-    "input_device_index": {
-      "description": "Microphone device index to use for audio input. Set to null for system default.",
-      "value": null
-    },
-    "output_device_index": {
-      "description": "Speaker device index to use for audio output. Set to null for system default.",
-      "value": null
-    },
-    "silence_window_seconds": {
-      "description": "Duration in seconds to monitor for silence before stopping recording",
-      "value": 2
-    },
-    "noise_floor_multiplier": {
-      "description": "Multiplier applied to noise floor when determining silence threshold (0.1-2.0)",
-      "value": 0.5
-    },
-    "noise_monitor_window_seconds": {
-      "description": "Duration in seconds for noise floor monitoring window",
-      "value": 5
     }
   }
 }

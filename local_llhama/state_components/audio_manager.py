@@ -108,7 +108,13 @@ class AudioComponentManager:
         @return Transcribed text from audio
         """
         noise_floor_val = self.get_noise_floor()
-        return self.recorder.record_audio(self.transcriptor, noise_floor_val)
+        # Pass wake word listener's stream and PyAudio instance to reuse the device
+        return self.recorder.record_audio(
+            self.transcriptor, 
+            noise_floor_val,
+            existing_stream=self.awaker.mic_stream,
+            existing_pyaudio=self.awaker.audio
+        )
 
     def speak_text(self, text, language):
         """
