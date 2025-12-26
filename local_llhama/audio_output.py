@@ -183,6 +183,9 @@ class TextToSpeech:
         """
         self.voice_dir = Path(voice_dir)
         self.class_prefix_message = "[TextToSpeech]"
+        
+        # Load audio device settings from system_settings.json
+        self._load_settings()
 
         # Set language models - use provided or fall back to defaults
         if language_models:
@@ -232,7 +235,8 @@ class TextToSpeech:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error scanning voice directory: {e}"
             )
-
+        # Load output device settings
+        self._load_output_device_settings()
         # Initialize PyAudio with error handling
         # Important: Initialize AFTER pygame to avoid device conflicts
         # Multiple retries to handle race conditions with pygame
@@ -275,39 +279,61 @@ class TextToSpeech:
 
         device_count = self.p.get_device_count()
 
-        # Get and validate default output device
-        try:
-            default_output_info = self.p.get_default_output_device_info()
-            self.output_device_index = default_output_info["index"]
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Default output device: {default_output_info['name']} (index: {self.output_device_index})"
-            )
-        except (OSError, IOError) as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No default output device found: {e}"
-            )
-            # Try to find any working output device
-            self.output_device_index = None
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Searching {device_count} devices for output capability..."
-            )
-            for i in range(device_count):
-                try:
-                    dev_info = self.p.get_device_info_by_index(i)
-                    if dev_info["maxOutputChannels"] > 0:
-                        self.output_device_index = i
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using output device: {dev_info['name']} (index: {i}, channels: {dev_info['maxOutputChannels']})"
-                        )
-                        break
-                except Exception as dev_err:
+        # Check if user has configured a specific output device
+        if self.configured_output_device_index is not None:
+            try:
+                dev_info = self.p.get_device_info_by_index(self.configured_output_device_index)
+                if dev_info["maxOutputChannels"] > 0:
+                    self.output_device_index = self.configured_output_device_index
                     print(
-                        f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error checking device {i}: {dev_err}"
+                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using configured output device: {dev_info['name']} (index: {self.output_device_index})"
                     )
-                    continue
+                else:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Configured device {self.configured_output_device_index} has no output channels, falling back to default"
+                    )
+                    self.configured_output_device_index = None
+            except Exception as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Configured output device {self.configured_output_device_index} not available: {e}, falling back to default"
+                )
+                self.configured_output_device_index = None
+        
+        # If no configured device or it failed, use default
+        if self.configured_output_device_index is None:
+            # Get and validate default output device
+            try:
+                default_output_info = self.p.get_default_output_device_info()
+                self.output_device_index = default_output_info["index"]
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Default output device: {default_output_info['name']} (index: {self.output_device_index})"
+                )
+            except (OSError, IOError) as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] No default output device found: {e}"
+                )
+                # Try to find any working output device
+                self.output_device_index = None
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Searching {device_count} devices for output capability..."
+                )
+                for i in range(device_count):
+                    try:
+                        dev_info = self.p.get_device_info_by_index(i)
+                        if dev_info["maxOutputChannels"] > 0:
+                            self.output_device_index = i
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using output device: {dev_info['name']} (index: {i}, channels: {dev_info['maxOutputChannels']})"
+                            )
+                            break
+                    except Exception as dev_err:
+                        print(
+                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error checking device {i}: {dev_err}"
+                        )
+                        continue
 
-            if self.output_device_index is None:
-                raise RuntimeError("No output audio device available")
+                if self.output_device_index is None:
+                    raise RuntimeError("No output audio device available")
 
         # Test if we can actually open the device
         try:
@@ -364,6 +390,29 @@ class TextToSpeech:
         self.voice = None
         self.voice_cache = {}  # Cache loaded voices by language
         self.current_lang = None
+
+    def _load_settings(self):
+        """Load audio device settings from system_settings.json"""
+        import json
+        
+        try:
+            settings_file = self.voice_dir.parent.parent / "settings" / "system_settings.json"
+            if settings_file.exists():
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                audio_settings = data.get("audio", {})
+                self.configured_output_device_index = audio_settings.get("output_device_index", {}).get("value", None)
+            else:
+                self.configured_output_device_index = None
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default")
+            self.configured_output_device_index = None
+    
+    def _load_output_device_settings(self):
+        """Load and apply output device settings after PyAudio initialization"""
+        # This will be called after PyAudio is initialized
+        pass
 
     def preprocess_text(self, text: str) -> str:
         """

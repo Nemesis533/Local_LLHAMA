@@ -462,3 +462,82 @@ def get_available_gpus():
         pass
 
     return {"status": "ok", "gpus": gpus}
+
+
+@settings_bp.route("/settings/available-audio-devices", methods=["GET"])
+@login_required
+@FlaskErrorHandler.handle_route()
+def get_available_audio_devices():
+    """
+    Enumerate available audio input and output devices.
+    Returns lists of microphones and speakers.
+    """
+    import pyaudio
+
+    input_devices = []
+    output_devices = []
+
+    try:
+        p = pyaudio.PyAudio()
+
+        # Add default device option
+        input_devices.append(
+            {"index": None, "name": "System Default Microphone", "is_default": True}
+        )
+        output_devices.append(
+            {"index": None, "name": "System Default Speaker", "is_default": True}
+        )
+
+        # Enumerate all devices
+        device_count = p.get_device_count()
+        for i in range(device_count):
+            try:
+                device_info = p.get_device_info_by_index(i)
+                device_name = device_info.get("name", f"Device {i}")
+
+                # Check if it's an input device (microphone)
+                if device_info.get("maxInputChannels", 0) > 0:
+                    input_devices.append(
+                        {
+                            "index": i,
+                            "name": f"{device_name} (Index: {i})",
+                            "is_default": False,
+                        }
+                    )
+
+                # Check if it's an output device (speaker)
+                if device_info.get("maxOutputChannels", 0) > 0:
+                    output_devices.append(
+                        {
+                            "index": i,
+                            "name": f"{device_name} (Index: {i})",
+                            "is_default": False,
+                        }
+                    )
+            except Exception as e:
+                # Skip devices that can't be queried
+                print(f"Skipping device {i}: {e}")
+                continue
+
+        # Don't terminate PyAudio - let garbage collector handle it
+        # Just give time for cleanup
+        import time
+
+        time.sleep(0.1)
+
+        return {
+            "status": "ok",
+            "input_devices": input_devices,
+            "output_devices": output_devices,
+        }
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"Failed to enumerate audio devices: {str(e)}",
+                }
+            ),
+            500,
+        )

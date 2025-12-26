@@ -5,6 +5,10 @@
 
 let systemSettingsData = {};
 let availableGpus = [];
+let availableAudioDevices = {
+    input_devices: [],
+    output_devices: []
+};
 
 /**
  * Load available GPUs from server
@@ -23,6 +27,28 @@ async function loadAvailableGpus() {
         }
     } catch (error) {
         console.error('Failed to load available GPUs:', error.message);
+        return false;
+    }
+}
+
+/**
+ * Load available audio devices from server
+ */
+async function loadAvailableAudioDevices() {
+    try {
+        const response = await fetch('/settings/available-audio-devices');
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+            availableAudioDevices.input_devices = data.input_devices;
+            availableAudioDevices.output_devices = data.output_devices;
+            return true;
+        } else {
+            console.error('Failed to load available audio devices:', data.message);
+            return false;
+        }
+    } catch (error) {
+        console.error('Failed to load available audio devices:', error.message);
         return false;
     }
 }
@@ -58,8 +84,9 @@ export async function displaySystemSettings() {
         if (!loaded) return;
     }
     
-    // Load available GPUs
+    // Load available GPUs and audio devices
     await loadAvailableGpus();
+    await loadAvailableAudioDevices();
     
     // Build dynamic UI
     const container = document.getElementById('dynamic-system-settings');
@@ -67,16 +94,22 @@ export async function displaySystemSettings() {
     
     container.innerHTML = '';
     
-    // Define section display names
+    // Define section display names and order
     const sectionTitles = {
+        'audio': 'Audio Settings',
         'safety': 'Safety & Content Moderation',
         'chat': 'Chat & Conversations',
         'hardware': 'Hardware Configuration',
         'home_assistant': 'Home Assistant Configuration'
     };
     
-    // Render each category
-    for (const [categoryKey, categoryData] of Object.entries(systemSettingsData)) {
+    const sectionOrder = ['audio', 'safety', 'chat', 'hardware', 'home_assistant'];
+    
+    // Render each category in the specified order
+    for (const categoryKey of sectionOrder) {
+        if (!systemSettingsData[categoryKey]) continue;
+        
+        const categoryData = systemSettingsData[categoryKey];
         if (typeof categoryData !== 'object') continue;
         
         const sectionDiv = document.createElement('div');
@@ -142,9 +175,22 @@ function createSettingElement(categoryKey, settingKey, settingData) {
         input.type = 'number';
         input.id = settingId;
         input.value = value;
-        input.min = value >= 1 ? 1 : 0;
-        input.max = value > 50 ? 1000 : 100;
-        input.onchange = () => updateSetting(categoryKey, settingKey, parseInt(input.value, 10));
+        
+        // Special handling for specific settings
+        if (settingKey === 'noise_floor_multiplier') {
+            input.step = 0.1;
+            input.min = 0.1;
+            input.max = 2.0;
+        } else if (settingKey === 'silence_window_seconds' || settingKey === 'noise_monitor_window_seconds') {
+            input.step = 0.5;
+            input.min = 0.5;
+            input.max = 10;
+        } else {
+            input.min = value >= 1 ? 1 : 0;
+            input.max = value > 50 ? 1000 : 100;
+        }
+        
+        input.onchange = () => updateSetting(categoryKey, settingKey, parseFloat(input.value));
         settingDiv.appendChild(input);
         
     } else if (typeof value === 'string') {
@@ -177,6 +223,61 @@ function createSettingElement(categoryKey, settingKey, settingData) {
             input.onchange = () => updateSetting(categoryKey, settingKey, input.value);
             settingDiv.appendChild(input);
         }
+        
+    } else if (value === null || settingKey.includes('device_index')) {
+        // Special handling for audio device selection (can be null)
+        const label = document.createElement('label');
+        label.htmlFor = settingId;
+        label.textContent = settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ':';
+        settingDiv.appendChild(label);
+        
+        const select = document.createElement('select');
+        select.id = settingId;
+        
+        // Determine which device list to use
+        let deviceList = [];
+        if (settingKey === 'input_device_index') {
+            deviceList = availableAudioDevices.input_devices;
+        } else if (settingKey === 'output_device_index') {
+            deviceList = availableAudioDevices.output_devices;
+        }
+        
+        // Add device options
+        deviceList.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.index === null ? '' : device.index;
+            option.textContent = device.name;
+            select.appendChild(option);
+        });
+        
+        // Set current value
+        if (value === null) {
+            select.value = '';
+        } else {
+            select.value = value;
+        }
+        
+        select.onchange = () => {
+            const newValue = select.value === '' ? null : parseInt(select.value, 10);
+            updateSetting(categoryKey, settingKey, newValue);
+        };
+        settingDiv.appendChild(select);
+        
+    } else if (typeof value === 'number') {
+        // Number input
+        const label = document.createElement('label');
+        label.htmlFor = settingId;
+        label.textContent = settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ':';
+        settingDiv.appendChild(label);
+        
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.id = settingId;
+        input.value = value;
+        input.min = value >= 1 ? 1 : 0;
+        input.max = value > 50 ? 1000 : 100;
+        input.onchange = () => updateSetting(categoryKey, settingKey, parseInt(input.value, 10));
+        settingDiv.appendChild(input);
         
     } else if (Array.isArray(value)) {
         // Textarea for arrays
