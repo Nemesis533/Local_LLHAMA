@@ -121,13 +121,41 @@ class AudioRecorderClass:
         self.channels = channels
         self.chunk_size = chunk_size
         self.noise_floor_monitor: NoiseFloorMonitor = noise_floor_monitor
-        self.noise_floor_multiplier = 0.5
+        
+        # Load settings from system_settings.json
+        self._load_settings()
+        
         self.noise_threshold = 0
-        self.silence_window_seconds = 2
         self.max_chunks = int(
             self.sample_rate / self.chunk_size * self.silence_window_seconds
         )
         self.rms_values = deque(maxlen=self.max_chunks)
+
+    def _load_settings(self):
+        """Load audio settings from system_settings.json"""
+        import json
+        from pathlib import Path
+        
+        try:
+            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
+            if settings_file.exists():
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                audio_settings = data.get("audio", {})
+                self.silence_window_seconds = audio_settings.get("silence_window_seconds", {}).get("value", 2)
+                self.noise_floor_multiplier = audio_settings.get("noise_floor_multiplier", {}).get("value", 0.5)
+                self.input_device_index = audio_settings.get("input_device_index", {}).get("value", None)
+            else:
+                # Fallback to defaults
+                self.silence_window_seconds = 2
+                self.noise_floor_multiplier = 0.5
+                self.input_device_index = None
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using defaults")
+            self.silence_window_seconds = 2
+            self.noise_floor_multiplier = 0.5
+            self.input_device_index = None
 
     def get_silence(self):
         if not self.rms_values:
@@ -155,13 +183,19 @@ class AudioRecorderClass:
 
             # Open audio stream with error handling
             try:
-                stream = p.open(
-                    format=pyaudio.paInt16,
-                    channels=self.channels,
-                    rate=self.sample_rate,
-                    input=True,
-                    frames_per_buffer=self.chunk_size,
-                )
+                stream_params = {
+                    "format": pyaudio.paInt16,
+                    "channels": self.channels,
+                    "rate": self.sample_rate,
+                    "input": True,
+                    "frames_per_buffer": self.chunk_size,
+                }
+                
+                # Add input device if configured
+                if self.input_device_index is not None:
+                    stream_params["input_device_index"] = self.input_device_index
+                
+                stream = p.open(**stream_params)
             except OSError as e:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open audio stream: {e}"
@@ -279,14 +313,38 @@ class NoiseFloorMonitor:
     @brief Monitors and calculates the noise floor (RMS) in an audio stream.
     """
 
-    def __init__(self, rate=16000, chunk_size=1024, window_seconds=5):
+    def __init__(self, rate=16000, chunk_size=1024, window_seconds=None):
         self.class_prefix_message = "[NoiseFloorMonitor]"
         self.rate = rate
         self.chunk_size = chunk_size
+        
+        # Load settings from system_settings.json
+        if window_seconds is None:
+            window_seconds = self._load_window_seconds()
         self.window_seconds = window_seconds
+        
         self.max_chunks = int(self.rate / self.chunk_size * self.window_seconds)
         self.rms_values = deque(maxlen=self.max_chunks)
         self.noise_floor_multiplier = 1.05
+
+    def _load_window_seconds(self):
+        """Load window_seconds from system_settings.json"""
+        import json
+        from pathlib import Path
+        
+        try:
+            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
+            if settings_file.exists():
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                audio_settings = data.get("audio", {})
+                return audio_settings.get("noise_monitor_window_seconds", {}).get("value", 5)
+            else:
+                return 5
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default")
+            return 5
 
     def _calculate_rms(self, data):
         audio_data = np.frombuffer(data, dtype=np.int16)
@@ -329,6 +387,9 @@ class WakeWordListener:
         self.pause_event.set()  # Start unpaused
         self.ready_event = threading.Event()  # Signal when ready to detect wake words
         
+        # Load audio device settings
+        self._load_settings()
+        
         # Load OpenWakeWord model once during initialization
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading OpenWakeWord model...")
         self.owwModel = Model(inference_framework="tflite")
@@ -339,6 +400,25 @@ class WakeWordListener:
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio...")
         self.audio = pyaudio.PyAudio()
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
+
+    def _load_settings(self):
+        """Load audio settings from system_settings.json"""
+        import json
+        from pathlib import Path
+        
+        try:
+            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
+            if settings_file.exists():
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                audio_settings = data.get("audio", {})
+                self.input_device_index = audio_settings.get("input_device_index", {}).get("value", None)
+            else:
+                self.input_device_index = None
+        except Exception as e:
+            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default")
+            self.input_device_index = None
 
     def pause(self):
         """
@@ -400,13 +480,19 @@ class WakeWordListener:
                 # Open microphone stream with error handling (PyAudio already initialized in __init__)
                 try:
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening microphone stream...")
-                    mic_stream = self.audio.open(
-                        format=pyaudio.paInt16,
-                        channels=1,
-                        rate=16000,
-                        input=True,
-                        frames_per_buffer=self.CHUNK,
-                    )
+                    stream_params = {
+                        "format": pyaudio.paInt16,
+                        "channels": 1,
+                        "rate": 16000,
+                        "input": True,
+                        "frames_per_buffer": self.CHUNK,
+                    }
+                    
+                    # Add input device if configured
+                    if self.input_device_index is not None:
+                        stream_params["input_device_index"] = self.input_device_index
+                    
+                    mic_stream = self.audio.open(**stream_params)
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully!")
                 except OSError as e:
                     print(

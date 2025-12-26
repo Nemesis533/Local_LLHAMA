@@ -62,5 +62,28 @@
       "description": "Enable or disable the safety instruction prompt that ensures safe and appropriate responses",
       "value": true
     }
+  },
+  "audio": {
+    "description": "Audio input and output configuration",
+    "input_device_index": {
+      "description": "Microphone device index to use for audio input. Set to null for system default.",
+      "value": null
+    },
+    "output_device_index": {
+      "description": "Speaker device index to use for audio output. Set to null for system default.",
+      "value": null
+    },
+    "silence_window_seconds": {
+      "description": "Duration in seconds to monitor for silence before stopping recording",
+      "value": 2
+    },
+    "noise_floor_multiplier": {
+      "description": "Multiplier applied to noise floor when determining silence threshold (0.1-2.0)",
+      "value": 0.5
+    },
+    "noise_monitor_window_seconds": {
+      "description": "Duration in seconds for noise floor monitoring window",
+      "value": 5
+    }
   }
 }
