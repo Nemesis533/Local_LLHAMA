@@ -146,6 +146,10 @@ class AudioRecorderClass:
                 self.silence_window_seconds = audio_settings.get("silence_window_seconds", {}).get("value", 2)
                 self.noise_floor_multiplier = audio_settings.get("noise_floor_multiplier", {}).get("value", 0.5)
                 self.input_device_index = audio_settings.get("input_device_index", {}).get("value", None)
+                
+                # Load sample rate from settings
+                configured_sample_rate = audio_settings.get("sample_rate", {}).get("value", 16000)
+                self.sample_rate = configured_sample_rate
             else:
                 # Fallback to defaults
                 self.silence_window_seconds = 2
@@ -162,52 +166,76 @@ class AudioRecorderClass:
             return 0.0
         return sum(self.rms_values) / len(self.rms_values)
 
-    def record_audio(self, transcriptor: AudioTranscriptionClass, noise_floor):
-        p = None
-        stream = None
+    def record_audio(self, transcriptor: AudioTranscriptionClass, noise_floor, existing_stream=None, existing_pyaudio=None):
+        """Record audio using an existing stream if provided, otherwise create a new one."""
+        p = existing_pyaudio
+        stream = existing_stream
+        owns_resources = (existing_stream is None)  # Track if we created the resources
 
         try:
-            # Initialize PyAudio with error handling
-            try:
-                p = pyaudio.PyAudio()
-            except OSError as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}"
-                )
-                return "Audio device initialization failed"
-            except Exception as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing PyAudio: {type(e).__name__}: {e}"
-                )
-                return "Audio initialization error"
+            # Initialize PyAudio only if not provided
+            if p is None:
+                try:
+                    p = pyaudio.PyAudio()
+                except OSError as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to initialize PyAudio: {e}"
+                    )
+                    return "Audio device initialization failed"
+                except Exception as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error initializing PyAudio: {type(e).__name__}: {e}"
+                    )
+                    return "Audio initialization error"
 
-            # Open audio stream with error handling
-            try:
-                stream_params = {
-                    "format": pyaudio.paInt16,
-                    "channels": self.channels,
-                    "rate": self.sample_rate,
-                    "input": True,
-                    "frames_per_buffer": self.chunk_size,
-                }
-                
-                # Add input device if configured
-                if self.input_device_index is not None:
-                    stream_params["input_device_index"] = self.input_device_index
-                
-                stream = p.open(**stream_params)
-            except OSError as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open audio stream: {e}"
-                )
-                # Don't terminate - let garbage collector handle it
-                return "Failed to open microphone"
-            except Exception as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error opening stream: {type(e).__name__}: {e}"
-                )
-                # Don't terminate - let garbage collector handle it
-                return "Microphone error"
+            # Open audio stream only if not provided
+            if stream is None:
+                try:
+                    stream_params = {
+                        "format": pyaudio.paInt16,
+                        "channels": self.channels,
+                        "rate": self.sample_rate,
+                        "input": True,
+                        "frames_per_buffer": self.chunk_size,
+                    }
+                    
+                    # Add input device if configured
+                    if self.input_device_index is not None:
+                        stream_params["input_device_index"] = self.input_device_index
+                        
+                        # Query device info to use its native sample rate
+                        try:
+                            device_info = p.get_device_info_by_index(self.input_device_index)
+                            device_default_rate = int(device_info.get('defaultSampleRate', 16000))
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Device default sample rate: {device_default_rate} Hz"
+                            )
+                            # Use device's native sample rate
+                            stream_params["rate"] = device_default_rate
+                            self.sample_rate = device_default_rate
+                        except Exception as dev_err:
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not query device info: {dev_err}"
+                            )
+                    
+                    stream = p.open(**stream_params)
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio stream opened successfully at {self.sample_rate} Hz!")
+                except OSError as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open audio stream: {e}"
+                    )
+                    if owns_resources and p:
+                        p.terminate()
+                    return "Failed to access audio device"
+                except Exception as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error opening stream: {type(e).__name__}: {e}"
+                    )
+                    if owns_resources and p:
+                        p.terminate()
+                    return "Audio stream error"
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using existing audio stream")
 
             self.noise_threshold = noise_floor * self.noise_floor_multiplier
             frames = []
@@ -295,16 +323,19 @@ class AudioRecorderClass:
             )
             return "Recording error"
         finally:
-            # Ensure cleanup
-            if stream:
-                try:
-                    stream.stop_stream()
-                    stream.close()
-                except:
-                    pass
-            # Don't terminate PyAudio - it's a global shutdown
-            # Just allow time for device cleanup
-            time.sleep(0.3)
+            # Only cleanup if we own the resources
+            if owns_resources:
+                if stream:
+                    try:
+                        stream.stop_stream()
+                        stream.close()
+                    except:
+                        pass
+                # Don't terminate PyAudio - it's a global shutdown
+                # Just allow time for device cleanup
+                time.sleep(0.3)
+            else:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Returning stream to caller")
 
 
 class NoiseFloorMonitor:
@@ -399,6 +430,7 @@ class WakeWordListener:
         # Initialize PyAudio once
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio...")
         self.audio = pyaudio.PyAudio()
+        self.mic_stream = None  # Track current stream for reuse
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully")
 
     def _load_settings(self):
@@ -414,11 +446,14 @@ class WakeWordListener:
                 
                 audio_settings = data.get("audio", {})
                 self.input_device_index = audio_settings.get("input_device_index", {}).get("value", None)
+                self.sample_rate = audio_settings.get("sample_rate", {}).get("value", 16000)
             else:
                 self.input_device_index = None
+                self.sample_rate = 16000
         except Exception as e:
             print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default")
             self.input_device_index = None
+            self.sample_rate = 16000
 
     def pause(self):
         """
@@ -480,10 +515,27 @@ class WakeWordListener:
                 # Open microphone stream with error handling (PyAudio already initialized in __init__)
                 try:
                     print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening microphone stream...")
+                    
+                    # Query device info if device index is configured
+                    device_sample_rate = self.sample_rate
+                    if self.input_device_index is not None:
+                        try:
+                            device_info = self.audio.get_device_info_by_index(self.input_device_index)
+                            device_default_rate = int(device_info.get('defaultSampleRate', 16000))
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Device default sample rate: {device_default_rate} Hz"
+                            )
+                            # Use device's native sample rate
+                            device_sample_rate = device_default_rate
+                        except Exception as dev_err:
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not query device info: {dev_err}"
+                            )
+                    
                     stream_params = {
                         "format": pyaudio.paInt16,
                         "channels": 1,
-                        "rate": 16000,
+                        "rate": device_sample_rate,
                         "input": True,
                         "frames_per_buffer": self.CHUNK,
                     }
@@ -492,8 +544,9 @@ class WakeWordListener:
                     if self.input_device_index is not None:
                         stream_params["input_device_index"] = self.input_device_index
                     
-                    mic_stream = self.audio.open(**stream_params)
-                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully!")
+                    self.mic_stream = self.audio.open(**stream_params)
+                    mic_stream = self.mic_stream
+                    print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully at {device_sample_rate} Hz!")
                 except OSError as e:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}"
@@ -523,6 +576,15 @@ class WakeWordListener:
                     try:
                         audio_data = mic_stream.read(self.CHUNK, exception_on_overflow=False)
                         np_audio = np.frombuffer(audio_data, dtype=np.int16)
+                        
+                        # Resample to 16kHz if device is using a different sample rate
+                        # OpenWakeWord models are trained on 16kHz audio
+                        if device_sample_rate != 16000:
+                            from scipy import signal
+                            # Calculate the resampling ratio
+                            num_samples = int(len(np_audio) * 16000 / device_sample_rate)
+                            np_audio = signal.resample(np_audio, num_samples).astype(np.int16)
+                        
                         prediction = self.owwModel.predict(np_audio)
 
                         current_time = time.time()
@@ -580,11 +642,12 @@ class WakeWordListener:
                     try:
                         mic_stream.stop_stream()
                         mic_stream.close()
+                        self.mic_stream = None  # Clear reference
                     except Exception as e:
                         print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error closing mic stream: {e}")
                 
-                # Allow time for device cleanup
-                time.sleep(0.5)
+                # Allow time for device cleanup - increased for device release
+                time.sleep(1.0)
 
             # After cleanup, check if we should restart the detection loop
             # If still not stopped and not paused, we'll reinitialize on next iteration

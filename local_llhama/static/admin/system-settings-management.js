@@ -164,6 +164,45 @@ function createSettingElement(categoryKey, settingKey, settingData) {
         label.appendChild(span);
         settingDiv.appendChild(label);
         
+    } else if (settingKey.includes('device_index')) {
+        // Special handling for audio device selection (can be null or number)
+        const label = document.createElement('label');
+        label.htmlFor = settingId;
+        label.textContent = settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ':';
+        settingDiv.appendChild(label);
+        
+        const select = document.createElement('select');
+        select.id = settingId;
+        
+        // Determine which device list to use
+        let deviceList = [];
+        if (settingKey === 'input_device_index') {
+            deviceList = availableAudioDevices.input_devices;
+        } else if (settingKey === 'output_device_index') {
+            deviceList = availableAudioDevices.output_devices;
+        }
+        
+        // Add device options
+        deviceList.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.index === null ? '' : device.index;
+            option.textContent = device.name;
+            select.appendChild(option);
+        });
+        
+        // Set current value - convert to string for comparison
+        if (value === null) {
+            select.value = '';
+        } else {
+            select.value = String(value);
+        }
+        
+        select.onchange = () => {
+            const newValue = select.value === '' ? null : parseInt(select.value, 10);
+            updateSetting(categoryKey, settingKey, newValue);
+        };
+        settingDiv.appendChild(select);
+        
     } else if (typeof value === 'number') {
         // Number input
         const label = document.createElement('label');
@@ -223,61 +262,6 @@ function createSettingElement(categoryKey, settingKey, settingData) {
             input.onchange = () => updateSetting(categoryKey, settingKey, input.value);
             settingDiv.appendChild(input);
         }
-        
-    } else if (value === null || settingKey.includes('device_index')) {
-        // Special handling for audio device selection (can be null)
-        const label = document.createElement('label');
-        label.htmlFor = settingId;
-        label.textContent = settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ':';
-        settingDiv.appendChild(label);
-        
-        const select = document.createElement('select');
-        select.id = settingId;
-        
-        // Determine which device list to use
-        let deviceList = [];
-        if (settingKey === 'input_device_index') {
-            deviceList = availableAudioDevices.input_devices;
-        } else if (settingKey === 'output_device_index') {
-            deviceList = availableAudioDevices.output_devices;
-        }
-        
-        // Add device options
-        deviceList.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.index === null ? '' : device.index;
-            option.textContent = device.name;
-            select.appendChild(option);
-        });
-        
-        // Set current value
-        if (value === null) {
-            select.value = '';
-        } else {
-            select.value = value;
-        }
-        
-        select.onchange = () => {
-            const newValue = select.value === '' ? null : parseInt(select.value, 10);
-            updateSetting(categoryKey, settingKey, newValue);
-        };
-        settingDiv.appendChild(select);
-        
-    } else if (typeof value === 'number') {
-        // Number input
-        const label = document.createElement('label');
-        label.htmlFor = settingId;
-        label.textContent = settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + ':';
-        settingDiv.appendChild(label);
-        
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.id = settingId;
-        input.value = value;
-        input.min = value >= 1 ? 1 : 0;
-        input.max = value > 50 ? 1000 : 100;
-        input.onchange = () => updateSetting(categoryKey, settingKey, parseInt(input.value, 10));
-        settingDiv.appendChild(input);
         
     } else if (Array.isArray(value)) {
         // Textarea for arrays
