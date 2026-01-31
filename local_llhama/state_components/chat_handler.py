@@ -432,12 +432,7 @@ class ChatHandler:
                     full_response += chunk_text
 
             # Parse complete response to extract nl_response from JSON
-            try:
-                parsed_response = json.loads(full_response)
-                nl_response = parsed_response.get("nl_response", full_response)
-            except json.JSONDecodeError:
-                # If not JSON, use full response as-is
-                nl_response = full_response
+            nl_response = self._extract_nl_response_from_json(full_response)
 
             # Now stream the extracted nl_response character by character for smooth display
             chunk_size = 5  # Send a few characters at a time for smooth streaming
@@ -474,6 +469,7 @@ class ChatHandler:
         @param client_id Client identifier for routing
         """
         try:
+            # DON'T send log_line message - we're streaming directly
             # Stream the nl_response character by character for smooth display
             chunk_size = 5  # Send a few characters at a time for smooth streaming
             for i in range(0, len(nl_response), chunk_size):
@@ -561,6 +557,71 @@ class ChatHandler:
                 f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Error during streaming response: {type(e).__name__}: {e}"
             )
             self._send_error_response("Error generating response", client_id)
+
+    def _extract_nl_response_from_json(self, text):
+        """
+        Extract nl_response from JSON text, handling various edge cases.
+        
+        @param text The JSON text from LLM response
+        @return Extracted nl_response content or original text if extraction fails
+        """
+        # First, try standard JSON parsing
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and "nl_response" in parsed:
+                return parsed["nl_response"]
+        except json.JSONDecodeError:
+            pass
+        
+        # If JSON parsing fails, try to extract nl_response manually
+        # Look for "nl_response": "..." pattern
+        import re
+        
+        # Pattern to match nl_response field with quoted content
+        # This handles multi-line strings and escaped quotes
+        pattern = r'"nl_response"\s*:\s*"((?:[^"\\]|\\.)*)"'
+        match = re.search(pattern, text, re.DOTALL)
+        
+        if match:
+            # Unescape the captured content
+            content = match.group(1)
+            # Unescape common escape sequences
+            content = content.replace('\\"', '"')
+            content = content.replace('\\n', '\n')
+            content = content.replace('\\t', '\t')
+            content = content.replace('\\\\', '\\')
+            return content
+        
+        # If pattern matching fails, check if text looks like it starts with JSON structure
+        # and strip the JSON wrapper manually
+        if text.strip().startswith('{') and '"nl_response"' in text:
+            # Try to find the content between "nl_response": " and the closing "
+            start_marker = '"nl_response":'
+            start_idx = text.find(start_marker)
+            if start_idx != -1:
+                # Find the opening quote after the colon
+                quote_start = text.find('"', start_idx + len(start_marker))
+                if quote_start != -1:
+                    # Find the closing quote (accounting for escaped quotes)
+                    i = quote_start + 1
+                    while i < len(text):
+                        if text[i] == '"' and (i == 0 or text[i-1] != '\\'):
+                            # Found unescaped closing quote
+                            return text[quote_start + 1:i].replace('\\"', '"').replace('\\n', '\n')
+                        i += 1
+        
+        # Last resort: if we see JSON structure markers but couldn't parse,
+        # try to clean it up
+        if '{' in text and '"nl_response"' in text and '"language"' in text:
+            # Strip common JSON artifacts that might appear in streaming
+            cleaned = text.replace('{"nl_response":"', '').replace('", "language":', '').replace('"language":"en"', '').replace('"language":"fr"', '').replace('"language":"de"', '').replace('"language":"it"', '').replace('"language":"es"', '').replace('"language":"ru"', '')
+            if cleaned != text:
+                # Remove trailing braces
+                cleaned = cleaned.rstrip('}').rstrip()
+                return cleaned
+        
+        # If all else fails, return original text
+        return text
 
     def _handle_nl_response(self, structured_output, client_id):
         """

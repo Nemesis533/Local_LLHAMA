@@ -3,12 +3,28 @@ const socket = io();
 
 // Global state
 let currentAssistantName = 'Assistant';
+let pageHidden = false;
+let pendingUpdates = 0;
 
 // DOM elements
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-chat-btn');
 const logoutBtn = document.getElementById('logout-btn');
+
+// Track page visibility to ensure updates work even when tab is not focused
+document.addEventListener('visibilitychange', () => {
+  pageHidden = document.hidden;
+  if (!pageHidden && pendingUpdates > 0) {
+    // Page became visible and we had pending updates - update title
+    document.title = `Chat (${pendingUpdates} new)`;
+    // Clear after a moment
+    setTimeout(() => {
+      document.title = 'Chat';
+      pendingUpdates = 0;
+    }, 2000);
+  }
+});
 
 // Logout handler
 logoutBtn.addEventListener('click', async () => {
@@ -249,6 +265,7 @@ socket.on('streaming_chunk', (data) => {
     
     chatMessages.appendChild(messageDiv);
     currentStreamingMessage = messageDiv.querySelector('.message-content');
+    currentStreamingMessage.setAttribute('data-raw-text', '');
   }
   
   // Append chunk to current message
@@ -257,19 +274,8 @@ socket.on('streaming_chunk', (data) => {
     const newText = currentText + chunk;
     currentStreamingMessage.setAttribute('data-raw-text', newText);
     
-    // Parse and render the accumulated text as JSON if possible
-    try {
-      const parsed = JSON.parse(newText);
-      if (parsed.nl_response) {
-        currentStreamingMessage.innerHTML = formatMarkdown(parsed.nl_response);
-      } else {
-        currentStreamingMessage.innerHTML = formatMarkdown(newText);
-      }
-    } catch {
-      // Not valid JSON yet, display as-is
-      currentStreamingMessage.innerHTML = formatMarkdown(newText);
-    }
-    
+    // Display the text directly with Markdown formatting
+    currentStreamingMessage.innerHTML = formatMarkdown(newText);
     scrollToBottom();
   }
   
@@ -280,6 +286,12 @@ socket.on('streaming_chunk', (data) => {
       const messageDiv = currentStreamingMessage.parentElement;
       if (messageDiv) {
         messageDiv.classList.remove('streaming-message');
+        
+        // Update pending counter if page is hidden
+        if (pageHidden) {
+          pendingUpdates++;
+          document.title = `Chat (${pendingUpdates} new)`;
+        }
         
         // Check if we need to refresh calendar
         const finalText = currentStreamingMessage.textContent;
@@ -316,6 +328,10 @@ socket.on('log_line', (data) => {
         showStatusMessage(status);
       }
     } else if (message.includes('[LLM Reply]:')) {
+      // Skip if we're currently streaming - streaming takes precedence
+      if (currentStreamingMessage) {
+        return;
+      }
       // Extract the actual reply and hide loading indicator
       const reply = message.split('[LLM Reply]:')[1]?.trim();
       if (reply) {

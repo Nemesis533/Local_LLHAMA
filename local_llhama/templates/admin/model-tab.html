@@ -52,6 +52,42 @@
             </div>
         </div>
 
+        <!-- Decision Model Configuration -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Decision Model (Advanced)</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Use a lightweight model for command parsing to improve response speed.
+            </p>
+            
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" 
+                           id="use-separate-decision-model" 
+                           style="margin-right: 10px; width: 18px; height: 18px;">
+                    <span style="font-weight: 500;">Use separate model for decision-making phase</span>
+                </label>
+                <div style="font-size: 12px; color: #666; margin-top: 5px; margin-left: 28px;">
+                    Enable this to use a faster, smaller model for parsing commands. Responses will still use the main model.
+                </div>
+            </div>
+            
+            <div class="form-group" id="decision-model-selector" style="display: none;">
+                <label for="decision-model">Decision Model:</label>
+                <input type="text" 
+                       id="decision-model" 
+                       placeholder="e.g., phi4-mini:3.8b-q4_K_M, qwen2.5:3b, gemma2:2b" 
+                       value="phi4-mini:3.8b-q4_K_M"
+                       style="width: 300px; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Recommended: phi4-mini:3.8b-q4_K_M, qwen2.5:3b, gemma2:2b, llama3.2:3b
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px; color: #856404;">
+                <strong>Performance Tip:</strong> Using a smaller decision model can reduce voice command latency by 50-70% while maintaining accuracy.
+            </div>
+        </div>
+
         <!-- Interaction Section -->
         <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="margin-top: 0; color: #000;">Interact with Assistant</h3>

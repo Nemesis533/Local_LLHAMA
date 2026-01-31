@@ -146,19 +146,25 @@ def get_prompts():
     """
     Get current LLM prompts configuration.
     """
-    prompts_file = Path(
-        "/home/llhama-usr/Local_LLHAMA/local_llhama/settings/prompts.json"
-    )
-
-    if prompts_file.exists():
-        with open(prompts_file, "r", encoding="utf-8") as f:
-            prompts_data = json.load(f)
-
+    try:
+        from local_llhama.settings import prompts
+        
+        # Build response with all prompts
+        prompts_data = {
+            "response_processor_prompt": prompts.RESPONSE_PROCESSOR_PROMPT,
+            "smart_home_prompt_template": prompts.SMART_HOME_PROMPT_TEMPLATE,
+            "conversation_processor_prompt": prompts.CONVERSATION_PROCESSOR_PROMPT,
+            "calendar_event_prompt": prompts.CALENDAR_EVENT_PROMPT,
+            "resume_conversation_prompt": prompts.RESUME_CONVERSATION_PROMPT,
+            "smart_home_decision_making_extension": prompts.SMART_HOME_DECISION_MAKING_EXTENSION,
+            "safety_instruction_prompt": prompts.SAFETY_INSTRUCTION_PROMPT,
+        }
+        
         return {"status": "ok", "prompts": prompts_data}
-    else:
+    except Exception as e:
         return (
-            jsonify({"status": "error", "message": "Prompts file not found"}),
-            404,
+            jsonify({"status": "error", "message": f"Error loading prompts: {str(e)}"}),
+            500,
         )
 
 
@@ -168,7 +174,7 @@ def get_prompts():
 def update_prompts():
     """
     Update LLM prompts configuration.
-    Expects JSON: {"prompts": {"prompt_name": {"value": "...", "description": "..."}, ...}}
+    Expects JSON: {"prompts": {"prompt_name": "value", ...}}
     """
     data = request.get_json()
 
@@ -187,13 +193,48 @@ def update_prompts():
             400,
         )
 
-    prompts_file = Path(
-        "/home/llhama-usr/Local_LLHAMA/local_llhama/settings/prompts.json"
-    )
+    prompts_file = Path(__file__).parent.parent / "settings" / "prompts.py"
+
+    # Generate Python file content
+    content = '''"""
+@file prompts.py
+@brief LLM prompt templates with human-readable multi-line format.
+
+All prompts use triple-quoted strings for easy editing and readability.
+Use {assistant_name} placeholder which will be replaced at runtime.
+"""
+
+'''
+    
+    prompt_names = [
+        "RESPONSE_PROCESSOR_PROMPT",
+        "SMART_HOME_PROMPT_TEMPLATE",
+        "CONVERSATION_PROCESSOR_PROMPT",
+        "CALENDAR_EVENT_PROMPT",
+        "RESUME_CONVERSATION_PROMPT",
+        "SMART_HOME_DECISION_MAKING_EXTENSION",
+        "SAFETY_INSTRUCTION_PROMPT",
+    ]
+    
+    for prompt_name in prompt_names:
+        key = prompt_name.lower()
+        value = prompts.get(key, "")
+        
+        # Escape triple quotes in the value
+        value = value.replace('"""', r'\"\"\"')
+        
+        content += f'{prompt_name} = """{value}"""\n\n\n'
 
     # Save to file
     with open(prompts_file, "w", encoding="utf-8") as f:
-        json.dump(prompts, f, indent=2)
+        f.write(content)
+
+    # Reload prompts in the application
+    try:
+        from local_llhama.llm_prompts import reload_prompts
+        reload_prompts()
+    except Exception as e:
+        print(f"[Settings] Warning: Could not reload prompts: {e}")
 
     return {"status": "ok", "message": "Prompts updated successfully"}
 
@@ -298,6 +339,16 @@ def get_model_config():
     if internet_searches is None:
         internet_searches = True
 
+    # Get decision model settings
+    decision_model = (
+        loader.get_setting("SettingLoaderClass", "ollama_decision_model") or "phi4-mini:3.8b-q4_K_M"
+    )
+    use_separate_decision_model = loader.get_setting(
+        "SettingLoaderClass", "use_separate_decision_model"
+    )
+    if use_separate_decision_model is None:
+        use_separate_decision_model = False
+
     return {
         "status": "ok",
         "config": {
@@ -305,6 +356,8 @@ def get_model_config():
             "ollama_model": ollama_model,
             "embedding_model": embedding_model,
             "internet_searches": internet_searches,
+            "decision_model": decision_model,
+            "use_separate_decision_model": use_separate_decision_model,
         },
     }
 
@@ -314,8 +367,12 @@ def get_model_config():
 @FlaskErrorHandler.handle_route()
 def update_model_config():
     """
-    Update model configuration (currently only assistant name is editable).
-    Expects JSON: {"assistant_name": "LLHAMA"}
+    Update model configuration (assistant name and decision model settings).
+    Expects JSON: {
+        "assistant_name": "LLHAMA",
+        "use_separate_decision_model": true,
+        "decision_model": "phi3:mini"
+    }
     """
     data = request.get_json()
 
@@ -341,16 +398,27 @@ def update_model_config():
     service = current_app.config["SERVICE_INSTANCE"]
     loader = service.loader
 
+    # Update assistant name
     success = loader.update_assistant_name(assistant_name)
+    
+    # Update decision model settings if provided
+    if "use_separate_decision_model" in data:
+        use_separate = data["use_separate_decision_model"]
+        loader.update_setting("SettingLoaderClass", "use_separate_decision_model", use_separate)
+    
+    if "decision_model" in data:
+        decision_model = data["decision_model"].strip()
+        if decision_model:
+            loader.update_setting("SettingLoaderClass", "ollama_decision_model", decision_model)
 
     if success:
         return {
             "status": "ok",
-            "message": "Assistant name updated successfully. Restart system to apply changes.",
+            "message": "Model configuration updated successfully. Restart system to apply changes.",
         }
     else:
         return (
-            jsonify({"status": "error", "message": "Failed to update assistant name"}),
+            jsonify({"status": "error", "message": "Failed to update model configuration"}),
             500,
         )
 

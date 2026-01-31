@@ -7,6 +7,8 @@ Ollama LLM server for command parsing and response processing.
 
 # === System Imports ===
 import json
+import threading
+import time
 
 import requests
 
@@ -44,6 +46,10 @@ class OllamaClient:
         pg_client=None,
         conversation_loader=None,
         embedding_model: str = "nomic-embed-text",
+        decision_model: str = None,
+        use_separate_decision_model: bool = False,
+        keepalive_enabled: bool = True,
+        keepalive_interval: int = 180,
     ):
         """
         Initialize Ollama client with connection details.
@@ -55,6 +61,10 @@ class OllamaClient:
         @param pg_client Optional PostgreSQLClient for storing message embeddings
         @param conversation_loader Optional ConversationLoader for accessing previous conversations
         @param embedding_model Embedding model name to use (default: nomic-embed-text)
+        @param decision_model Optional separate model for decision-making phase
+        @param use_separate_decision_model Whether to use separate model for decisions
+        @param keepalive_enabled Whether to enable model keepalive thread
+        @param keepalive_interval Seconds between keepalive pings
         """
         self.class_prefix_message = "[OllamaClient]"
         # Ensure host has http:// scheme
@@ -62,9 +72,26 @@ class OllamaClient:
             host = f"http://{host}"
         self.host = host.rstrip("/")
         self.model = model
+        self.decision_model = decision_model if decision_model else model
+        self.use_separate_decision_model = use_separate_decision_model
+        self.keepalive_enabled = keepalive_enabled
+        self.keepalive_interval = keepalive_interval
+        self.keepalive_thread = None
+        self.keepalive_running = False
         self.ha_client = ha_client
         self.pg_client = pg_client
         self.conversation_loader = conversation_loader
+        
+        # Debug: Log decision model configuration
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Main model: {self.model}"
+        )
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Decision model: {self.decision_model}"
+        )
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Use separate decision model: {self.use_separate_decision_model}"
+        )
 
         self.context_builder = ContextBuilder(ha_client, self.class_prefix_message)
         self.devices_context = self.context_builder.get_devices_context()
@@ -97,6 +124,101 @@ class OllamaClient:
             devices_context=self.devices_context,
             simple_functions_context=simple_functions_context,
         )
+        
+        # Start keepalive thread if enabled
+        if self.keepalive_enabled:
+            self._start_keepalive()
+
+    def _start_keepalive(self):
+        """Start the model keepalive background thread."""
+        if self.keepalive_running:
+            return
+        
+        self.keepalive_running = True
+        self.keepalive_thread = threading.Thread(target=self._keepalive_worker, daemon=True)
+        self.keepalive_thread.start()
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model keepalive started (interval: {self.keepalive_interval}s)"
+        )
+    
+    def _stop_keepalive(self):
+        """Stop the keepalive thread."""
+        self.keepalive_running = False
+        if self.keepalive_thread:
+            self.keepalive_thread.join(timeout=5)
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model keepalive stopped"
+        )
+    
+    def _keepalive_worker(self):
+        """Background worker that sends keepalive requests to models."""
+        while self.keepalive_running:
+            try:
+                # Wait for the interval
+                for _ in range(self.keepalive_interval):
+                    if not self.keepalive_running:
+                        return
+                    time.sleep(1)
+                
+                # Send keepalive to main model
+                self._send_keepalive(self.model, is_embedding=False)
+                
+                # Send keepalive to decision model if separate
+                if self.use_separate_decision_model and self.decision_model != self.model:
+                    self._send_keepalive(self.decision_model, is_embedding=False)
+                
+                # Send keepalive to embedding model
+                if self.embedding_client:
+                    self._send_keepalive(self.embedding_client.model, is_embedding=True)
+                    
+            except Exception as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive error: {type(e).__name__}: {e}"
+                )
+    
+    def _send_keepalive(self, model_name, is_embedding=False):
+        """
+        Send a minimal request to keep a model loaded.
+        
+        @param model_name Name of the model to ping
+        @param is_embedding Whether this is an embedding model
+        """
+        try:
+            url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
+            
+            if is_embedding:
+                # For embedding models, embed a single character
+                payload = {
+                    "model": model_name,
+                    "input": "1"
+                }
+            else:
+                # For LLM models, generate a minimal response
+                payload = {
+                    "model": model_name,
+                    "prompt": "Reply only with the number 1, nothing else.",
+                    "stream": False,
+                    "options": {
+                        "num_predict": 2,
+                        "temperature": 0
+                    }
+                }
+            
+            response = requests.post(url, json=payload, timeout=10)
+            
+            if response.status_code == 200:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Keepalive ping successful: {model_name}"
+                )
+            else:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive ping failed for {model_name}: HTTP {response.status_code}"
+                )
+                
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive failed for {model_name}: {type(e).__name__}: {e}"
+            )
 
     def _build_extended_prompt(self):
         """
@@ -199,13 +321,6 @@ class OllamaClient:
             # Use smart_home_prompt_template with decision-making extension (already built)
             system_prompt = self.system_prompt
 
-        # Generate embedding for user question once
-        if message_type == "command" and self.embedding_client:
-            text_to_embed = original_text if original_text else user_message
-            self.last_user_embedding = self.embedding_client._get_embedding_from_ollama(
-                text_to_embed
-            )
-
         # Build the prompt with context if available
         prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
 
@@ -214,9 +329,12 @@ class OllamaClient:
             temperature = 0.8  # More creative for processing Wikipedia/news responses
             top_p = 0.90
 
+        # Determine if we should use decision model (only for command parsing, not responses)
+        use_decision_model = (message_type == "command")
+
         # Send request to Ollama
         response_data = self._send_to_ollama(
-            prompt, system_prompt, temperature, top_p, max_tokens
+            prompt, system_prompt, temperature, top_p, max_tokens, use_decision_model=use_decision_model
         )
 
         if response_data is None:
@@ -292,13 +410,6 @@ class OllamaClient:
             # Use smart_home_prompt_template with decision-making extension (already built)
             system_prompt = self.system_prompt
 
-        # Generate embedding for user question once
-        if message_type == "command" and self.embedding_client:
-            text_to_embed = original_text if original_text else user_message
-            self.last_user_embedding = self.embedding_client._get_embedding_from_ollama(
-                text_to_embed
-            )
-
         # Build the prompt with context if available
         prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
 
@@ -307,9 +418,12 @@ class OllamaClient:
             self.last_message_from_chat = from_chat
             self.last_user_message = original_text if original_text else user_message
 
+        # Determine if we should use decision model (only for command parsing, not responses)
+        use_decision_model = (message_type == "command")
+
         # Send streaming request to Ollama
         response_generator = self._send_to_ollama(
-            prompt, system_prompt, temperature, top_p, max_tokens, stream=True
+            prompt, system_prompt, temperature, top_p, max_tokens, stream=True, use_decision_model=use_decision_model
         )
 
         if response_generator is None:
@@ -390,6 +504,7 @@ class OllamaClient:
         top_p: float,
         max_tokens: int,
         stream: bool = False,
+        use_decision_model: bool = False,
     ):
         """
         Send request to Ollama server.
@@ -400,16 +515,30 @@ class OllamaClient:
         @param top_p Nucleus sampling
         @param max_tokens Max tokens to generate
         @param stream Whether to stream responses (for generators)
+        @param use_decision_model Whether to use the decision model instead of main model
         @return Response data or None on error, or generator if stream=True
         """
         # Append safety prompt if enabled
         if is_safety_enabled() and SAFETY_INSTRUCTION_PROMPT:
             system_prompt = f"{system_prompt}\n\n{SAFETY_INSTRUCTION_PROMPT}"
 
+        # Choose model based on whether this is decision-making phase
+        model_to_use = self.decision_model if (use_decision_model and self.use_separate_decision_model) else self.model
+        
+        # Log which model is being used
+        if use_decision_model and self.use_separate_decision_model:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using decision model: {model_to_use}"
+            )
+        elif stream:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using main model for response: {model_to_use}"
+            )
+
         url = f"{self.host}/api/generate"
 
         payload = {
-            "model": self.model,
+            "model": model_to_use,
             "prompt": prompt,
             "system": system_prompt,
             "options": {

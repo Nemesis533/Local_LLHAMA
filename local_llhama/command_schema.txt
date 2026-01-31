@@ -82,5 +82,15 @@
     "parameters": {
       "query": {"required": true, "description": "The keyword to search for, comma separated"}
     }
+  },
+  "generate_conversational_response": {
+    "entity_id": "generate_conversational_response",
+    "actions": ["generate_conversational_response"],
+    "description": "Generate conversational responses for general chat, stories, creative writing, advice, or any query that doesn't require device control or information lookup",
+    "display_name": "Thinking...",
+    "example": {"action": "generate_conversational_response", "target": "generate_conversational_response", "data": {"query": "Tell me a story about a dragon"}},
+    "parameters": {
+      "query": {"required": true, "description": "The user's conversational query or request"}
+    }
   }
 }

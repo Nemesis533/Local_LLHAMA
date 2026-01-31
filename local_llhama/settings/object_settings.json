@@ -9,8 +9,16 @@
       "type": "str"
     },
     "ollama_model": {
-      "value": "gpt-oss:20b",
+      "value": "qwen3:30b-a3b-q4_K_M",
       "type": "str"
+    },
+    "ollama_decision_model": {
+      "value": "phi4-mini:3.8b-q4_K_M",
+      "type": "str"
+    },
+    "use_separate_decision_model": {
+      "value": false,
+      "type": "bool"
     },
     "ollama_embedding_model": {
       "value": "embeddinggemma",
@@ -28,12 +36,21 @@
         "Russian": "ru"
       },
       "type": "dict"
+    },
+    "model_keepalive_enabled": {
+      "value": true,
+      "type": "bool"
+    },
+    "model_keepalive_interval": {
+      "value": 180,
+      "type": "int"
     }
   },
   "AudioTranscriptionClass": {
     "whisper_model": {
-      "value": "turbo",
-      "type": "str"
+      "value": "small",
+      "type": "str",
+      "device": "cuda:0"
     }
   },
   "TextToSpeech": {
@@ -55,7 +72,7 @@
       "type": "int"
     },
     "default_context_words": {
-      "value": 400,
+      "value": 1500,
       "type": "int"
     },
     "min_context_words": {

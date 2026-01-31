@@ -47,6 +47,8 @@ class SettingLoaderClass:
         self.ollama_ip = ""
         self.ollama_model = ""
         self.ollama_embedding_model = ""
+        self.ollama_decision_model = ""
+        self.use_separate_decision_model = False
         self.settings_file = f"{self.base_path}{self.json_path}"
         self.system_settings = {}
         self.assistant_name = ""  # Assistant name from settings
@@ -501,6 +503,25 @@ class SettingLoaderClass:
             print(
                 f"{self.class_prefix_message} {LogLevel.INFO} Using embedding model: {self.ollama_embedding_model}"
             )
+            
+            # Get decision model settings
+            decision_model = getattr(self, 'ollama_decision_model', 'phi4-mini:3.8b-q4_K_M')
+            use_separate_decision_model = getattr(self, 'use_separate_decision_model', False)
+            
+            if use_separate_decision_model:
+                print(
+                    f"{self.class_prefix_message} {LogLevel.INFO} Using separate decision model: {decision_model}"
+                )
+            
+            # Get keepalive settings
+            keepalive_enabled = self.get_setting('OllamaClient', 'model_keepalive_enabled')
+            if keepalive_enabled is None:
+                keepalive_enabled = True
+            
+            keepalive_interval = self.get_setting('OllamaClient', 'model_keepalive_interval')
+            if keepalive_interval is None:
+                keepalive_interval = 180
+            
             # Create ConversationLoader for chat history
             conversation_loader = ConversationLoader(pg_client) if pg_client else None
             # Pass conversation_loader to OllamaClient
@@ -511,6 +532,10 @@ class SettingLoaderClass:
                 pg_client=pg_client,
                 conversation_loader=conversation_loader,
                 embedding_model=self.ollama_embedding_model,
+                decision_model=decision_model,
+                use_separate_decision_model=use_separate_decision_model,
+                keepalive_enabled=keepalive_enabled,
+                keepalive_interval=keepalive_interval,
             )
             print(
                 f"{self.class_prefix_message} {LogLevel.INFO} Ollama client created successfully"
