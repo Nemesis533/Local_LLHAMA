@@ -100,10 +100,35 @@ export function displayModelConfig() {
     document.getElementById('current-embedding-model').textContent = modelConfig.embedding_model || 'unknown';
     document.getElementById('current-internet-searches').textContent = modelConfig.internet_searches ? 'Enabled' : 'Disabled';
     
+    // Set decision model configuration
+    const useSeparateDecisionModel = modelConfig.use_separate_decision_model || false;
+    const decisionModel = modelConfig.decision_model || 'phi4-mini:3.8b-q4_K_M';
+    
+    document.getElementById('use-separate-decision-model').checked = useSeparateDecisionModel;
+    document.getElementById('decision-model').value = decisionModel;
+    
+    // Show/hide decision model selector based on checkbox
+    toggleDecisionModelSelector();
+    
+    // Add event listener for checkbox
+    document.getElementById('use-separate-decision-model').addEventListener('change', toggleDecisionModelSelector);
+    
     // Initialize socket and other features
     initModelSocket();
     initPromptSender();
     fetchModelCalendarEvents();
+}
+
+/**
+ * Toggle visibility of decision model selector
+ */
+function toggleDecisionModelSelector() {
+    const checkbox = document.getElementById('use-separate-decision-model');
+    const selector = document.getElementById('decision-model-selector');
+    
+    if (checkbox && selector) {
+        selector.style.display = checkbox.checked ? 'block' : 'none';
+    }
 }
 
 /**
@@ -284,10 +309,19 @@ export async function saveModelConfig() {
     
     try {
         const assistantName = document.getElementById('assistant-name').value.trim();
+        const useSeparateDecisionModel = document.getElementById('use-separate-decision-model').checked;
+        const decisionModel = document.getElementById('decision-model').value.trim();
         
         if (!assistantName) {
             statusDiv.className = 'save-status error';
             statusDiv.textContent = '✗ Assistant name cannot be empty';
+            statusDiv.style.display = 'block';
+            return;
+        }
+        
+        if (useSeparateDecisionModel && !decisionModel) {
+            statusDiv.className = 'save-status error';
+            statusDiv.textContent = '✗ Decision model name cannot be empty when enabled';
             statusDiv.style.display = 'block';
             return;
         }
@@ -299,7 +333,9 @@ export async function saveModelConfig() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                assistant_name: assistantName
+                assistant_name: assistantName,
+                use_separate_decision_model: useSeparateDecisionModel,
+                decision_model: decisionModel
             })
         });
         

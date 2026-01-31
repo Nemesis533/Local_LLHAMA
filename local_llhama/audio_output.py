@@ -551,7 +551,7 @@ class TextToSpeech:
             print(
                 f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading voice file: {voice_file.name}"
             )
-            self.voice = PiperVoice.load(voice_file)
+            self.voice = PiperVoice.load(voice_file, use_cuda=True)
             self.voice_cache[lang_tag] = self.voice
             self.current_lang = lang_tag
             print(

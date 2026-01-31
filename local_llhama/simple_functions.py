@@ -864,3 +864,43 @@ class SimpleFunctions:
             return [self._replace_target_with_entity_id(item) for item in command]
         else:
             return command
+
+    def generate_conversational_response(self, query=None, context=None):
+        """
+        @brief Generate a natural language conversational response.
+        
+        This function is called when the user asks for general conversation,
+        stories, creative content, or anything that doesn't require device
+        control or information lookup.
+        
+        The context parameter is populated by the chat handler/command processor
+        and can include:
+        - conversation_history: Recent messages from the conversation
+        - user_preferences: Language, tone, formality settings
+        - temporal_context: Time of day, date, timezone
+        - function_results: Results from other functions called in same request
+        - user_metadata: User ID, name, location, etc.
+        
+        @param query The user's conversational query/request.
+        @param context Optional dict with additional contextual information
+                       to enhance the response (populated by system, not LLM).
+        @return Dict with 'type', 'response', and metadata.
+        """
+        if not query:
+            return {
+                "type": "simple_function",
+                "function_name": "generate_conversational_response",
+                "response": "I didn't receive a query to respond to.",
+                "error": "Missing query parameter"
+            }
+        
+        # This will be intercepted by the command processor and sent to
+        # the conversation LLM with appropriate context and prompts
+        return {
+            "type": "simple_function",
+            "function_name": "generate_conversational_response",
+            "query": query,
+            "context": context or {},
+            "response": f"Generating response for: {query}"
+        }
+
