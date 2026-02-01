@@ -689,7 +689,7 @@ class SimpleFunctions:
                 return entity_info.get("display_name")
         return None
 
-    def find_in_memory(self, query, user_id, limit=3):
+    def find_in_memory(self, query, user_id, limit=3, role=None, days_back=None):
         """
         Find most similar messages using vector similarity search with pgvector
         and keyword matching.
@@ -697,6 +697,8 @@ class SimpleFunctions:
         @param query: Text query to search for in past conversations
         @param user_id: User ID to filter messages by
         @param limit: Number of similar messages to return (default 3)
+        @param role: Optional role filter ('user', 'assistant', or None for both)
+        @param days_back: Optional number of days to look back (None = all time)
         @return: Formatted string describing found memories or error message
         """
         if not self.pg_client or not query:
@@ -736,6 +738,22 @@ class SimpleFunctions:
                 keyword_params.append(f"%{keyword}%")
             keyword_where = " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
 
+            # Build role filter condition
+            if role:
+                role_condition = "AND m.role = %s"
+                role_params = [role, role]  # For both vector_search and keyword_search
+            else:
+                role_condition = ""
+                role_params = []
+
+            # Build date filter condition
+            if days_back is not None:
+                date_condition = "AND m.created_at >= CURRENT_DATE - INTERVAL '%s days'"
+                date_params = [days_back, days_back]  # For both searches
+            else:
+                date_condition = ""
+                date_params = []
+
             # Hybrid search: vector similarity + keyword matching
             sql_query = f"""
             WITH vector_search AS (
@@ -745,7 +763,8 @@ class SimpleFunctions:
                 JOIN message_embeddings me ON m.id = me.message_id
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE c.user_id = %s
-                AND m.role = 'user'
+                {role_condition}
+                {date_condition}
                 AND (1 - (me.vector <=> %s::vector)) >= %s
             ),
             keyword_search AS (
@@ -756,7 +775,8 @@ class SimpleFunctions:
                 FROM messages m
                 JOIN conversations c ON m.conversation_id = c.id
                 WHERE c.user_id = %s
-                AND m.role = 'user'
+                {role_condition}
+                {date_condition}
                 AND ({keyword_where})
             ),
             combined AS (
@@ -772,7 +792,8 @@ class SimpleFunctions:
                 c.content as user_content,
                 c.created_at,
                 c.similarity,
-                m_next.content as assistant_content
+                m_next.content as assistant_content,
+                c.role as message_role
             FROM combined c
             LEFT JOIN LATERAL (
                 SELECT m_next.content
@@ -788,21 +809,25 @@ class SimpleFunctions:
             """
 
             # Build params tuple
-            params_tuple = (
+            params_tuple = [
                 embedding,                 # vector_search embedding
                 user_id,
+                *role_params[:1],          # role for vector_search (if any)
+                *date_params[:1],          # days_back for vector_search (if any)
                 embedding,                 # vector_search threshold comparison
                 self.similarity_threshold,
                 *keyword_params,           # keyword LIKE params for keyword_search similarity calculation
                 user_id,
+                *role_params[1:2],         # role for keyword_search (if any)
+                *date_params[1:2],         # days_back for keyword_search (if any)
                 *keyword_params,           # keyword LIKE params for WHERE clause
                 limit,
-            )
+            ]
 
             # Debug
             print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}")
 
-            results = self.pg_client.execute_query(sql_query, params_tuple)
+            results = self.pg_client.execute_query(sql_query, tuple(params_tuple))
 
             filtered_results = []
             for row in results or []:
@@ -814,12 +839,13 @@ class SimpleFunctions:
                     "created_at": row[1],
                     "similarity": float(row[2]),
                     "assistant_response": row[3] if len(row) > 3 and row[3] else None,
+                    "message_role": row[4] if len(row) > 4 else "user",  # Track what role the message was
                 })
 
             if filtered_results:
                 print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
                 for idx, result in enumerate(filtered_results, 1):
-                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f}")
+                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f} (Role: {result.get('message_role', 'unknown')})")
                 
                 # Format results as a natural language string
                 response_parts = [f"I found {len(filtered_results)} relevant memory/memories from our past conversations:"]
@@ -827,12 +853,17 @@ class SimpleFunctions:
                 for idx, result in enumerate(filtered_results, 1):
                     timestamp = result['created_at'].strftime("%B %d, %Y") if hasattr(result['created_at'], 'strftime') else str(result['created_at'])
                     similarity_pct = int(result['similarity'] * 100)
+                    msg_role = result.get('message_role', 'user')
                     
                     response_parts.append(f"\n{idx}. (Similarity: {similarity_pct}%)")
-                    response_parts.append(f"   You asked: \"{result['user_message']}\"")
                     
-                    if result.get('assistant_response'):
-                        response_parts.append(f"   I responded: \"{result['assistant_response']}\"")
+                    # Format differently based on whether it's a user or assistant message
+                    if msg_role == 'assistant':
+                        response_parts.append(f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\"")
+                    else:
+                        response_parts.append(f"   You asked: \"{result['user_message']}\"")
+                        if result.get('assistant_response'):
+                            response_parts.append(f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\"")
                     
                     response_parts.append(f"   (from {timestamp})")
                 

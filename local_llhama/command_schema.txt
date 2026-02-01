@@ -76,11 +76,13 @@
   "find_in_memory": {
     "entity_id": "find_in_memory",
     "actions": ["find_in_memory"],
-    "description": "Search when user references past interactions like 'you told me before', 'like last time', 'we discussed', 'you said earlier', etc. Always return comma separated keywords for the query",
+    "description": "Search past conversations using semantic similarity and keywords. Use when user references 'you told me before', 'like last time', 'we discussed', 'you said earlier', or asks about past topics. Can filter by timeframe (recent days) and whether to search user messages, assistant responses, or both.",
     "display_name": "Searching Previous Conversations...",
-    "example": {"action": "find_in_memory", "target": "find_in_memory", "data": {"query": "recipe,cake"}},
+    "example": {"action": "find_in_memory", "target": "find_in_memory", "data": {"query": "dragon,story,emberlyn", "days_back": 7}},
     "parameters": {
-      "query": {"required": true, "description": "The keyword to search for, comma separated"}
+      "query": {"required": true, "description": "Keywords to search for, comma separated"},
+      "role": {"required": false, "description": "Filter by message role: 'user' (what user said), 'assistant' (what you said), or omit for both"},
+      "days_back": {"required": false, "description": "Number of days to search back (e.g., 1 for yesterday, 7 for last week). Omit to search all time"}
     }
   },
   "generate_conversational_response": {
