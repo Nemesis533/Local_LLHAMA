@@ -503,25 +503,33 @@ class SettingLoaderClass:
             print(
                 f"{self.class_prefix_message} {LogLevel.INFO} Using embedding model: {self.ollama_embedding_model}"
             )
-            
+
             # Get decision model settings
-            decision_model = getattr(self, 'ollama_decision_model', 'phi4-mini:3.8b-q4_K_M')
-            use_separate_decision_model = getattr(self, 'use_separate_decision_model', False)
-            
+            decision_model = getattr(
+                self, "ollama_decision_model", "phi4-mini:3.8b-q4_K_M"
+            )
+            use_separate_decision_model = getattr(
+                self, "use_separate_decision_model", False
+            )
+
             if use_separate_decision_model:
                 print(
                     f"{self.class_prefix_message} {LogLevel.INFO} Using separate decision model: {decision_model}"
                 )
-            
+
             # Get keepalive settings
-            keepalive_enabled = self.get_setting('OllamaClient', 'model_keepalive_enabled')
+            keepalive_enabled = self.get_setting(
+                "OllamaClient", "model_keepalive_enabled"
+            )
             if keepalive_enabled is None:
                 keepalive_enabled = True
-            
-            keepalive_interval = self.get_setting('OllamaClient', 'model_keepalive_interval')
+
+            keepalive_interval = self.get_setting(
+                "OllamaClient", "model_keepalive_interval"
+            )
             if keepalive_interval is None:
                 keepalive_interval = 180
-            
+
             # Create ConversationLoader for chat history
             conversation_loader = ConversationLoader(pg_client) if pg_client else None
             # Pass conversation_loader to OllamaClient

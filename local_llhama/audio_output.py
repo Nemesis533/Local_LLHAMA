@@ -183,7 +183,7 @@ class TextToSpeech:
         """
         self.voice_dir = Path(voice_dir)
         self.class_prefix_message = "[TextToSpeech]"
-        
+
         # Load audio device settings from system_settings.json
         self._load_settings()
 
@@ -282,7 +282,9 @@ class TextToSpeech:
         # Check if user has configured a specific output device
         if self.configured_output_device_index is not None:
             try:
-                dev_info = self.p.get_device_info_by_index(self.configured_output_device_index)
+                dev_info = self.p.get_device_info_by_index(
+                    self.configured_output_device_index
+                )
                 if dev_info["maxOutputChannels"] > 0:
                     self.output_device_index = self.configured_output_device_index
                     print(
@@ -298,7 +300,7 @@ class TextToSpeech:
                     f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Configured output device {self.configured_output_device_index} not available: {e}, falling back to default"
                 )
                 self.configured_output_device_index = None
-        
+
         # If no configured device or it failed, use default
         if self.configured_output_device_index is None:
             # Get and validate default output device
@@ -394,21 +396,27 @@ class TextToSpeech:
     def _load_settings(self):
         """Load audio device settings from system_settings.json"""
         import json
-        
+
         try:
-            settings_file = self.voice_dir.parent.parent / "settings" / "system_settings.json"
+            settings_file = (
+                self.voice_dir.parent.parent / "settings" / "system_settings.json"
+            )
             if settings_file.exists():
                 with open(settings_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
+
                 audio_settings = data.get("audio", {})
-                self.configured_output_device_index = audio_settings.get("output_device_index", {}).get("value", None)
+                self.configured_output_device_index = audio_settings.get(
+                    "output_device_index", {}
+                ).get("value", None)
             else:
                 self.configured_output_device_index = None
         except Exception as e:
-            print(f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default")
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"
+            )
             self.configured_output_device_index = None
-    
+
     def _load_output_device_settings(self):
         """Load and apply output device settings after PyAudio initialization"""
         # This will be called after PyAudio is initialized
