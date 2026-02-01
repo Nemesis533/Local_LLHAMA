@@ -9,11 +9,11 @@
       "type": "str"
     },
     "ollama_model": {
-      "value": "qwen3:30b-a3b-q4_K_M",
+      "value": "qwen3:30b-instruct",
       "type": "str"
     },
     "ollama_decision_model": {
-      "value": "phi4-mini:3.8b-q4_K_M",
+      "value": "qwen3:4b-q4_K_M",
       "type": "str"
     },
     "use_separate_decision_model": {
@@ -82,6 +82,18 @@
     "context_reduction_factor": {
       "value": 0.6,
       "type": "float"
+    },
+    "context_management_mode": {
+      "value": "truncate",
+      "type": "str"
+    },
+    "context_summarization_model": {
+      "value": "decision",
+      "type": "str"
+    },
+    "context_summary_target_words": {
+      "value": 150,
+      "type": "int"
     }
   },
   "SimpleFunctions": {

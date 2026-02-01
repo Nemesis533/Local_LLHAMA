@@ -428,6 +428,22 @@ function createPresetModal() {
                         
                         <label for="context-reduction">Context Reduction Factor</label>
                         <input type="number" id="context-reduction" required value="0.7" min="0.1" max="0.9" step="0.1">
+                        
+                        <label for="context-management-mode">Context Management Mode</label>
+                        <select id="context-management-mode" required>
+                            <option value="truncate" selected>Truncate (Simple cut-off)</option>
+                            <option value="summarize">Summarize (AI-generated summary)</option>
+                        </select>
+                        
+                        <label for="context-summarization-model">Summarization Model</label>
+                        <select id="context-summarization-model" required>
+                            <option value="decision" selected>Decision Model (faster)</option>
+                            <option value="main">Main Model (higher quality)</option>
+                            <option value="auto">Auto (prefer decision model)</option>
+                        </select>
+                        
+                        <label for="context-summary-target-words">Summary Target Words</label>
+                        <input type="number" id="context-summary-target-words" required value="150" min="50" max="500">
                     </div>
                     
                     <div class="preset-form-section">
@@ -502,6 +518,18 @@ export async function submitCreatePreset(event) {
                 context_reduction_factor: {
                     value: parseFloat(document.getElementById('context-reduction').value),
                     type: "float"
+                },
+                context_management_mode: {
+                    value: document.getElementById('context-management-mode').value,
+                    type: "str"
+                },
+                context_summarization_model: {
+                    value: document.getElementById('context-summarization-model').value,
+                    type: "str"
+                },
+                context_summary_target_words: {
+                    value: parseInt(document.getElementById('context-summary-target-words').value),
+                    type: "int"
                 }
             },
             TextToSpeech: {

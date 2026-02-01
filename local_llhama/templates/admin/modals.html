@@ -187,6 +187,37 @@
                         Reduction rate when context limit reached (0.1-0.9)
                     </div>
                 </div>
+                
+                <div class="form-group">
+                    <label for="newContextManagementMode">Context Management Mode:</label>
+                    <select id="newContextManagementMode" required>
+                        <option value="truncate">Truncate (Simple cut-off)</option>
+                        <option value="summarize">Summarize (AI-generated summary)</option>
+                    </select>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        How to handle context when it exceeds limits
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newContextSummarizationModel">Summarization Model:</label>
+                    <select id="newContextSummarizationModel" required>
+                        <option value="decision">Decision Model (faster)</option>
+                        <option value="main">Main Model (higher quality)</option>
+                        <option value="auto">Auto (prefer decision model)</option>
+                    </select>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Which model to use for context summarization
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newContextSummaryTargetWords">Summary Target Words:</label>
+                    <input type="number" id="newContextSummaryTargetWords" required min="50" max="500" value="150">
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Target word count for context summaries (50-500)
+                    </div>
+                </div>
             </div>
 
             <!-- Requirements Section -->

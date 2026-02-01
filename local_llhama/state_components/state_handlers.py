@@ -203,8 +203,10 @@ class StateHandlers:
         self.sm.from_webui = from_webui
         self.sm.client_id = client_id
 
-        message = f"{self.log_prefix} [User Prompt]: {transcription} (from_webui={from_webui})"
-        self.sm.message_handler.send_to_web_server(message, client_id=client_id)
+        # Only send voice commands to web UI if they originated from web UI
+        if from_webui:
+            message = f"{self.log_prefix} [User Prompt]: {transcription}"
+            self.sm.message_handler.send_to_web_server(message, client_id=client_id)
 
         structured_output = self.sm.command_processor.parse_transcription(
             transcription, from_webui=from_webui, client_id=client_id

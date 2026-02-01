@@ -180,6 +180,15 @@ class StateMachineInstance:
                     "context_reduction_factor", 0.7
                 ),
                 history_exchanges=self.chat_config.get("history_exchanges", 3),
+                context_management_mode=self.chat_config.get(
+                    "context_management_mode", "truncate"
+                ),
+                context_summarization_model=self.chat_config.get(
+                    "context_summarization_model", "decision"
+                ),
+                context_summary_target_words=self.chat_config.get(
+                    "context_summary_target_words", 150
+                ),
             )
             self.chat_handler.start()
             print(
