@@ -147,9 +147,12 @@ class StateHandlers:
                 self.log_prefix, context="Speaking", suppress=True
             ):
                 self.sm.audio_manager.speak_text(transcription[0], transcription[1])
-                time.sleep(0.3)  # delay for more natural interactions
+                # Wait for TTS audio to clear and echoes to dissipate
+                # This prevents the system from detecting its own speech as a wake word
+                time.sleep(1.5)
                 if not isinstance(self.sm.command_llm, OllamaClient):
                     self.sm.audio_manager.sound_player.play(SoundActions.action_closing)
+                    time.sleep(0.5)  # Wait for closing sound to finish
 
         self.sm.state_manager.transition(self.sm.State.LISTENING)
 

@@ -536,15 +536,40 @@ class LocalLLHAMA_WebService:
             s.close()
         return ip
 
+    def get_all_network_ips(self):
+        """Get all non-loopback IP addresses on the system."""
+        ips = []
+        try:
+            for interface, addrs in psutil.net_if_addrs().items():
+                for addr in addrs:
+                    if addr.family == socket.AF_INET:
+                        ip = addr.address
+                        if not ip.startswith("127."):
+                            ips.append(ip)
+        except Exception:
+            pass
+        return ips
+
     def run(self):
+        display_host = self.host
         if self.host == "0.0.0.0":
-            self.host = self.get_host_ip()
+            display_host = self.get_host_ip()
+        
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting web server on {self.host}:{self.port}"
         )
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at: http://{self.host}:{self.port}/login"
-        )
+        
+        # Display all network interfaces
+        all_ips = self.get_all_network_ips()
+        if all_ips:
+            print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at:")
+            for ip in all_ips:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}]   http://{ip}:{self.port}/login")
+        else:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at: http://{display_host}:{self.port}/login"
+            )
+        
         self.socketio.run(
-            self.app, host=self.host, port=5001, debug=False, use_reloader=False
+            self.app, host="0.0.0.0", port=5001, debug=False, use_reloader=False
         )
