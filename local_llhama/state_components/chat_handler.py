@@ -35,6 +35,9 @@ class ChatHandler:
         min_context_words=100,
         context_reduction_factor=0.7,
         history_exchanges=3,
+        context_management_mode="truncate",
+        context_summarization_model="decision",
+        context_summary_target_words=150,
     ):
         """
         Initialize the chat handler.
@@ -49,6 +52,9 @@ class ChatHandler:
         @param min_context_words Minimum context window size in words (default: 100)
         @param context_reduction_factor Factor to reduce context on timeout (default: 0.7)
         @param history_exchanges Number of recent exchanges to keep in memory (default: 3)
+        @param context_management_mode Mode for handling context overflow: "truncate" or "summarize"
+        @param context_summarization_model Model to use for summarization: "main", "decision", or "auto"
+        @param context_summary_target_words Target word count for context summaries
         """
         self.chat_queue = chat_queue
         self.command_llm = command_llm
@@ -66,6 +72,11 @@ class ChatHandler:
         pg_client = getattr(command_llm, "pg_client", None)
         conversation_loader = getattr(command_llm, "conversation_loader", None)
 
+        # Get decision model if separate decision model is enabled
+        decision_llm = None
+        if hasattr(command_llm, "use_separate_decision_model") and command_llm.use_separate_decision_model:
+            decision_llm = getattr(command_llm, "decision_llm", None)
+
         # Initialize context manager
         self.context_manager = ChatContextManager(
             pg_client=pg_client,
@@ -75,6 +86,12 @@ class ChatHandler:
             min_context_words=min_context_words,
             context_reduction_factor=context_reduction_factor,
             history_exchanges=history_exchanges,
+            context_management_mode=context_management_mode,
+            context_summarization_model=context_summarization_model,
+            context_summary_target_words=context_summary_target_words,
+            main_llm_client=command_llm,
+            decision_llm_client=decision_llm,
+            message_handler=message_handler,
         )
 
         self.running = False

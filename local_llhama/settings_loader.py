@@ -852,6 +852,9 @@ class SettingLoaderClass:
             "default_context_words": 400,
             "min_context_words": 100,
             "context_reduction_factor": 0.7,
+            "context_management_mode": "truncate",
+            "context_summarization_model": "decision",
+            "context_summary_target_words": 150,
         }
 
         if "ChatHandler" not in self.data:
@@ -881,7 +884,10 @@ class SettingLoaderClass:
         print(
             f"{self.class_prefix_message} {LogLevel.INFO} ChatHandler config: max_tokens={config['max_tokens']}, "
             f"default_context_words={config['default_context_words']}, min_context_words={config['min_context_words']}, "
-            f"history_exchanges={config['history_exchanges']}"
-            f"context_reduction_factor={config['context_reduction_factor']}"
+            f"history_exchanges={config['history_exchanges']}, "
+            f"context_reduction_factor={config['context_reduction_factor']}, "
+            f"context_management_mode={config['context_management_mode']}, "
+            f"context_summarization_model={config['context_summarization_model']}, "
+            f"context_summary_target_words={config['context_summary_target_words']}"
         )
         return config
