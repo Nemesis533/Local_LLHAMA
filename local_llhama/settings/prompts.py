@@ -55,6 +55,8 @@ Your job:
 - Extract one command per device only.
 - Always respond with a single valid JSON object matching the format below, and nothing else.
 
+**CRITICAL**: All command data fields (title, when, description, topic, query, etc.) MUST be in English, regardless of the user's input language. Only the "language" field should reflect the user's language for response generation.
+
 Decision Guidelines:
 - Questions about general knowledge, facts, or explanations → Use get_wikipedia_summary
 - Questions about current/recent news or events → Use get_news_summary
@@ -195,6 +197,27 @@ JSON response:
 "language": "en"
 }}
 
+User input (Italian):
+"Ricordami di bere il caffè domani alle 7:30"
+
+JSON response (note: all data fields are in English):
+{{
+"commands": [
+    {{
+    "action": "add_event",
+    "target": "add_event",
+    "data": {{
+        "event_type": "reminder",
+        "title": "Drink coffee",
+        "when": "tomorrow at 07:30",
+        "description": "Remember to drink coffee",
+        "repeat": "none"
+    }}
+    }}
+],
+"language": "it"
+}}
+
 Respond in this format exactly:
 {{
 "commands": [
@@ -221,7 +244,7 @@ Your job:
 - If provided, take the function result data and convert it into a friendly, conversational response
 - Focus on the content inside the "response" field and present it in an engaging, natural way
 - Use previous conversation context when helpful
-- Detect the user's original language and reply in that same language (supported: en, fr, de, it, es, ru)
+- **CRITICAL**: The user's language has already been detected. Use the language code from the context to reply in the correct language (supported: en, fr, de, it, es, ru). If no language code is provided, default to English.
 - **Match the user's preferred response length**: If they ask for a long story, detailed explanation, or specific word count (e.g., "write 1000 words"), honor that request fully by generating the complete content
 - Respond naturally, like a thoughtful friend — be clear, engaging, and avoid repetitive phrases. Keep it human, not scripted.
 - Format numbers and details in a user-friendly, approachable way
@@ -246,9 +269,14 @@ Your job:
 
 **Always respond with this JSON format:**
 {
-    "nl_response": "<your natural language response>",
+    "nl_response": "<your natural language response in the user's language>",
     "language": "<language code: en, fr, de, it, es, or ru>"
 }
+
+**Language Code Usage:**
+- Use the language code provided in the context (from the decision-making phase)
+- This ensures consistency between command parsing and user responses
+- The language code tells you which language to write your "nl_response" in
 
 ---------------------------------------
 EXAMPLES
@@ -359,7 +387,181 @@ If you encounter a request that violates these guidelines, respond with:
 where <language_code> matches the user's language (en, fr, de, it, es, ru)."""
 
 
-FUNCTIONS_CREATION_PROMPT = """You are {assistant_name}, an expert assistant that creates JSON function definitions for smart home and information retrieval tasks.
+CUSTOM_FUNCTION_CREATION_PROMPT = """
+You are creating a new function for the SimpleFunctions class that follows established patterns. Below are the specifications and conventions you MUST follow:
 
+FUNCTION STRUCTURE TEMPLATE:
 
+def your_function_name(self, param1=None, param2=None, user_id=None):
+    \"\"\"
+    @brief Brief one-line description of what this function does.
+    
+    Extended description that explains the purpose, behavior, and any fallback mechanisms.
+    
+    @param param1 Description of first parameter (include type and purpose).
+    @param param2 Description of second parameter with default behavior.
+    @param user_id Optional user ID for multi-user scenarios (if applicable).
+    @return Description of what the function returns (success message, data, or error).
+    \"\"\"
+
+MANDATORY PATTERNS TO FOLLOW:
+
+1. INPUT VALIDATION
+- Always validate required parameters first
+- Use helper functions from simple_functions_helpers module:
+  error_msg = helpers.validate_input(param, "param_name")
+  if error_msg:
+      return error_msg
+      
+- Check internet access if needed:
+  if not helpers.check_internet_access(self.allow_internet_searches):
+      return "Internet searches are currently disabled in system settings."
+
+2. CONFIGURATION ACCESS
+- Retrieve URLs from web_search_config:
+  api_url = helpers.get_config_url(self.web_search_config, "service_name", "")
+  timeout = self.web_search_config.get("timeout", 10)
+  max_results = self.web_search_config.get("max_results", 5)
+
+3. HTTP REQUESTS
+- Use consistent timeout and headers:
+  response = requests.get(url, params=params, headers=self.headers, timeout=timeout)
+  response.raise_for_status()
+  
+- Or use helper:
+  data = helpers.make_http_request(url, self.headers, timeout=timeout)
+
+4. ERROR HANDLING
+- Use try-except with specific exception types
+- Log errors using ErrorHandler:
+  except requests.exceptions.HTTPError as e:
+      ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Description")
+      return "User-friendly error message."
+  except Exception as e:
+      ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "Description")
+      return "Generic error message for users."
+
+5. RETURN VALUES
+- Always return strings for direct user feedback
+- Use descriptive, natural language responses
+- Include context in error messages
+- Format multi-line responses consistently:
+  result = "Header:\\n"
+  for item in items:
+      result += f"• {item}\\n"
+  return result
+
+6. DATABASE OPERATIONS
+- Use self.pg_client for PostgreSQL operations
+- Pass user_id when relevant for multi-user scenarios
+- Example:
+  results = self.pg_client.execute_query(sql_query, params_tuple)
+
+7. EXTERNAL SERVICE INTEGRATION
+- Calendar operations use self.calendar (CalendarManager instance)
+- Ollama operations use self.ollama_host and self.ollama_embedding_model
+- Check if services are configured before using:
+  if not self.ollama_host:
+      return "Service not configured."
+
+CONVENTIONS:
+
+NAMING:
+- Function names: lowercase with underscores (get_weather, add_event)
+- Parameter names: descriptive and lowercase (event_type, search_term)
+- Constants: UPPERCASE (CLASS_PREFIX_MESSAGE)
+
+LOGGING:
+- Use CLASS_PREFIX_MESSAGE prefix for all print statements
+- Include LogLevel in bracket format: [LogLevel.WARNING.name]
+- Example:
+  print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Operation successful")
+
+COMMON PATTERNS:
+
+API DATA RETRIEVAL PATTERN:
+def get_something(self, query=None, user_id=None):
+    \"\"\"@brief Fetch something from external API.\"\"\"
+    
+    # 1. Validate internet access
+    if not self.allow_internet_searches:
+        return "Internet searches are currently disabled in system settings."
+    
+    # 2. Validate input
+    if not query:
+        return "Please specify a query."
+    
+    # 3. Get config values
+    api_url = helpers.get_config_url(self.web_search_config, "service", "")
+    timeout = self.web_search_config.get("timeout", 10)
+    
+    try:
+        # 4. Make request
+        response = requests.get(api_url, params={"q": query}, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+        
+        # 5. Process and format response
+        if not data:
+            return f"No results found for: {query}"
+        
+        return self._format_response(data)
+        
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching data: Unable to connect. {str(e)}"
+    except Exception as e:
+        return f"Error processing data: {str(e)}"
+
+DATABASE QUERY PATTERN:
+def query_database(self, search_term, user_id=None):
+    \"\"\"@brief Query database for user-specific data.\"\"\"
+    
+    if not self.pg_client:
+        return "Database not configured."
+    
+    try:
+        sql = "SELECT * FROM table WHERE user_id = %s AND field LIKE %s"
+        results = self.pg_client.execute_query(sql, (user_id, f"%{search_term}%"))
+        
+        if not results:
+            return f"No results found for '{search_term}'."
+        
+        # Format results
+        return "\\n".join([f"• {row[0]}" for row in results])
+        
+    except Exception as e:
+        ErrorHandler.log_error(CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "DB query error")
+        return "Database error occurred."
+
+AVAILABLE INSTANCE VARIABLES:
+- self.home_location - Dict with 'latitude' and 'longitude'
+- self.allow_internet_searches - Boolean flag
+- self.pg_client - PostgreSQL client instance
+- self.ollama_host - Ollama server URL
+- self.ollama_embedding_model - Embedding model name
+- self.similarity_threshold - Float for vector search (default 0.5)
+- self.calendar - CalendarManager instance
+- self.command_schema - Dict of command definitions
+- self.web_search_config - Dict with API configs, URLs, timeouts
+- self.newsdata_api_key - API key for news service
+- self.headers - Standard HTTP headers dict
+
+HELPER MODULES AVAILABLE:
+- simple_functions_helpers (imported as helpers)
+  - validate_input(value, name) - Input validation
+  - check_internet_access(flag) - Internet permission check
+  - get_config_url(config, service, default) - URL retrieval
+  - make_http_request(url, headers, timeout) - HTTP wrapper
+
+TASK:
+Now create your function following these patterns. Provide:
+1. Function signature with appropriate parameters
+2. Complete docstring with @brief, @param, @return
+3. Input validation
+4. Main logic with error handling
+5. Formatted return value
+
+Your function should handle:
+- Function name: {function_name}
+- Description: {function_description}
 """

@@ -48,7 +48,7 @@
   },
   "AudioTranscriptionClass": {
     "whisper_model": {
-      "value": "small",
+      "value": "turbo",
       "type": "str",
       "device": "cuda:0"
     }

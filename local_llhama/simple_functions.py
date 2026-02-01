@@ -159,6 +159,7 @@ class SimpleFunctions:
         """
         @brief Fetch a short introductory summary from Wikipedia for a given topic.
         Falls back to memory search if Wikipedia doesn't have the article.
+        Automatically handles compound queries (e.g., "gastritis and honey") by fetching multiple articles.
 
         @param topic Topic/article name as a string.
         @param user_id Optional user ID for memory search fallback.
@@ -190,8 +191,9 @@ class SimpleFunctions:
             )
 
             if not summary_data or not summary_data.get("title"):
-                return helpers.wikipedia_fallback_to_memory(
-                    topic, user_id, self.pg_client, self.find_in_memory
+                # Try splitting into multiple topics if original query failed
+                return self._handle_compound_wikipedia_query(
+                    topic, user_id, wiki_base_url, wikimedia_base_url, timeout
                 )
 
             canonical_title = summary_data.get("title").replace(" ", "_")
@@ -230,6 +232,13 @@ class SimpleFunctions:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
+                # Try splitting into multiple topics
+                compound_result = self._handle_compound_wikipedia_query(
+                    topic, user_id, wiki_base_url, wikimedia_base_url, timeout
+                )
+                if compound_result and "not available" not in compound_result.lower():
+                    return compound_result
+                # Fall back to memory search
                 return helpers.wikipedia_fallback_to_memory(
                     topic, user_id, self.pg_client, self.find_in_memory
                 )
@@ -246,6 +255,85 @@ class SimpleFunctions:
             return (
                 "Wikipedia information not available at the moment, please try later."
             )
+
+    def _handle_compound_wikipedia_query(self, topic, user_id, wiki_base_url, wikimedia_base_url, timeout):
+        """
+        @brief Handle queries with multiple topics (e.g., "gastritis and honey").
+        Splits the query and fetches separate articles.
+
+        @param topic Original topic string
+        @param user_id Optional user ID for memory fallback
+        @param wiki_base_url Wikipedia API base URL
+        @param wikimedia_base_url Wikimedia API base URL
+        @param timeout Request timeout
+        @return Combined summary or error message
+        """
+        import re
+        
+        # Split on common conjunctions
+        splitters = r'\s+(?:and|or|vs|versus|with|plus)\s+'
+        topics = re.split(splitters, topic, flags=re.IGNORECASE)
+        
+        # Clean and filter topics
+        topics = [t.strip() for t in topics if t.strip() and len(t.strip()) > 2]
+        
+        # Limit to max 3 topics to avoid overwhelming
+        topics = topics[:3]
+        
+        if len(topics) < 2:
+            # Not a compound query, return None to use fallback
+            return None
+        
+        print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Compound query detected: {topics}")
+        
+        summaries = []
+        for sub_topic in topics:
+            try:
+                sub_topic_formatted = "_".join(sub_topic.strip().split())
+                summary_url = f"{wiki_base_url}/page/summary/{sub_topic_formatted}"
+                
+                summary_data = helpers.make_http_request(
+                    summary_url, self.headers, timeout=timeout
+                )
+                
+                if summary_data and summary_data.get("title"):
+                    canonical_title = summary_data.get("title").replace(" ", "_")
+                    html_url = f"{wikimedia_base_url}/{canonical_title}/html"
+                    
+                    html_resp = requests.get(html_url, headers=self.headers, timeout=timeout)
+                    html_resp.raise_for_status()
+                    
+                    soup = BeautifulSoup(html_resp.text, "html.parser")
+                    
+                    # Remove unwanted elements
+                    for element in soup(["script", "style", "nav", "footer", "header", "table", "figure"]):
+                        element.decompose()
+                    
+                    # Get first 2 paragraphs for each sub-topic
+                    paragraphs = soup.find_all("p", limit=2)
+                    text_parts = [
+                        p.get_text(separator=" ", strip=True)
+                        for p in paragraphs
+                        if len(p.get_text(strip=True)) > 20
+                    ]
+                    
+                    if text_parts:
+                        summary = " ".join(text_parts)
+                        # Limit each sub-summary to ~250 chars
+                        if len(summary) > 250:
+                            summary = summary[:247] + "..."
+                        summaries.append(f"{sub_topic.title()}: {summary}")
+                        
+            except Exception as e:
+                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Failed to fetch '{sub_topic}': {e}")
+                continue
+        
+        if summaries:
+            combined = "\n\n".join(summaries)
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Combined {len(summaries)} Wikipedia summaries")
+            return combined
+        
+        return None
 
     def get_news_summary(self, query=None):
         """
@@ -415,8 +503,17 @@ class SimpleFunctions:
         @param user_id: Optional user ID for web chat users
         @return: Confirmation message
         """
+        # Normalize repeat pattern - convert common variations to database values
+        repeat_normalized = repeat.lower() if repeat else "none"
+        if repeat_normalized in ["once", "never", "no", "single"]:
+            repeat_normalized = "none"
+        elif repeat_normalized not in ["none", "daily", "weekly", "monthly", "yearly"]:
+            # Invalid repeat pattern, default to none
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Invalid repeat pattern '{repeat}', using 'none'")
+            repeat_normalized = "none"
+        
         success, message, _ = self.calendar.add_event(
-            event_type, title, when, description, repeat, user_id=user_id
+            event_type, title, when, description, repeat_normalized, user_id=user_id
         )
         return message
 
