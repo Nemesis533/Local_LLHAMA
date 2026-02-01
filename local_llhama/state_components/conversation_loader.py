@@ -312,20 +312,21 @@ class ConversationLoader:
                 f"Loaded {len(conversations)} conversations for user {user_id} "
                 f"(first {min(full_message_limit, len(conversations))} with full messages)"
             )
-            
+
             # Create full log message with timestamp
             from datetime import datetime
+
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             full_log_message = f"[{timestamp}] {self.log_prefix} [{LogLevel.INFO.name}] {log_message_content}"
-            
+
             # If message content is the same, overwrite the line with updated timestamp
             if self.last_log_message == log_message_content:
-                print(f"\r{full_log_message}", end='\r', flush=True)
+                print(f"\r{full_log_message}", end="\r", flush=True)
             else:
                 # New message, print on new line
                 print(full_log_message)
                 self.last_log_message = log_message_content
-            
+
             return conversations
 
         except Exception as e:

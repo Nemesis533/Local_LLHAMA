@@ -10,11 +10,11 @@ Provides options to:
 - Initialize/reset database structure
 """
 
-import sys
 import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
 
 import psycopg2
 from psycopg2 import sql
@@ -29,7 +29,7 @@ DB_CONFIG = {
     "user": "your_user",  # Will be loaded from config
     "password": "your_password",  # Will be loaded from config
     "dbname": "local_llhama",
-    "port": 5432
+    "port": 5432,
 }
 
 
@@ -39,12 +39,13 @@ def load_db_config():
         # Try to load from setup_database.py if it exists
         try:
             from setup_database import get_db_config
+
             config = get_db_config()
             DB_CONFIG.update(config)
             return True
         except ImportError:
             pass
-        
+
         # Try to load from .env file
         env_file = Path(__file__).parent.parent / ".env"
         if env_file.exists():
@@ -111,7 +112,8 @@ class DBManager:
         print(f"Calendar Events: {events_count}")
 
         # List users with their conversation/message counts
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT u.id, u.username, 
                    COUNT(DISTINCT c.id) as conv_count,
                    COUNT(m.id) as msg_count
@@ -120,17 +122,22 @@ class DBManager:
             LEFT JOIN messages m ON c.id = m.conversation_id
             GROUP BY u.id, u.username
             ORDER BY u.id
-        """)
+        """
+        )
         users = self.cursor.fetchall()
         if users:
             print(f"\nUsers Details:")
             for user_id, username, conv_count, msg_count in users:
-                print(f"  - {username} (ID: {user_id}): {conv_count} conversations, {msg_count} messages")
+                print(
+                    f"  - {username} (ID: {user_id}): {conv_count} conversations, {msg_count} messages"
+                )
 
         # Database size
-        self.cursor.execute(f"""
+        self.cursor.execute(
+            f"""
             SELECT pg_size_pretty(pg_database_size('{self.db_name}'))
-        """)
+        """
+        )
         db_size = self.cursor.fetchone()[0]
         print(f"\nDatabase Size: {db_size}")
 
@@ -209,11 +216,11 @@ class DBManager:
         # First check if user exists
         self.cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
         user = self.cursor.fetchone()
-        
+
         if not user:
             print(f"\n❌ User not found: {username}")
             return
-        
+
         user_id = user[0]
 
         # Count what will be deleted
@@ -222,11 +229,14 @@ class DBManager:
         )
         conv_count = self.cursor.fetchone()[0]
 
-        self.cursor.execute("""
+        self.cursor.execute(
+            """
             SELECT COUNT(*) FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
             WHERE c.user_id = %s
-        """, (user_id,))
+        """,
+            (user_id,),
+        )
         msg_count = self.cursor.fetchone()[0]
 
         if conv_count == 0 and msg_count == 0:
@@ -243,20 +253,27 @@ class DBManager:
 
         try:
             # Delete messages through conversations
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 DELETE FROM messages 
                 WHERE conversation_id IN (
                     SELECT id FROM conversations WHERE user_id = %s
                 )
-            """, (user_id,))
+            """,
+                (user_id,),
+            )
             messages_deleted = self.cursor.rowcount
 
             # Delete conversations
-            self.cursor.execute("DELETE FROM conversations WHERE user_id = %s", (user_id,))
+            self.cursor.execute(
+                "DELETE FROM conversations WHERE user_id = %s", (user_id,)
+            )
             conversations_deleted = self.cursor.rowcount
 
             # Delete calendar events
-            self.cursor.execute("DELETE FROM calendar_events WHERE user_id = %s", (user_id,))
+            self.cursor.execute(
+                "DELETE FROM calendar_events WHERE user_id = %s", (user_id,)
+            )
             events_deleted = self.cursor.rowcount
 
             self.conn.commit()
@@ -283,20 +300,26 @@ class DBManager:
 
         try:
             # Delete old messages first
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 DELETE FROM messages 
                 WHERE conversation_id IN (
                     SELECT id FROM conversations 
                     WHERE created_at < NOW() - INTERVAL '%s days'
                 )
-            """, (days,))
+            """,
+                (days,),
+            )
             messages_deleted = self.cursor.rowcount
 
             # Delete old conversations
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 DELETE FROM conversations 
                 WHERE created_at < NOW() - INTERVAL '%s days'
-            """, (days,))
+            """,
+                (days,),
+            )
             conversations_deleted = self.cursor.rowcount
 
             self.conn.commit()
@@ -311,7 +334,7 @@ class DBManager:
     def backup_database(self, output_file: Optional[str] = None):
         """
         Backup database to SQL file using pg_dump.
-        
+
         @param output_file Optional output file path. If None, generates timestamped filename.
         """
         if output_file is None:
@@ -319,34 +342,40 @@ class DBManager:
             backup_dir.mkdir(exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = backup_dir / f"local_llhama_backup_{timestamp}.sql"
-        
+
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         print(f"\n📦 Backing up database to: {output_path.absolute()}")
-        
+
         try:
             cmd = [
                 "pg_dump",
-                "-h", str(self.db_host),
-                "-p", str(self.db_port),
-                "-U", self.db_user,
-                "-d", self.db_name,
-                "-F", "p",  # Plain text format
+                "-h",
+                str(self.db_host),
+                "-p",
+                str(self.db_port),
+                "-U",
+                self.db_user,
+                "-d",
+                self.db_name,
+                "-F",
+                "p",  # Plain text format
                 "--no-owner",
                 "--no-acl",
-                "-f", str(output_path.absolute())
+                "-f",
+                str(output_path.absolute()),
             ]
-            
+
             env = {"PGPASSWORD": DB_CONFIG.get("password", "")}
-            
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                env={**subprocess.os.environ, **env}
+                env={**subprocess.os.environ, **env},
             )
-            
+
             if result.returncode == 0:
                 file_size = output_path.stat().st_size / 1024 / 1024  # MB
                 print(f"✅ Database backed up successfully! ({file_size:.2f} MB)")
@@ -356,59 +385,66 @@ class DBManager:
                 print(f"❌ Error backing up database:")
                 print(f"   {result.stderr}")
                 return None
-                
+
         except FileNotFoundError:
-            print("❌ pg_dump command not found. Make sure PostgreSQL client tools are installed.")
+            print(
+                "❌ pg_dump command not found. Make sure PostgreSQL client tools are installed."
+            )
             return None
         except Exception as e:
             print(f"❌ Error during backup: {e}")
             return None
-    
+
     def restore_database(self, input_file: str):
         """
         Restore database from SQL file using psql.
-        
+
         @param input_file Path to SQL backup file
         """
         input_path = Path(input_file)
-        
+
         if not input_path.exists():
             print(f"❌ File not found: {input_path}")
             return
-        
+
         self.show_statistics()
-        
+
         confirm = input(
             f"\n⚠️  WARNING: This will overwrite current database data!\n"
             f"Restoring from: {input_path.absolute()}\n"
             f"Type 'RESTORE' to confirm: "
         )
-        
+
         if confirm != "RESTORE":
             print("❌ Restore cancelled.")
             return
-        
+
         print(f"\n📥 Restoring database from: {input_path.absolute()}")
-        
+
         try:
             cmd = [
                 "psql",
-                "-h", str(self.db_host),
-                "-p", str(self.db_port),
-                "-U", self.db_user,
-                "-d", self.db_name,
-                "-f", str(input_path.absolute())
+                "-h",
+                str(self.db_host),
+                "-p",
+                str(self.db_port),
+                "-U",
+                self.db_user,
+                "-d",
+                self.db_name,
+                "-f",
+                str(input_path.absolute()),
             ]
-            
+
             env = {"PGPASSWORD": DB_CONFIG.get("password", "")}
-            
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                env={**subprocess.os.environ, **env}
+                env={**subprocess.os.environ, **env},
             )
-            
+
             if result.returncode == 0:
                 print("✅ Database restored successfully!")
                 print("\nNew database state:")
@@ -416,34 +452,36 @@ class DBManager:
             else:
                 print(f"❌ Error restoring database:")
                 print(f"   {result.stderr}")
-                
+
         except FileNotFoundError:
-            print("❌ psql command not found. Make sure PostgreSQL client tools are installed.")
+            print(
+                "❌ psql command not found. Make sure PostgreSQL client tools are installed."
+            )
         except Exception as e:
             print(f"❌ Error during restore: {e}")
 
     def vacuum_database(self):
         """Run VACUUM ANALYZE to optimize database."""
         print("\n🧹 Running VACUUM ANALYZE to optimize database...")
-        
+
         try:
             # Close current connection and create one with autocommit
             self.cursor.close()
             self.conn.close()
-            
+
             self.conn = psycopg2.connect(**DB_CONFIG)
             self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             self.cursor = self.conn.cursor()
-            
+
             self.cursor.execute("VACUUM ANALYZE")
             print("✅ Database optimized successfully!")
-            
+
             # Reconnect normally
             self.cursor.close()
             self.conn.close()
             self.conn = psycopg2.connect(**DB_CONFIG)
             self.cursor = self.conn.cursor()
-            
+
         except Exception as e:
             print(f"❌ Error during vacuum: {e}")
 
@@ -459,16 +497,15 @@ class DBManager:
             return
 
         print("\n🔄 Resetting database...")
-        
+
         try:
             # Run the setup_database.py script
             setup_script = Path(__file__).parent.parent / "setup_database.py"
             if setup_script.exists():
                 import subprocess
+
                 result = subprocess.run(
-                    [sys.executable, str(setup_script)],
-                    capture_output=True,
-                    text=True
+                    [sys.executable, str(setup_script)], capture_output=True, text=True
                 )
                 if result.returncode == 0:
                     print("✅ Database reset successfully!")
@@ -477,7 +514,7 @@ class DBManager:
                     print(result.stderr)
             else:
                 print(f"❌ setup_database.py not found at {setup_script}")
-                
+
         except Exception as e:
             print(f"❌ Error during reset: {e}")
 
@@ -536,7 +573,9 @@ def main():
                 manager.delete_old_conversations(days)
 
             elif choice == "6":
-                output_file = input("\nEnter output file path (press Enter for auto): ").strip()
+                output_file = input(
+                    "\nEnter output file path (press Enter for auto): "
+                ).strip()
                 if not output_file:
                     output_file = None
                 manager.backup_database(output_file)
@@ -575,6 +614,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

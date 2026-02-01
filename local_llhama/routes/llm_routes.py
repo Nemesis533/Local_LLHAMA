@@ -44,13 +44,13 @@ def llm_status(host):
     # If checking localhost or same host, return online immediately
     if host in ["localhost", "127.0.0.1"] or host == request.host.split(":")[0]:
         return {"host": host, "status": "online"}
-    
+
     # Get port from host if included, otherwise use default port 5001
     if ":" in host:
         system_url = f"http://{host}"
     else:
         system_url = f"http://{host}:5001"
-    
+
     # Try to reach the system's health check endpoint
     try:
         # Simple GET request to verify server is responding
@@ -75,24 +75,30 @@ def ollama_status():
     try:
         import json
         from pathlib import Path
-        
-        settings_file = Path(__file__).parent.parent / "settings" / "system_settings.json"
+
+        settings_file = (
+            Path(__file__).parent.parent / "settings" / "system_settings.json"
+        )
         if settings_file.exists():
             with open(settings_file, "r", encoding="utf-8") as f:
                 settings = json.load(f)
-            
-            ollama_host = settings.get("ollama", {}).get("host", {}).get("value", "localhost:11434")
+
+            ollama_host = (
+                settings.get("ollama", {})
+                .get("host", {})
+                .get("value", "localhost:11434")
+            )
         else:
             ollama_host = "localhost:11434"
     except Exception as e:
         return {"status": "error", "error": f"Failed to read settings: {str(e)}"}
-    
+
     # Ensure proper URL format
     if not ollama_host.startswith("http://") and not ollama_host.startswith("https://"):
         ollama_url = f"http://{ollama_host}"
     else:
         ollama_url = ollama_host
-    
+
     # Try to reach the Ollama API endpoint
     try:
         response = requests.get(f"{ollama_url}/api/tags", timeout=5)
@@ -100,17 +106,24 @@ def ollama_status():
             # Parse available models
             try:
                 models_data = response.json()
-                models = [model.get("name", "unknown") for model in models_data.get("models", [])]
+                models = [
+                    model.get("name", "unknown")
+                    for model in models_data.get("models", [])
+                ]
                 return {
                     "host": ollama_host,
                     "status": "online",
                     "models": models,
-                    "model_count": len(models)
+                    "model_count": len(models),
                 }
             except Exception:
                 return {"host": ollama_host, "status": "online"}
         else:
-            return {"host": ollama_host, "status": "offline", "code": response.status_code}
+            return {
+                "host": ollama_host,
+                "status": "offline",
+                "code": response.status_code,
+            }
     except requests.RequestException as e:
         return {"host": ollama_host, "status": "offline", "error": str(e)}
 
@@ -126,28 +139,36 @@ def system_status():
     status_info = {
         "system": "Local LLHAMA",
         "web_server": "online",  # If this endpoint responds, web server is online
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
-    
+
     # Check Ollama status
     try:
         import json
         from pathlib import Path
-        
-        settings_file = Path(__file__).parent.parent / "settings" / "system_settings.json"
+
+        settings_file = (
+            Path(__file__).parent.parent / "settings" / "system_settings.json"
+        )
         if settings_file.exists():
             with open(settings_file, "r", encoding="utf-8") as f:
                 settings = json.load(f)
-            
-            ollama_host = settings.get("ollama", {}).get("host", {}).get("value", "localhost:11434")
+
+            ollama_host = (
+                settings.get("ollama", {})
+                .get("host", {})
+                .get("value", "localhost:11434")
+            )
         else:
             ollama_host = "localhost:11434"
-        
-        if not ollama_host.startswith("http://") and not ollama_host.startswith("https://"):
+
+        if not ollama_host.startswith("http://") and not ollama_host.startswith(
+            "https://"
+        ):
             ollama_url = f"http://{ollama_host}"
         else:
             ollama_url = ollama_host
-        
+
         try:
             response = requests.get(f"{ollama_url}/api/tags", timeout=3)
             if response.status_code == 200:
@@ -162,5 +183,5 @@ def system_status():
     except Exception as e:
         status_info["ollama"] = "error"
         status_info["ollama_error"] = str(e)
-    
+
     return status_info

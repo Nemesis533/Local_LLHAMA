@@ -710,7 +710,12 @@ class SimpleFunctions:
         # Generate embedding from query using Ollama
         try:
             import requests
-            ollama_url = self.ollama_host if self.ollama_host.startswith("http") else f"http://{self.ollama_host}"
+
+            ollama_url = (
+                self.ollama_host
+                if self.ollama_host.startswith("http")
+                else f"http://{self.ollama_host}"
+            )
             response = requests.post(
                 f"{ollama_url}/api/embeddings",
                 json={"model": self.ollama_embedding_model, "prompt": query},
@@ -721,14 +726,19 @@ class SimpleFunctions:
             if not embedding:
                 return "Could not generate embedding for search."
         except Exception as e:
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}"
+            )
             return "Could not generate embedding for search."
 
         try:
             import re
+
             # Extract alphanumeric keywords from query, lowercase for matching
-            keywords = re.findall(r'\w+', query.lower())
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}")
+            keywords = re.findall(r"\w+", query.lower())
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}"
+            )
 
             # Build keyword search conditions (OR logic: match any keyword)
             keyword_conditions = []
@@ -736,7 +746,9 @@ class SimpleFunctions:
             for keyword in keywords:
                 keyword_conditions.append("LOWER(m.content) ILIKE %s")
                 keyword_params.append(f"%{keyword}%")
-            keyword_where = " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
+            keyword_where = (
+                " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
+            )
 
             # Build role filter condition
             if role:
@@ -810,73 +822,103 @@ class SimpleFunctions:
 
             # Build params tuple
             params_tuple = [
-                embedding,                 # vector_search embedding
+                embedding,  # vector_search embedding
                 user_id,
-                *role_params[:1],          # role for vector_search (if any)
-                *date_params[:1],          # days_back for vector_search (if any)
-                embedding,                 # vector_search threshold comparison
+                *role_params[:1],  # role for vector_search (if any)
+                *date_params[:1],  # days_back for vector_search (if any)
+                embedding,  # vector_search threshold comparison
                 self.similarity_threshold,
-                *keyword_params,           # keyword LIKE params for keyword_search similarity calculation
+                *keyword_params,  # keyword LIKE params for keyword_search similarity calculation
                 user_id,
-                *role_params[1:2],         # role for keyword_search (if any)
-                *date_params[1:2],         # days_back for keyword_search (if any)
-                *keyword_params,           # keyword LIKE params for WHERE clause
+                *role_params[1:2],  # role for keyword_search (if any)
+                *date_params[1:2],  # days_back for keyword_search (if any)
+                *keyword_params,  # keyword LIKE params for WHERE clause
                 limit,
             ]
 
             # Debug
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}"
+            )
 
             results = self.pg_client.execute_query(sql_query, tuple(params_tuple))
 
             filtered_results = []
             for row in results or []:
                 if len(row) < 3:
-                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Skipping malformed row: {row}")
+                    print(
+                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Skipping malformed row: {row}"
+                    )
                     continue
-                filtered_results.append({
-                    "user_message": row[0],
-                    "created_at": row[1],
-                    "similarity": float(row[2]),
-                    "assistant_response": row[3] if len(row) > 3 and row[3] else None,
-                    "message_role": row[4] if len(row) > 4 else "user",  # Track what role the message was
-                })
+                filtered_results.append(
+                    {
+                        "user_message": row[0],
+                        "created_at": row[1],
+                        "similarity": float(row[2]),
+                        "assistant_response": (
+                            row[3] if len(row) > 3 and row[3] else None
+                        ),
+                        "message_role": (
+                            row[4] if len(row) > 4 else "user"
+                        ),  # Track what role the message was
+                    }
+                )
 
             if filtered_results:
-                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}")
+                print(
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}"
+                )
                 for idx, result in enumerate(filtered_results, 1):
-                    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f} (Role: {result.get('message_role', 'unknown')})")
-                
+                    print(
+                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f} (Role: {result.get('message_role', 'unknown')})"
+                    )
+
                 # Format results as a natural language string
-                response_parts = [f"I found {len(filtered_results)} relevant memory/memories from our past conversations:"]
-                
+                response_parts = [
+                    f"I found {len(filtered_results)} relevant memory/memories from our past conversations:"
+                ]
+
                 for idx, result in enumerate(filtered_results, 1):
-                    timestamp = result['created_at'].strftime("%B %d, %Y") if hasattr(result['created_at'], 'strftime') else str(result['created_at'])
-                    similarity_pct = int(result['similarity'] * 100)
-                    msg_role = result.get('message_role', 'user')
-                    
+                    timestamp = (
+                        result["created_at"].strftime("%B %d, %Y")
+                        if hasattr(result["created_at"], "strftime")
+                        else str(result["created_at"])
+                    )
+                    similarity_pct = int(result["similarity"] * 100)
+                    msg_role = result.get("message_role", "user")
+
                     response_parts.append(f"\n{idx}. (Similarity: {similarity_pct}%)")
-                    
+
                     # Format differently based on whether it's a user or assistant message
-                    if msg_role == 'assistant':
-                        response_parts.append(f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\"")
+                    if msg_role == "assistant":
+                        response_parts.append(
+                            f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\""
+                        )
                     else:
-                        response_parts.append(f"   You asked: \"{result['user_message']}\"")
-                        if result.get('assistant_response'):
-                            response_parts.append(f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\"")
-                    
+                        response_parts.append(
+                            f"   You asked: \"{result['user_message']}\""
+                        )
+                        if result.get("assistant_response"):
+                            response_parts.append(
+                                f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\""
+                            )
+
                     response_parts.append(f"   (from {timestamp})")
-                
+
                 return "\n".join(response_parts)
 
             return f"No memories found with similarity above {self.similarity_threshold:.2f}."
 
         except Exception as e:
             import traceback
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}")
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Traceback:\n{traceback.format_exc()}")
-            return "Could not find previous messages for this topic."
 
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error finding similar messages: {e}"
+            )
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Traceback:\n{traceback.format_exc()}"
+            )
+            return "Could not find previous messages for this topic."
 
     def _replace_target_with_entity_id(self, command):
         """
@@ -899,11 +941,11 @@ class SimpleFunctions:
     def generate_conversational_response(self, query=None, context=None):
         """
         @brief Generate a natural language conversational response.
-        
+
         This function is called when the user asks for general conversation,
         stories, creative content, or anything that doesn't require device
         control or information lookup.
-        
+
         The context parameter is populated by the chat handler/command processor
         and can include:
         - conversation_history: Recent messages from the conversation
@@ -911,7 +953,7 @@ class SimpleFunctions:
         - temporal_context: Time of day, date, timezone
         - function_results: Results from other functions called in same request
         - user_metadata: User ID, name, location, etc.
-        
+
         @param query The user's conversational query/request.
         @param context Optional dict with additional contextual information
                        to enhance the response (populated by system, not LLM).
@@ -922,9 +964,9 @@ class SimpleFunctions:
                 "type": "simple_function",
                 "function_name": "generate_conversational_response",
                 "response": "I didn't receive a query to respond to.",
-                "error": "Missing query parameter"
+                "error": "Missing query parameter",
             }
-        
+
         # This will be intercepted by the command processor and sent to
         # the conversation LLM with appropriate context and prompts
         return {
@@ -932,6 +974,5 @@ class SimpleFunctions:
             "function_name": "generate_conversational_response",
             "query": query,
             "context": context or {},
-            "response": f"Generating response for: {query}"
+            "response": f"Generating response for: {query}",
         }
-

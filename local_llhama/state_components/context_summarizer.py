@@ -6,6 +6,7 @@ or decision model to create concise summaries when context exceeds limits.
 """
 
 from typing import Optional
+
 from ..shared_logger import LogLevel
 
 
@@ -32,13 +33,15 @@ class ContextSummarizer:
         self.decision_llm_client = decision_llm_client
         self.log_prefix = log_prefix
 
-        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Context summarizer initialized")
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Context summarizer initialized"
+        )
 
     def summarize_context(
         self,
         context_text: str,
         target_words: int = 150,
-        model_preference: str = "decision"
+        model_preference: str = "decision",
     ) -> Optional[str]:
         """
         Summarize context text into a concise bullet point summary.
@@ -54,15 +57,19 @@ class ContextSummarizer:
         # Select the appropriate model
         llm_client = self._select_model(model_preference)
         if not llm_client:
-            print(f"{self.log_prefix} [{LogLevel.WARNING.name}] No suitable model available for summarization")
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] No suitable model available for summarization"
+            )
             return None
 
         # Build summarization prompt
         summary_prompt = self._build_summary_prompt(context_text, target_words)
 
         try:
-            print(f"{self.log_prefix} [{LogLevel.INFO.name}] Generating context summary (~{target_words} words target)")
-            
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Generating context summary (~{target_words} words target)"
+            )
+
             # Use the selected model to generate summary (non-streaming for complete response)
             response = llm_client.send_message(
                 user_message=summary_prompt,
@@ -73,15 +80,21 @@ class ContextSummarizer:
             if response and "response" in response:
                 summary = response["response"].strip()
                 word_count = len(summary.split())
-                
-                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Context summary generated ({word_count} words)")
+
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Context summary generated ({word_count} words)"
+                )
                 return summary
             else:
-                print(f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to generate summary - no valid response")
+                print(
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to generate summary - no valid response"
+                )
                 return None
 
         except Exception as e:
-            print(f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Context summarization failed: {type(e).__name__}: {e}")
+            print(
+                f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Context summarization failed: {type(e).__name__}: {e}"
+            )
             return None
 
     def _select_model(self, model_preference: str):
@@ -101,7 +114,7 @@ class ContextSummarizer:
                 return self.decision_llm_client
             elif self.main_llm_client:
                 return self.main_llm_client
-        
+
         # Fallback: use any available model
         return self.decision_llm_client or self.main_llm_client
 
@@ -138,15 +151,16 @@ Provide your summary as 3-4 bullet points below:"""
         """
         original_words = len(original_text.split()) if original_text else 0
         summary_words = len(summary_text.split()) if summary_text else 0
-        
+
         compression_ratio = (
             (original_words - summary_words) / original_words * 100
-            if original_words > 0 else 0
+            if original_words > 0
+            else 0
         )
-        
+
         return {
             "original_words": original_words,
             "summary_words": summary_words,
             "compression_ratio": compression_ratio,
-            "words_saved": original_words - summary_words
+            "words_saved": original_words - summary_words,
         }

@@ -75,17 +75,21 @@ class ChatContextManager:
 
         # Initialize context summarizer if summarization is enabled
         self.context_summarizer = None
-        if context_management_mode == "summarize" and (main_llm_client or decision_llm_client):
+        if context_management_mode == "summarize" and (
+            main_llm_client or decision_llm_client
+        ):
             self.context_summarizer = ContextSummarizer(
                 main_llm_client=main_llm_client,
                 decision_llm_client=decision_llm_client,
-                log_prefix=f"{log_prefix} [Summarizer]"
+                log_prefix=f"{log_prefix} [Summarizer]",
             )
 
         # Store context summaries for clients
         self.client_context_summaries = {}
 
-        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Context manager initialized (mode: {context_management_mode})")
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Context manager initialized (mode: {context_management_mode})"
+        )
 
     def ensure_conversation_exists(self, client_id, passed_conversation_id=None):
         """
@@ -232,18 +236,26 @@ class ChatContextManager:
 
             # Add current message
             prompt += f"\n---\n\nThis is the user's next message: {text}"
-            
+
             # Check if prompt exceeds target length and process accordingly
             prompt_words = len(prompt.split())
-            target_words = self.context_word_limits.get(client_id, self.DEFAULT_CONTEXT_WORDS)
-            
+            target_words = self.context_word_limits.get(
+                client_id, self.DEFAULT_CONTEXT_WORDS
+            )
+
             if prompt_words > target_words:
-                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Context overflow detected ({prompt_words} > {target_words} words)")
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Context overflow detected ({prompt_words} > {target_words} words)"
+                )
                 # Extract just the context part (without current message) for processing
-                context_part = prompt.replace(f"\n---\n\nThis is the user's next message: {text}", "")
-                processed_context = self.handle_context_overflow(client_id, context_part, target_words - 50)  # Reserve words for current message
+                context_part = prompt.replace(
+                    f"\n---\n\nThis is the user's next message: {text}", ""
+                )
+                processed_context = self.handle_context_overflow(
+                    client_id, context_part, target_words - 50
+                )  # Reserve words for current message
                 prompt = f"{processed_context}\n---\n\nThis is the user's next message: {text}"
-            
+
             return prompt, True
 
         # No persistent context - use only in-memory history
@@ -258,18 +270,26 @@ class ChatContextManager:
                 history_text += f"Assistant: {interaction['assistant']}\n"
 
             prompt = f"{history_text}\nThis is the last thing the user asked: {text}"
-            
+
             # Check if prompt exceeds target length and process accordingly
             prompt_words = len(prompt.split())
-            target_words = self.context_word_limits.get(client_id, self.DEFAULT_CONTEXT_WORDS)
-            
+            target_words = self.context_word_limits.get(
+                client_id, self.DEFAULT_CONTEXT_WORDS
+            )
+
             if prompt_words > target_words:
-                print(f"{self.log_prefix} [{LogLevel.INFO.name}] In-memory context overflow detected ({prompt_words} > {target_words} words)")
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] In-memory context overflow detected ({prompt_words} > {target_words} words)"
+                )
                 # Extract just the history part for processing
-                history_part = prompt.replace(f"\nThis is the last thing the user asked: {text}", "")
-                processed_history = self.handle_context_overflow(client_id, history_part, target_words - 30)  # Reserve words for current message
+                history_part = prompt.replace(
+                    f"\nThis is the last thing the user asked: {text}", ""
+                )
+                processed_history = self.handle_context_overflow(
+                    client_id, history_part, target_words - 30
+                )  # Reserve words for current message
                 prompt = f"{processed_history}\nThis is the last thing the user asked: {text}"
-            
+
             print(
                 f"{self.log_prefix} [{LogLevel.INFO.name}] Using in-memory history ({len(history)} interactions)"
             )
@@ -303,7 +323,9 @@ class ChatContextManager:
             f"{self.log_prefix} [{LogLevel.INFO.name}] Stored interaction (history size: {len(self.conversation_history[client_id])})"
         )
 
-    def handle_context_overflow(self, client_id, context_text: str, target_words: int) -> str:
+    def handle_context_overflow(
+        self, client_id, context_text: str, target_words: int
+    ) -> str:
         """
         Handle context overflow either by summarization or truncation based on mode.
 
@@ -313,11 +335,15 @@ class ChatContextManager:
         @return Processed context (summarized or truncated)
         """
         if self.CONTEXT_MANAGEMENT_MODE == "summarize" and self.context_summarizer:
-            return self._handle_context_with_summarization(client_id, context_text, target_words)
+            return self._handle_context_with_summarization(
+                client_id, context_text, target_words
+            )
         else:
             return self._handle_context_with_truncation(context_text, target_words)
 
-    def _handle_context_with_summarization(self, client_id: str, context_text: str, target_words: int) -> str:
+    def _handle_context_with_summarization(
+        self, client_id: str, context_text: str, target_words: int
+    ) -> str:
         """
         Handle context overflow using summarization.
 
@@ -331,12 +357,15 @@ class ChatContextManager:
             if self.message_handler:
                 self.message_handler.send_message(
                     client_id,
-                    {"type": "system", "message": "⏳ Summarizing conversation context..."},
+                    {
+                        "type": "system",
+                        "message": "⏳ Summarizing conversation context...",
+                    },
                 )
-            
+
             # Check if we already have a summary for this client
             existing_summary = self.client_context_summaries.get(client_id)
-            
+
             # Determine how much context to summarize vs keep recent
             recent_words = min(target_words // 3, 300)  # Keep ~1/3 as recent context
             summary_words = target_words - recent_words
@@ -347,13 +376,15 @@ class ChatContextManager:
                 return context_text  # No need to process if within limits
 
             # Keep recent words as-is, summarize the older portion
-            recent_text = ' '.join(words[-recent_words:])
-            older_text = ' '.join(words[:-recent_words])
+            recent_text = " ".join(words[-recent_words:])
+            older_text = " ".join(words[:-recent_words])
 
             # If we have an existing summary, combine it with older text for new summary
             if existing_summary:
                 text_to_summarize = f"{existing_summary}\n\n---\n\n{older_text}"
-                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Combining existing summary with new context for re-summarization")
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Combining existing summary with new context for re-summarization"
+                )
             else:
                 text_to_summarize = older_text
 
@@ -361,35 +392,45 @@ class ChatContextManager:
             summary = self.context_summarizer.summarize_context(
                 context_text=text_to_summarize,
                 target_words=summary_words,
-                model_preference=self.CONTEXT_SUMMARIZATION_MODEL
+                model_preference=self.CONTEXT_SUMMARIZATION_MODEL,
             )
 
             if summary:
                 # Store the new summary for this client
                 self.client_context_summaries[client_id] = summary
-                
+
                 # Combine summary with recent context
-                final_context = f"{summary}\n\n---\n\nRecent conversation:\n{recent_text}"
-                
+                final_context = (
+                    f"{summary}\n\n---\n\nRecent conversation:\n{recent_text}"
+                )
+
                 # Log compression stats
-                stats = self.context_summarizer.get_summary_stats(context_text, final_context)
+                stats = self.context_summarizer.get_summary_stats(
+                    context_text, final_context
+                )
                 print(
                     f"{self.log_prefix} [{LogLevel.INFO.name}] Context summarized: "
                     f"{stats['original_words']} → {stats['summary_words']} words "
                     f"({stats['compression_ratio']:.1f}% reduction)"
                 )
-                
+
                 return final_context
             else:
                 # Fallback to truncation if summarization fails
-                print(f"{self.log_prefix} [{LogLevel.WARNING.name}] Summarization failed, falling back to truncation")
+                print(
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Summarization failed, falling back to truncation"
+                )
                 return self._handle_context_with_truncation(context_text, target_words)
 
         except Exception as e:
-            print(f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Context summarization error: {e}")
+            print(
+                f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Context summarization error: {e}"
+            )
             return self._handle_context_with_truncation(context_text, target_words)
 
-    def _handle_context_with_truncation(self, context_text: str, target_words: int) -> str:
+    def _handle_context_with_truncation(
+        self, context_text: str, target_words: int
+    ) -> str:
         """
         Handle context overflow using simple truncation.
 
@@ -400,9 +441,11 @@ class ChatContextManager:
         words = context_text.split()
         if len(words) <= target_words:
             return context_text
-        
-        truncated = ' '.join(words[-target_words:])
-        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Context truncated: {len(words)} → {target_words} words")
+
+        truncated = " ".join(words[-target_words:])
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Context truncated: {len(words)} → {target_words} words"
+        )
         return truncated
 
     def reduce_context_window(self, client_id):

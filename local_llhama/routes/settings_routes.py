@@ -148,7 +148,7 @@ def get_prompts():
     """
     try:
         from local_llhama.settings import prompts
-        
+
         # Build response with all prompts
         prompts_data = {
             "response_processor_prompt": prompts.RESPONSE_PROCESSOR_PROMPT,
@@ -159,7 +159,7 @@ def get_prompts():
             "smart_home_decision_making_extension": prompts.SMART_HOME_DECISION_MAKING_EXTENSION,
             "safety_instruction_prompt": prompts.SAFETY_INSTRUCTION_PROMPT,
         }
-        
+
         return {"status": "ok", "prompts": prompts_data}
     except Exception as e:
         return (
@@ -205,7 +205,7 @@ Use {assistant_name} placeholder which will be replaced at runtime.
 """
 
 '''
-    
+
     prompt_names = [
         "RESPONSE_PROCESSOR_PROMPT",
         "SMART_HOME_PROMPT_TEMPLATE",
@@ -215,14 +215,14 @@ Use {assistant_name} placeholder which will be replaced at runtime.
         "SMART_HOME_DECISION_MAKING_EXTENSION",
         "SAFETY_INSTRUCTION_PROMPT",
     ]
-    
+
     for prompt_name in prompt_names:
         key = prompt_name.lower()
         value = prompts.get(key, "")
-        
+
         # Escape triple quotes in the value
-        value = value.replace('"""', r'\"\"\"')
-        
+        value = value.replace('"""', r"\"\"\"")
+
         content += f'{prompt_name} = """{value}"""\n\n\n'
 
     # Save to file
@@ -232,6 +232,7 @@ Use {assistant_name} placeholder which will be replaced at runtime.
     # Reload prompts in the application
     try:
         from local_llhama.llm_prompts import reload_prompts
+
         reload_prompts()
     except Exception as e:
         print(f"[Settings] Warning: Could not reload prompts: {e}")
@@ -341,7 +342,8 @@ def get_model_config():
 
     # Get decision model settings
     decision_model = (
-        loader.get_setting("SettingLoaderClass", "ollama_decision_model") or "phi4-mini:3.8b-q4_K_M"
+        loader.get_setting("SettingLoaderClass", "ollama_decision_model")
+        or "phi4-mini:3.8b-q4_K_M"
     )
     use_separate_decision_model = loader.get_setting(
         "SettingLoaderClass", "use_separate_decision_model"
@@ -400,16 +402,20 @@ def update_model_config():
 
     # Update assistant name
     success = loader.update_assistant_name(assistant_name)
-    
+
     # Update decision model settings if provided
     if "use_separate_decision_model" in data:
         use_separate = data["use_separate_decision_model"]
-        loader.update_setting("SettingLoaderClass", "use_separate_decision_model", use_separate)
-    
+        loader.update_setting(
+            "SettingLoaderClass", "use_separate_decision_model", use_separate
+        )
+
     if "decision_model" in data:
         decision_model = data["decision_model"].strip()
         if decision_model:
-            loader.update_setting("SettingLoaderClass", "ollama_decision_model", decision_model)
+            loader.update_setting(
+                "SettingLoaderClass", "ollama_decision_model", decision_model
+            )
 
     if success:
         return {
@@ -418,7 +424,9 @@ def update_model_config():
         }
     else:
         return (
-            jsonify({"status": "error", "message": "Failed to update model configuration"}),
+            jsonify(
+                {"status": "error", "message": "Failed to update model configuration"}
+            ),
             500,
         )
 

@@ -74,7 +74,10 @@ class ChatHandler:
 
         # Get decision model if separate decision model is enabled
         decision_llm = None
-        if hasattr(command_llm, "use_separate_decision_model") and command_llm.use_separate_decision_model:
+        if (
+            hasattr(command_llm, "use_separate_decision_model")
+            and command_llm.use_separate_decision_model
+        ):
             decision_llm = getattr(command_llm, "decision_llm", None)
 
         # Initialize context manager
@@ -578,7 +581,7 @@ class ChatHandler:
     def _extract_nl_response_from_json(self, text):
         """
         Extract nl_response from JSON text, handling various edge cases.
-        
+
         @param text The JSON text from LLM response
         @return Extracted nl_response content or original text if extraction fails
         """
@@ -589,29 +592,29 @@ class ChatHandler:
                 return parsed["nl_response"]
         except json.JSONDecodeError:
             pass
-        
+
         # If JSON parsing fails, try to extract nl_response manually
         # Look for "nl_response": "..." pattern
         import re
-        
+
         # Pattern to match nl_response field with quoted content
         # This handles multi-line strings and escaped quotes
         pattern = r'"nl_response"\s*:\s*"((?:[^"\\]|\\.)*)"'
         match = re.search(pattern, text, re.DOTALL)
-        
+
         if match:
             # Unescape the captured content
             content = match.group(1)
             # Unescape common escape sequences
             content = content.replace('\\"', '"')
-            content = content.replace('\\n', '\n')
-            content = content.replace('\\t', '\t')
-            content = content.replace('\\\\', '\\')
+            content = content.replace("\\n", "\n")
+            content = content.replace("\\t", "\t")
+            content = content.replace("\\\\", "\\")
             return content
-        
+
         # If pattern matching fails, check if text looks like it starts with JSON structure
         # and strip the JSON wrapper manually
-        if text.strip().startswith('{') and '"nl_response"' in text:
+        if text.strip().startswith("{") and '"nl_response"' in text:
             # Try to find the content between "nl_response": " and the closing "
             start_marker = '"nl_response":'
             start_idx = text.find(start_marker)
@@ -622,21 +625,34 @@ class ChatHandler:
                     # Find the closing quote (accounting for escaped quotes)
                     i = quote_start + 1
                     while i < len(text):
-                        if text[i] == '"' and (i == 0 or text[i-1] != '\\'):
+                        if text[i] == '"' and (i == 0 or text[i - 1] != "\\"):
                             # Found unescaped closing quote
-                            return text[quote_start + 1:i].replace('\\"', '"').replace('\\n', '\n')
+                            return (
+                                text[quote_start + 1 : i]
+                                .replace('\\"', '"')
+                                .replace("\\n", "\n")
+                            )
                         i += 1
-        
+
         # Last resort: if we see JSON structure markers but couldn't parse,
         # try to clean it up
-        if '{' in text and '"nl_response"' in text and '"language"' in text:
+        if "{" in text and '"nl_response"' in text and '"language"' in text:
             # Strip common JSON artifacts that might appear in streaming
-            cleaned = text.replace('{"nl_response":"', '').replace('", "language":', '').replace('"language":"en"', '').replace('"language":"fr"', '').replace('"language":"de"', '').replace('"language":"it"', '').replace('"language":"es"', '').replace('"language":"ru"', '')
+            cleaned = (
+                text.replace('{"nl_response":"', "")
+                .replace('", "language":', "")
+                .replace('"language":"en"', "")
+                .replace('"language":"fr"', "")
+                .replace('"language":"de"', "")
+                .replace('"language":"it"', "")
+                .replace('"language":"es"', "")
+                .replace('"language":"ru"', "")
+            )
             if cleaned != text:
                 # Remove trailing braces
-                cleaned = cleaned.rstrip('}').rstrip()
+                cleaned = cleaned.rstrip("}").rstrip()
                 return cleaned
-        
+
         # If all else fails, return original text
         return text
 

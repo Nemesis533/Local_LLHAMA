@@ -70,9 +70,14 @@ def wikipedia_fallback_to_memory(
     # find_in_memory now returns a formatted string
     if isinstance(memory_results, str):
         # If it's an error message or "no memories found", return Wikipedia error
-        if "No memories found" in memory_results or "not configured" in memory_results or "No query provided" in memory_results or "Could not" in memory_results:
+        if (
+            "No memories found" in memory_results
+            or "not configured" in memory_results
+            or "No query provided" in memory_results
+            or "Could not" in memory_results
+        ):
             return f"No Wikipedia page found for: {topic}"
-        
+
         # Otherwise, prepend context and return the memory results
         return f"No '{topic}' on Wikipedia, but here's what we discussed before:\n\n{memory_results}"
 
