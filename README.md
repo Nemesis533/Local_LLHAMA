@@ -167,6 +167,10 @@ Configurations tested on real hardware with performance benchmarks:
 | **multi_lingual_small** | 16GB | Qwen2.5:14B | 6 languages | Balanced multilingual |
 | **multi_lingual_large** | 24GB | GPT-OSS:20B | 6 languages | Maximum performance |
 
+The Qwen family is being used because of how well they follow instructions and their size-availability. GPT-OSS is used as alternative for larger GPUS.
+qwen3:30b-instruct works very well too but woudl be on edge of a 24GB card - recommned at least 28 GB+ VRAM for that model.
+
+
 Each preset configures:
 - LLM model selection and parameters
 - Whisper model size
@@ -434,16 +438,20 @@ Open discussions before submitting major PRs.
 
 ### v0.8 — Enhanced Orchestration
 
+**Based on feedback and testing, the scope of work was updated**
+
 **Improved Backend Integration:**
 - Streamlined custom function integration with examples
 - Automation creation via LLM function calling
 - Enhanced error recovery with retry logic
 - Backend health monitoring and failover
+- ADDED: plex and jellyfin media control functions
+- ADDED: improved memory search that now also include assistant replies and temporal information
 
 **Performance Optimization:**
 - Context caching for repeated queries
-- Predictive context scaling based on intent complexity
-- Parallel intent execution benchmarking
+- Predictive context scaling/summaries based on intent complexity
+~~- Parallel intent execution benchmarking~~
 
 ### v0.9 — Advanced Capabilities
 
