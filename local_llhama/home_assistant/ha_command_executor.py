@@ -47,8 +47,9 @@ class HACommandExecutor:
         @return List of results for each command or None
         """
         results = []
+        all_commands = payload.get("commands", [])
 
-        for command in payload.get("commands", []):
+        for command in all_commands:
             action = command.get("action", "").replace(" ", "_")
             target = command.get("target", "").lower()
             extra_data = command.get("data", {})
@@ -75,7 +76,13 @@ class HACommandExecutor:
                     simple_action
                 )
                 result = self._execute_simple_function(
-                    simple_action, target, action, extra_data, user_id, display_name
+                    simple_action,
+                    target,
+                    action,
+                    extra_data,
+                    user_id,
+                    display_name,
+                    all_commands,
                 )
                 results.append(result)
 
@@ -188,6 +195,7 @@ class HACommandExecutor:
         extra_data: dict,
         user_id: int = None,
         display_name: str = None,
+        all_commands: list = None,
     ) -> dict:
         """
         Execute a simple function (non-Home Assistant command).
@@ -198,6 +206,7 @@ class HACommandExecutor:
         @param extra_data Additional data for the function
         @param user_id Optional user ID for calendar/user-specific operations
         @param display_name Optional display name for UI
+        @param all_commands All commands in the current request (for create_automation)
         @return Command result dictionary
         """
         # Inject user_id for calendar functions
@@ -211,6 +220,22 @@ class HACommandExecutor:
         # Inject user_id for Wikipedia to enable memory fallback
         if simple_action == "get_wikipedia_summary" and user_id is not None:
             extra_data["user_id"] = user_id
+
+        # Inject user_id and ha_client for automation functions
+        if simple_action in [
+            "create_automation",
+            "trigger_automation",
+            "list_automations",
+            "delete_automation",
+        ]:
+            if user_id is not None:
+                extra_data["user_id"] = user_id
+            # For create_automation, inject all commands from current request
+            if simple_action == "create_automation" and all_commands:
+                extra_data["current_request_commands"] = all_commands
+            # For trigger_automation, pass the HA client so it can execute the stored actions
+            if simple_action == "trigger_automation":
+                extra_data["ha_client"] = self.device_manager.ha_client
 
         # Call the simple function corresponding to the action - this too simplifies LLM prompts
         result = self.device_manager.simple_functions.call_function_by_name(

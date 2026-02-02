@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 from . import simple_functions_helpers as helpers
+from .auth.automation_manager import AutomationManager
 from .auth.calendar_manager import CalendarManager
 
 # === Custom Imports ===
@@ -79,6 +80,9 @@ class SimpleFunctions:
 
         # Initialize calendar manager with PostgreSQL client
         self.calendar = CalendarManager(pg_client)
+
+        # Initialize automation manager with PostgreSQL client
+        self.automation = AutomationManager(pg_client)
 
         # Common headers for HTTP requests
         self.headers = {
@@ -256,7 +260,9 @@ class SimpleFunctions:
                 "Wikipedia information not available at the moment, please try later."
             )
 
-    def _handle_compound_wikipedia_query(self, topic, user_id, wiki_base_url, wikimedia_base_url, timeout):
+    def _handle_compound_wikipedia_query(
+        self, topic, user_id, wiki_base_url, wikimedia_base_url, timeout
+    ):
         """
         @brief Handle queries with multiple topics (e.g., "gastritis and honey").
         Splits the query and fetches separate articles.
@@ -269,46 +275,60 @@ class SimpleFunctions:
         @return Combined summary or error message
         """
         import re
-        
+
         # Split on common conjunctions
-        splitters = r'\s+(?:and|or|vs|versus|with|plus)\s+'
+        splitters = r"\s+(?:and|or|vs|versus|with|plus)\s+"
         topics = re.split(splitters, topic, flags=re.IGNORECASE)
-        
+
         # Clean and filter topics
         topics = [t.strip() for t in topics if t.strip() and len(t.strip()) > 2]
-        
+
         # Limit to max 3 topics to avoid overwhelming
         topics = topics[:3]
-        
+
         if len(topics) < 2:
             # Not a compound query, return None to use fallback
             return None
-        
-        print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Compound query detected: {topics}")
-        
+
+        print(
+            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Compound query detected: {topics}"
+        )
+
         summaries = []
         for sub_topic in topics:
             try:
                 sub_topic_formatted = "_".join(sub_topic.strip().split())
                 summary_url = f"{wiki_base_url}/page/summary/{sub_topic_formatted}"
-                
+
                 summary_data = helpers.make_http_request(
                     summary_url, self.headers, timeout=timeout
                 )
-                
+
                 if summary_data and summary_data.get("title"):
                     canonical_title = summary_data.get("title").replace(" ", "_")
                     html_url = f"{wikimedia_base_url}/{canonical_title}/html"
-                    
-                    html_resp = requests.get(html_url, headers=self.headers, timeout=timeout)
+
+                    html_resp = requests.get(
+                        html_url, headers=self.headers, timeout=timeout
+                    )
                     html_resp.raise_for_status()
-                    
+
                     soup = BeautifulSoup(html_resp.text, "html.parser")
-                    
+
                     # Remove unwanted elements
-                    for element in soup(["script", "style", "nav", "footer", "header", "table", "figure"]):
+                    for element in soup(
+                        [
+                            "script",
+                            "style",
+                            "nav",
+                            "footer",
+                            "header",
+                            "table",
+                            "figure",
+                        ]
+                    ):
                         element.decompose()
-                    
+
                     # Get first 2 paragraphs for each sub-topic
                     paragraphs = soup.find_all("p", limit=2)
                     text_parts = [
@@ -316,23 +336,27 @@ class SimpleFunctions:
                         for p in paragraphs
                         if len(p.get_text(strip=True)) > 20
                     ]
-                    
+
                     if text_parts:
                         summary = " ".join(text_parts)
                         # Limit each sub-summary to ~250 chars
                         if len(summary) > 250:
                             summary = summary[:247] + "..."
                         summaries.append(f"{sub_topic.title()}: {summary}")
-                        
+
             except Exception as e:
-                print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Failed to fetch '{sub_topic}': {e}")
+                print(
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Failed to fetch '{sub_topic}': {e}"
+                )
                 continue
-        
+
         if summaries:
             combined = "\n\n".join(summaries)
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Combined {len(summaries)} Wikipedia summaries")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Combined {len(summaries)} Wikipedia summaries"
+            )
             return combined
-        
+
         return None
 
     def get_news_summary(self, query=None):
@@ -509,9 +533,11 @@ class SimpleFunctions:
             repeat_normalized = "none"
         elif repeat_normalized not in ["none", "daily", "weekly", "monthly", "yearly"]:
             # Invalid repeat pattern, default to none
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Invalid repeat pattern '{repeat}', using 'none'")
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Invalid repeat pattern '{repeat}', using 'none'"
+            )
             repeat_normalized = "none"
-        
+
         success, message, _ = self.calendar.add_event(
             event_type, title, when, description, repeat_normalized, user_id=user_id
         )
@@ -1073,3 +1099,130 @@ class SimpleFunctions:
             "context": context or {},
             "response": f"Generating response for: {query}",
         }
+
+    # === AUTOMATION FUNCTIONS ===
+
+    def create_automation(
+        self,
+        name: str,
+        actions: list = None,
+        description: str = "",
+        user_id: int = None,
+        save_previous_commands: bool = True,
+        current_request_commands: list = None,
+    ) -> str:
+        """
+        Create a new automation sequence.
+
+        @param name: Unique name for the automation
+        @param actions: List of command dictionaries to execute (optional if using save_previous_commands)
+        @param description: Optional description
+        @param user_id: Optional user ID for per-user automations
+        @param save_previous_commands: If True and current_request_commands provided, use those instead of actions
+        @param current_request_commands: Commands from current request (injected by command processor)
+        @return: Confirmation message
+        """
+        # If save_previous_commands is True and we have current request commands, use those
+        if save_previous_commands and current_request_commands:
+            # Filter out the create_automation command itself
+            actions = [
+                cmd
+                for cmd in current_request_commands
+                if cmd.get("action") != "create_automation"
+            ]
+            if not actions:
+                return "No commands to save - create_automation was the only command in the request."
+
+        # Fallback to provided actions parameter
+        if not actions:
+            return "No actions provided. Either specify actions or use save_previous_commands with other commands in the request."
+
+        success, message, automation_id = self.automation.create_automation(
+            name, actions, description, user_id
+        )
+        return message
+
+    def trigger_automation(self, name: str, user_id: int = None, ha_client=None) -> str:
+        """
+        Trigger (execute) an existing automation by name.
+
+        @param name: Name of the automation to run
+        @param user_id: Optional user ID to filter automations
+        @param ha_client: HomeAssistantClient instance for executing commands
+        @return: Result message
+        """
+        # Get the automation
+        automation = self.automation.get_automation(name, user_id)
+
+        if not automation:
+            return f"Automation '{name}' not found."
+
+        if not ha_client:
+            return "Cannot execute automation: Home Assistant client not available."
+
+        # Execute all actions in the automation
+        actions = automation.get("actions", [])
+        if not actions:
+            return f"Automation '{name}' has no actions to execute."
+
+        try:
+            # Build command payload
+            payload = {"commands": actions}
+
+            # Execute through HA client (which handles both HA and simple functions)
+            results = ha_client.send_commands(payload, debug=True, user_id=user_id)
+
+            # Update last triggered timestamp
+            self.automation.update_last_triggered(automation["id"])
+
+            # Build response
+            success_count = sum(
+                1 for r in results if isinstance(r, dict) and not r.get("error")
+            )
+            total_count = len(actions)
+
+            if success_count == total_count:
+                return f"Automation '{name}' executed successfully ({total_count} action(s))."
+            elif success_count > 0:
+                return f"Automation '{name}' partially executed ({success_count}/{total_count} actions succeeded)."
+            else:
+                return f"Automation '{name}' failed to execute."
+
+        except Exception as e:
+            error_msg = f"Error executing automation '{name}': {str(e)}"
+            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.ERROR.name}] {error_msg}")
+            return error_msg
+
+    def list_automations(self, user_id: int = None) -> str:
+        """
+        List all saved automations.
+
+        @param user_id: Optional user ID to filter automations
+        @return: Formatted list of automations
+        """
+        automations = self.automation.list_automations(user_id)
+
+        if not automations:
+            return "No automations found."
+
+        result = "Your automations:\n"
+        for auto in automations:
+            result += f"\n- {auto['name']}"
+            if auto.get("description"):
+                result += f": {auto['description']}"
+            result += f" ({auto['action_count']} action(s))"
+            if auto.get("last_triggered"):
+                result += f"\n  Last used: {auto['last_triggered']}"
+
+        return result
+
+    def delete_automation(self, name: str, user_id: int = None) -> str:
+        """
+        Delete an automation by name.
+
+        @param name: Name of the automation to delete
+        @param user_id: Optional user ID to filter automations
+        @return: Confirmation message
+        """
+        success, message = self.automation.delete_automation(name, user_id)
+        return message

@@ -94,5 +94,45 @@
     "parameters": {
       "query": {"required": true, "description": "The user's conversational query or request"}
     }
+  },
+  "create_automation": {
+    "entity_id": "create_automation",
+    "actions": ["create_automation"],
+    "description": "Create a named automation from commands in this request. Place this as the LAST command in a multi-command sequence - it will save all previous commands in the same request as an automation. Example: Turn on light, set alarm, THEN create automation.",
+    "display_name": "Creating Automation...",
+    "example": {"action": "create_automation", "target": "create_automation", "data": {"name": "morning_routine", "description": "My morning routine", "save_previous_commands": true}},
+    "parameters": {
+      "name": {"required": true, "description": "Unique name for the automation (e.g., 'movie_mode', 'bedtime_routine')"},
+      "description": {"required": false, "description": "Optional description of what this automation does"},
+      "save_previous_commands": {"required": false, "description": "Set to true to save all commands before this one in the current request (default: true)"}
+    }
+  },
+  "trigger_automation": {
+    "entity_id": "trigger_automation",
+    "actions": ["trigger_automation"],
+    "description": "Run a previously created automation by name. Executes all stored actions in sequence.",
+    "display_name": "Running Automation...",
+    "example": {"action": "trigger_automation", "target": "trigger_automation", "data": {"name": "morning_routine"}},
+    "parameters": {
+      "name": {"required": true, "description": "Name of the automation to trigger"}
+    }
+  },
+  "list_automations": {
+    "entity_id": "list_automations",
+    "actions": ["list_automations"],
+    "description": "List all saved automations with their names and descriptions.",
+    "display_name": "Listing Automations...",
+    "example": {"action": "list_automations", "target": "list_automations"},
+    "parameters": {}
+  },
+  "delete_automation": {
+    "entity_id": "delete_automation",
+    "actions": ["delete_automation"],
+    "description": "Delete an automation by name.",
+    "display_name": "Deleting Automation...",
+    "example": {"action": "delete_automation", "target": "delete_automation", "data": {"name": "morning_routine"}},
+    "parameters": {
+      "name": {"required": true, "description": "Name of the automation to delete"}
+    }
   }
 }

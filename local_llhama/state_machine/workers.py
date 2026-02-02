@@ -152,10 +152,12 @@ class WorkerThreads:
                         print(
                             f"{self.class_prefix_message} [{LogLevel.INFO.name}] {event_type.capitalize()} TRIGGERED: {event['title']} (due at {due_time.strftime('%H:%M:%S')}, triggered at {now.strftime('%H:%M:%S')})"
                         )
-                        
+
                         # Play sound for 1 second only, then speak the reminder
-                        self._play_short_sound_and_speak_reminder(event, event_type, due_time)
-                        
+                        self._play_short_sound_and_speak_reminder(
+                            event, event_type, due_time
+                        )
+
                         print(
                             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Sound and speech notification queued"
                         )
@@ -187,7 +189,7 @@ class WorkerThreads:
 
     def _play_short_sound_and_speak_reminder(self, event, event_type, due_time):
         """
-        Play a short 1-second notification sound, then have the LLM generate 
+        Play a short 1-second notification sound, then have the LLM generate
         and speak the reminder text.
 
         @param event Event dictionary
@@ -195,17 +197,17 @@ class WorkerThreads:
         @param due_time Event due time
         """
         import threading
-        
+
         def play_and_speak():
             try:
                 # Play sound for 1 second only (non-blocking)
                 sound_thread = threading.Thread(
                     target=self._play_sound_limited,
                     args=(1.0,),  # 1 second duration
-                    daemon=True
+                    daemon=True,
                 )
                 sound_thread.start()
-                
+
                 # Generate LLM text for the reminder
                 if isinstance(self.sm.command_llm, OllamaClient):
                     event_description = event.get("description", "")
@@ -220,7 +222,7 @@ Keep it short and natural for voice output."""
                         nl_output = self.sm.command_llm.send_message(
                             llm_input, message_type="response", from_chat=False
                         )
-                        
+
                         if nl_output and nl_output.get("nl_response"):
                             reminder_text = nl_output.get("nl_response")
                         else:
@@ -234,12 +236,12 @@ Keep it short and natural for voice output."""
                 else:
                     # No LLM available, use simple text
                     reminder_text = f"Reminder: {event['title']}"
-                
+
                 # Wait for sound to finish (1 second)
                 sound_thread.join(timeout=1.5)
-                
+
                 # Speak the reminder text
-                if hasattr(self.sm, 'tts') and self.sm.tts:
+                if hasattr(self.sm, "tts") and self.sm.tts:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.INFO.name}] Speaking reminder: {reminder_text}"
                     )
@@ -248,12 +250,12 @@ Keep it short and natural for voice output."""
                     print(
                         f"{self.class_prefix_message} [{LogLevel.WARNING.name}] TTS not available, skipping speech"
                     )
-                    
+
             except Exception as e:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error in sound+speech reminder: {type(e).__name__}: {e}"
                 )
-        
+
         # Run in background thread to not block calendar checker
         reminder_thread = threading.Thread(target=play_and_speak, daemon=True)
         reminder_thread.start()
@@ -266,18 +268,19 @@ Keep it short and natural for voice output."""
         """
         try:
             import pygame
+
             from ..audio_output import SoundActions
-            
+
             # Start playing the sound
             self.sm.play_sound(SoundActions.reminder)
-            
+
             # Wait for specified duration
             time.sleep(duration_seconds)
-            
+
             # Stop the sound
-            if hasattr(self.sm, 'sound_player') and self.sm.sound_player:
+            if hasattr(self.sm, "sound_player") and self.sm.sound_player:
                 self.sm.sound_player.stop()
-                
+
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error limiting sound duration: {e}"

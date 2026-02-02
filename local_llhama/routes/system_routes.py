@@ -37,6 +37,6 @@ def get_system_metrics():
     # Check if user is admin
     if not current_user.is_admin:
         return jsonify({"error": "Admin access required"}), 403
-    
+
     metrics = SystemMetrics.get_all_metrics()
     return jsonify(metrics)
