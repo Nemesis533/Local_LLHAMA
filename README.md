@@ -441,17 +441,20 @@ Open discussions before submitting major PRs.
 **Based on feedback and testing, the scope of work was updated**
 
 **Improved Backend Integration:**
-- Streamlined custom function integration with examples
+- Streamlined custom function integration with examples 
 - Automation creation via LLM function calling
-- Enhanced error recovery with retry logic
-- Backend health monitoring and failover
-- ADDED: plex and jellyfin media control functions
-- ADDED: improved memory search that now also include assistant replies and temporal information
+- Enhanced error recovery with retry logic ✓
+- Backend health monitoring with real-time system metrics (CPU, RAM, GPU) ✓
+
+- ADDED: improved memory search that now also include assistant replies and temporal information ✓
 
 **Performance Optimization:**
-- Context caching for repeated queries
-- Predictive context scaling/summaries based on intent complexity
+- Context caching for repeated queries ✓
+- Predictive context scaling/summaries based on intent complexity ✓
 ~~- Parallel intent execution benchmarking~~
+
+### v0.85 — Coding Abilities
+- Creation of dedicated fnctionality for a coding assistant that integrates with vscode.
 
 ### v0.9 — Advanced Capabilities
 
@@ -460,6 +463,11 @@ Open discussions before submitting major PRs.
 - Contextual model swapping (task-specific model selection)
 - Test coverage for orchestration patterns
 - Performance regression testing
+
+### v0.95 — Advanced Capabilities
+
+**Additional API support:**
+- ADDED: plex and jellyfin media control functions
 
 ### v1.0 — Production Release
 
