@@ -56,6 +56,9 @@ class HADeviceManager:
         self.domain_to_actions = {}
         self.entity_map = {}
         self.simple_functions = None
+        self.ha_client = (
+            None  # Reference to parent HomeAssistantClient for automation execution
+        )
 
     def initialize(
         self,
@@ -69,9 +72,12 @@ class HADeviceManager:
 
         @param allow_internet_searches Enable internet searches in simple functions
         @param pg_client PostgreSQL client for simple functions
-        @param ha_client HomeAssistantClient instance for ollama config
+        @param ha_client HomeAssistantClient instance for ollama config and automation execution
         @param settings_loader SettingLoaderClass instance for web search config
         """
+        # Store reference to parent HA client for automation execution
+        self.ha_client = ha_client
+
         # Get home location and validate
         home_location = self.get_home_location()
         if "error" in home_location:

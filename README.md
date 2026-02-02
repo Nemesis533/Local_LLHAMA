@@ -442,10 +442,9 @@ Open discussions before submitting major PRs.
 
 **Improved Backend Integration:**
 - Streamlined custom function integration with examples 
-- Automation creation via LLM function calling
+- Automation creation via LLM function calling ✓
 - Enhanced error recovery with retry logic ✓
 - Backend health monitoring with real-time system metrics (CPU, RAM, GPU) ✓
-
 - ADDED: improved memory search that now also include assistant replies and temporal information ✓
 
 **Performance Optimization:**

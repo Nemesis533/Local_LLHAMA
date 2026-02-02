@@ -554,22 +554,24 @@ class LocalLLHAMA_WebService:
         display_host = self.host
         if self.host == "0.0.0.0":
             display_host = self.get_host_ip()
-        
+
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting web server on {self.host}:{self.port}"
         )
-        
+
         # Display all network interfaces
         all_ips = self.get_all_network_ips()
         if all_ips:
             print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at:")
             for ip in all_ips:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}]   http://{ip}:{self.port}/login")
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}]   http://{ip}:{self.port}/login"
+                )
         else:
             print(
                 f"{self.class_prefix_message} [{LogLevel.INFO.name}] Access at: http://{display_host}:{self.port}/login"
             )
-        
+
         self.socketio.run(
             self.app, host="0.0.0.0", port=5001, debug=False, use_reloader=False
         )
