@@ -70,6 +70,47 @@
           <p class="loading-text">Loading events...</p>
         </div>
       </aside>
+      
+      <!-- System Metrics Panel (Admin Only) -->
+      <aside id="metrics-panel" class="metrics-panel collapsed" style="display: none;">
+        <div class="metrics-content">
+          <h3>System Metrics</h3>
+          <div class="metrics-section">
+            <h4>CPU</h4>
+            <div class="metric-item">
+              <span class="metric-label">Usage:</span>
+              <span id="cpu-usage" class="metric-value">--</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Temperature:</span>
+              <span id="cpu-temp" class="metric-value">--</span>
+            </div>
+          </div>
+          <div class="metrics-section">
+            <h4>RAM</h4>
+            <div class="metric-item">
+              <span class="metric-label">Used:</span>
+              <span id="ram-used" class="metric-value">--</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Total:</span>
+              <span id="ram-total" class="metric-value">--</span>
+            </div>
+          </div>
+          <div id="gpu-metrics" class="metrics-section">
+            <!-- GPU metrics will be dynamically populated -->
+          </div>
+          <div class="metrics-update">
+            <small>Updated: <span id="metrics-timestamp">--</span></small>
+          </div>
+        </div>
+        <div class="metrics-toggle" id="metrics-toggle" title="System Metrics">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18"/>
+            <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+          </svg>
+        </div>
+      </aside>
     </div>
   </div>
   

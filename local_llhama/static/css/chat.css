@@ -302,3 +302,119 @@
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(224, 244, 255, 0.2);
 }
+
+/* System Metrics Panel */
+.metrics-panel {
+  position: relative;
+  width: 280px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--bg-tertiary);
+  display: flex;
+  flex-direction: row;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.metrics-panel.collapsed {
+  width: 40px;
+}
+
+.metrics-panel.collapsed .metrics-content {
+  display: none;
+}
+
+.metrics-toggle {
+  width: 40px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  cursor: pointer;
+  border-radius: 8px 0 0 8px;
+  margin: var(--space-md) 0;
+  transition: background-color var(--transition-base);
+  flex-shrink: 0;
+}
+
+.metrics-toggle:hover {
+  background: var(--color-primary-hover);
+}
+
+.metrics-content {
+  flex: 1;
+  padding: var(--space-lg);
+  overflow-y: auto;
+  min-width: 240px;
+}
+
+.metrics-content h3 {
+  margin: 0 0 var(--space-lg) 0;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metrics-section {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--bg-tertiary);
+}
+
+.metrics-section h4 {
+  margin: 0 0 var(--space-sm) 0;
+  font-size: var(--font-size-base);
+  color: #000000;
+  font-weight: var(--font-weight-bold);
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.metric-label {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal);
+}
+
+.metric-value {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  font-family: 'Courier New', monospace;
+}
+
+.metrics-update {
+  margin-top: var(--space-md);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.gpu-card {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--bg-tertiary);
+}
+
+.gpu-card:first-child {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.gpu-name {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+  font-weight: var(--font-weight-medium);
+}
+
