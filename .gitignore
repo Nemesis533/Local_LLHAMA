@@ -234,3 +234,7 @@ README_original_backup.md
 navigator planning.md
 migrate_add_automations.sh
 CHANGES_SINCE_COMMIT.md
+
+# Root-level .md files except README.md
+/*.md
+!README.md
