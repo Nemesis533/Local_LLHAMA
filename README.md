@@ -441,7 +441,6 @@ Open discussions before submitting major PRs.
 **Based on feedback and testing, the scope of work was updated**
 
 **Improved Backend Integration:**
-- Streamlined custom function integration with examples 
 - Automation creation via LLM function calling ✓
 - Enhanced error recovery with retry logic ✓
 - Backend health monitoring with real-time system metrics (CPU, RAM, GPU) ✓
@@ -453,7 +452,8 @@ Open discussions before submitting major PRs.
 ~~- Parallel intent execution benchmarking~~
 
 ### v0.85 — Coding Abilities
-- Creation of dedicated fnctionality for a coding assistant that integrates with vscode.
+- Streamlined custom function integration with examples 
+- Creation of dedicated functionality for a coding assistant that integrates with vscode.
 
 ### v0.9 — Advanced Capabilities
 
