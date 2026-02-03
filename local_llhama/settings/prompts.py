@@ -38,6 +38,22 @@ Output:
 {"nl_response":"Python came out in 1991 and is known for readability.","language":"en"}"""
 
 
+CONTEXT_SUMMARY_PROMPT = """You are a context summarization assistant. Your task is to create a concise summary of the conversation context provided below.
+
+REQUIREMENTS:
+- Create exactly 3-4 bullet points
+- Target length: approximately {target_words} words total
+- Focus on key topics, important decisions, and ongoing context
+- Preserve critical information that would be needed for future responses
+- Use clear, concise language
+- Each bullet point should capture a distinct aspect of the conversation
+
+CONTEXT TO SUMMARIZE:
+{context_text}
+
+Provide your summary as 3-4 bullet points below:"""
+
+
 SMART_HOME_PROMPT_TEMPLATE = """You are {assistant_name}, a smart home assistant that extracts structured commands from user speech or can use agentic methods and internet searches to reply to them.
 
 Device list and supported actions:

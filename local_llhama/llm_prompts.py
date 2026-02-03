@@ -47,6 +47,7 @@ try:
     from local_llhama.settings.prompts import (
         CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION,
     )
+    from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
     from local_llhama.settings.prompts import (
         RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
     )
@@ -76,7 +77,7 @@ try:
     )
     SAFETY_INSTRUCTION_PROMPT = _inject_assistant_name(_RAW_SAFETY, _assistant_name)
 
-    print(f"[LLM_Prompts] Loaded 7 prompts (assistant: {_assistant_name})")
+    print(f"[LLM_Prompts] Loaded 8 prompts (assistant: {_assistant_name})")
 
 except Exception as e:
     print(f"[LLM_Prompts] Error importing prompts: {e}, using defaults")
@@ -91,6 +92,7 @@ except Exception as e:
     RESUME_CONVERSATION_PROMPT = "Continue conversation."
     SMART_HOME_DECISION_MAKING_EXTENSION = ""
     SAFETY_INSTRUCTION_PROMPT = ""
+    CONTEXT_SUMMARY_PROMPT = "Summarize the following context: {context_text}"
 
 
 def is_safety_enabled():
@@ -119,7 +121,7 @@ def reload_prompts(settings_loader=None, system_settings=None):
     global _assistant_name
     global RESPONSE_PROCESSOR_PROMPT, SMART_HOME_PROMPT_TEMPLATE
     global CONVERSATION_PROCESSOR_PROMPT, CALENDAR_EVENT_PROMPT, RESUME_CONVERSATION_PROMPT
-    global SMART_HOME_DECISION_MAKING_EXTENSION, SAFETY_INSTRUCTION_PROMPT
+    global SMART_HOME_DECISION_MAKING_EXTENSION, SAFETY_INSTRUCTION_PROMPT, CONTEXT_SUMMARY_PROMPT
 
     # Reload assistant name
     _assistant_name = _load_assistant_name()
@@ -136,6 +138,7 @@ def reload_prompts(settings_loader=None, system_settings=None):
         from local_llhama.settings.prompts import (
             CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION,
         )
+        from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
         from local_llhama.settings.prompts import (
             RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
         )
