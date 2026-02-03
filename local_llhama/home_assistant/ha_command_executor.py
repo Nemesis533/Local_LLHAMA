@@ -60,7 +60,7 @@ class HACommandExecutor:
                 )
 
             # Check if this command matches a simple function (non-HA); this allows adding simple functions easily
-            # And from the LLM's perspective, they are just commands that is can call
+
             simple_action = self.device_manager.simple_functions.find_matching_action(
                 command_json=command
             )

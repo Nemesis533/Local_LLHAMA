@@ -102,7 +102,7 @@ class HADeviceManager:
 
         # Fetch entity map, first with exclusions then filtering by allowed entities
         # The exclusion map is there pro prevent commands beign routed to entities we don't want
-        # Such as a wrongly interpreted command shutting off all your UPS systems
+        # Such as a wrongly interpreted command shutting off all your UPS systems - speaking from experience!
 
         self.entity_map = self.fetch_entity_map(exclusion_dict=self.exclusion_dict)
         self.entity_map = self.fetch_entity_map(
