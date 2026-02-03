@@ -7,6 +7,7 @@ or decision model to create concise summaries when context exceeds limits.
 
 from typing import Optional
 
+from ..llm_prompts import CONTEXT_SUMMARY_PROMPT
 from ..shared_logger import LogLevel
 
 
@@ -32,6 +33,7 @@ class ContextSummarizer:
         self.main_llm_client = main_llm_client
         self.decision_llm_client = decision_llm_client
         self.log_prefix = log_prefix
+        self.summary_buffer = 1.3  # Buffer multiplier for target word count
 
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Context summarizer initialized"
@@ -54,7 +56,7 @@ class ContextSummarizer:
         if not context_text or not context_text.strip():
             return None
 
-        # Select the appropriate model
+        # Select the appropriate model based on user preference/selection
         llm_client = self._select_model(model_preference)
         if not llm_client:
             print(
@@ -62,7 +64,6 @@ class ContextSummarizer:
             )
             return None
 
-        # Build summarization prompt
         summary_prompt = self._build_summary_prompt(context_text, target_words)
 
         try:
@@ -73,8 +74,8 @@ class ContextSummarizer:
             # Use the selected model to generate summary (non-streaming for complete response)
             response = llm_client.send_message(
                 user_message=summary_prompt,
-                temperature=0.3,  # Lower temperature for more focused summaries
-                max_tokens=target_words * 2,  # Allow some buffer
+                temperature=0.3, 
+                max_tokens=int(target_words * self.summary_buffer),
             )
 
             if response and "response" in response:
@@ -109,13 +110,13 @@ class ContextSummarizer:
         elif model_preference == "main" and self.main_llm_client:
             return self.main_llm_client
         elif model_preference == "auto":
-            # Prefer decision model if available (faster), fallback to main
+            # Prefer decision model if available as its meant to be faster, fallback to main
             if self.decision_llm_client:
                 return self.decision_llm_client
             elif self.main_llm_client:
                 return self.main_llm_client
 
-        # Fallback: use any available model
+        # Secondary fallback: use any available model
         return self.decision_llm_client or self.main_llm_client
 
     def _build_summary_prompt(self, context_text: str, target_words: int) -> str:
@@ -126,20 +127,9 @@ class ContextSummarizer:
         @param target_words Target word count for summary
         @return Formatted prompt string
         """
-        return f"""You are a context summarization assistant. Your task is to create a concise summary of the conversation context provided below.
-
-REQUIREMENTS:
-- Create exactly 3-4 bullet points
-- Target length: approximately {target_words} words total
-- Focus on key topics, important decisions, and ongoing context
-- Preserve critical information that would be needed for future responses
-- Use clear, concise language
-- Each bullet point should capture a distinct aspect of the conversation
-
-CONTEXT TO SUMMARIZE:
-{context_text}
-
-Provide your summary as 3-4 bullet points below:"""
+        return CONTEXT_SUMMARY_PROMPT.format(
+            context_text=context_text, target_words=target_words
+        )
 
     def get_summary_stats(self, original_text: str, summary_text: str) -> dict:
         """
