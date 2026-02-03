@@ -41,7 +41,7 @@ class OllamaClient:
     def __init__(
         self,
         ha_client,
-        host: str = "http://your_ip:11434",
+        host: str = "http://your_ip:11434", # leaving placeholder to force user to set
         model: str = "qwen3-14b",
         pg_client=None,
         conversation_loader=None,
@@ -106,6 +106,9 @@ class OllamaClient:
             host=self.host, model=embedding_model, pg_client=self.pg_client
         )
 
+        # Initialize models list for keepalive management
+        self._initialize_models_list()
+
         # Context management - keep only last request and response
         self.last_user_message = None
         self.last_message_from_chat = False  # Track if last command was from chat
@@ -128,6 +131,33 @@ class OllamaClient:
         # Start keepalive thread if enabled
         if self.keepalive_enabled:
             self._start_keepalive()
+
+    def _initialize_models_list(self):
+        """Initialize the list of models for keepalive management."""
+        self.models = []
+        
+        # Add main text generation model
+        self.models.append({
+            "name": self.model,
+            "type": "text",
+            "description": "Main text generation model"
+        })
+        
+        # Add decision model if it's different from main model
+        if self.use_separate_decision_model and self.decision_model != self.model:
+            self.models.append({
+                "name": self.decision_model,
+                "type": "text",
+                "description": "Decision-making model"
+            })
+        
+        # Add embedding model if embedding client exists
+        if self.embedding_client:
+            self.models.append({
+                "name": self.embedding_client.model,
+                "type": "embedding",
+                "description": "Embedding generation model"
+            })
 
     def _start_keepalive(self):
         """Start the model keepalive background thread."""
@@ -162,31 +192,27 @@ class OllamaClient:
                         return
                     time.sleep(1)
 
-                # Send keepalive to main model
-                self._send_keepalive(self.model, is_embedding=False)
-
-                # Send keepalive to decision model if separate
-                if (
-                    self.use_separate_decision_model
-                    and self.decision_model != self.model
-                ):
-                    self._send_keepalive(self.decision_model, is_embedding=False)
-
-                # Send keepalive to embedding model
-                if self.embedding_client:
-                    self._send_keepalive(self.embedding_client.model, is_embedding=True)
+                # Send keepalive to all registered models
+                for model_info in self.models:
+                    is_embedding = model_info["type"] == "embedding"
+                    self._send_keepalive(
+                        model_info["name"],
+                        is_embedding=is_embedding,
+                        description=model_info["description"]
+                    )
 
             except Exception as e:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive error: {type(e).__name__}: {e}"
                 )
 
-    def _send_keepalive(self, model_name, is_embedding=False):
+    def _send_keepalive(self, model_name, is_embedding=False, description=""):
         """
         Send a minimal request to keep a model loaded.
 
         @param model_name Name of the model to ping
         @param is_embedding Whether this is an embedding model
+        @param description Optional description of the model's purpose
         """
         try:
             url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
@@ -206,8 +232,9 @@ class OllamaClient:
             response = requests.post(url, json=payload, timeout=10)
 
             if response.status_code == 200:
+                desc_suffix = f" ({description})" if description else ""
                 print(
-                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Keepalive ping successful: {model_name}"
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Keepalive ping successful: {model_name}{desc_suffix}"
                 )
             else:
                 print(
