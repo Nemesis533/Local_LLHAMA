@@ -595,7 +595,7 @@ class TextToSpeech:
         # Synthesis configuration for natural voice
         syn_config = SynthesisConfig(
             volume=0.5,
-            length_scale=1,  # Slightly slower for clarity
+            length_scale=1,  
             noise_scale=0.667,  # Less noise/breathiness
             noise_w_scale=0.8,  # Smoother prosody
             normalize_audio=True,  # Consistent volume
