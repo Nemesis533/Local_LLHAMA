@@ -3,9 +3,8 @@ System Metrics Collection Module
 Collects CPU, RAM, and GPU metrics for backend health monitoring.
 """
 
-import json
 import subprocess
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
 
@@ -21,10 +20,8 @@ class SystemMetrics:
             "usage_per_core": psutil.cpu_percent(interval=1, percpu=True),
             "temperature": None,
         }
-
-        # Try to get CPU temperature using sensors
         try:
-            # First try psutil's sensors_temperatures (Linux only)
+            # First try psutil's sensors_temperatures
             temps = psutil.sensors_temperatures()
             if temps:
                 # Try coretemp first (Intel), then k10temp (AMD), then others

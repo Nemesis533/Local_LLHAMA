@@ -5,6 +5,9 @@ import time
 import wave
 from collections import deque
 
+import json
+from pathlib import Path
+import torch
 import numpy as np
 import pyaudio
 import whisper
@@ -34,10 +37,6 @@ class AudioTranscriptionClass:
         """
         # Auto-detect device if not specified
         if device is None:
-            import json
-            from pathlib import Path
-
-            import torch
 
             # Try to load from system_settings.json
             try:
@@ -94,7 +93,7 @@ class AudioTranscriptionClass:
         result = self.model.transcribe(filename)
         transcription = result["text"]
 
-        os.remove(filename)  # Cleanup
+        os.remove(filename) 
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription completed and temporary file removed."
         )
@@ -133,8 +132,6 @@ class AudioRecorderClass:
 
     def _load_settings(self):
         """Load audio settings from system_settings.json"""
-        import json
-        from pathlib import Path
 
         try:
             settings_file = Path(__file__).parent / "settings" / "system_settings.json"
@@ -186,7 +183,7 @@ class AudioRecorderClass:
         """Record audio using an existing stream if provided, otherwise create a new one."""
         p = existing_pyaudio
         stream = existing_stream
-        owns_resources = existing_stream is None  # Track if we created the resources
+        owns_resources = existing_stream is None  
 
         try:
             # Initialize PyAudio only if not provided
@@ -204,7 +201,7 @@ class AudioRecorderClass:
                     )
                     return "Audio initialization error"
 
-            # Open audio stream only if not provided
+            # Open audio stream only if not provided to avoid audio stream conflicts
             if stream is None:
                 try:
                     stream_params = {
@@ -271,7 +268,7 @@ class AudioRecorderClass:
             start_time = time.time()
             min_recording_duration = 2
 
-            # Recording loop with error handling
+            # Recording loop
             while True:
                 try:
                     data = stream.read(self.chunk_size, exception_on_overflow=False)
@@ -355,8 +352,7 @@ class AudioRecorderClass:
                         stream.close()
                     except:
                         pass
-                # Don't terminate PyAudio - it's a global shutdown
-                # Just allow time for device cleanup
+                # Don't terminate PyAudio - it's a global shutdown,just allow time for device cleanup
                 time.sleep(0.3)
             else:
                 print(
@@ -447,6 +443,8 @@ class WakeWordListener:
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.ready_event = threading.Event()  # Signal when ready to detect wake words
+        self.CHUNK = 1280
+        self.mic_stream = None  # Track current mic stream for reuse
 
         # Load audio device settings
         self._load_settings()
@@ -459,22 +457,18 @@ class WakeWordListener:
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] OpenWakeWord model loaded successfully"
         )
-        self.CHUNK = 1280
 
-        # Initialize PyAudio once
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio..."
         )
         self.audio = pyaudio.PyAudio()
-        self.mic_stream = None  # Track current stream for reuse
+        
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully"
         )
 
     def _load_settings(self):
         """Load audio settings from system_settings.json"""
-        import json
-        from pathlib import Path
 
         try:
             settings_file = Path(__file__).parent / "settings" / "system_settings.json"
@@ -543,211 +537,251 @@ class WakeWordListener:
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection resumed, pause_event is now: {self.pause_event.is_set()}"
         )
 
+    def _open_microphone_stream(self):
+        """Open and configure the microphone stream.
+        
+        Returns:
+            tuple: (mic_stream, device_sample_rate) or (None, None) on failure
+        """
+        try:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening microphone stream..."
+            )
+
+            # Query device info if device index is configured
+            device_sample_rate = self.sample_rate
+            if self.input_device_index is not None:
+                try:
+                    device_info = self.audio.get_device_info_by_index(
+                        self.input_device_index
+                    )
+                    device_default_rate = int(
+                        device_info.get("defaultSampleRate", 16000)
+                    )
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Device default sample rate: {device_default_rate} Hz"
+                    )
+                    device_sample_rate = device_default_rate
+                except Exception as dev_err:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not query device info: {dev_err}"
+                    )
+
+            stream_params = {
+                "format": pyaudio.paInt16,
+                "channels": 1,
+                "rate": device_sample_rate,
+                "input": True,
+                "frames_per_buffer": self.CHUNK,
+            }
+
+            if self.input_device_index is not None:
+                stream_params["input_device_index"] = self.input_device_index
+
+            self.mic_stream = self.audio.open(**stream_params)
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully at {device_sample_rate} Hz!"
+            )
+            return self.mic_stream, device_sample_rate
+
+        except OSError as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}"
+            )
+            time.sleep(5)
+            return None, None
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected stream error: {type(e).__name__}: {e}"
+            )
+            time.sleep(5)
+            return None, None
+
+    def _flush_audio_buffer(self, mic_stream):
+        """Flush initial audio buffer to discard any TTS echoes.
+        
+        Args:
+            mic_stream: The active microphone stream
+        """
+        flush_iterations = int(16000 / self.CHUNK)  # ~1 second at 16kHz
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Flushing audio buffer ({flush_iterations} chunks)..."
+        )
+        for _ in range(flush_iterations):
+            try:
+                mic_stream.read(self.CHUNK, exception_on_overflow=False)
+            except:
+                break
+
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio buffer flushed, ready for wake word detection"
+        )
+
+    def _process_audio_chunk(self, audio_data, device_sample_rate):
+        """Process a single audio chunk and return resampled numpy array.
+        
+        Args:
+            audio_data: Raw audio data bytes
+            device_sample_rate: Sample rate of the device
+            
+        Returns:
+            numpy.ndarray: Resampled audio data at 16kHz
+        """
+        np_audio = np.frombuffer(audio_data, dtype=np.int16)
+
+        # Resample to 16kHz if device is using a different sample rate
+        # OpenWakeWord models are trained on 16kHz audio
+        if device_sample_rate != 16000:
+            from scipy import signal
+
+            num_samples = int(len(np_audio) * 16000 / device_sample_rate)
+            np_audio = signal.resample(np_audio, num_samples).astype(np.int16)
+        
+        return np_audio
+
+    def _check_wake_word_detection(self, prediction, current_time, last_detection_time, 
+                                   cooldown_time, result_queue):
+        """Check if wake word was detected and handle it.
+        
+        Args:
+            prediction: Prediction dictionary from owwModel
+            current_time: Current timestamp
+            last_detection_time: Timestamp of last detection
+            cooldown_time: Cooldown period between detections
+            result_queue: Queue to put detection results
+            
+        Returns:
+            float: Updated last_detection_time, or original if no detection
+        """
+        for mdl in prediction.keys():
+            scores = list(self.owwModel.prediction_buffer[mdl])
+            last_scores = scores[-5:]
+            avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
+
+            if (avg_score >= self.wakeword_thr and 
+                (current_time - last_detection_time) > cooldown_time):
+                
+                # Clear queue and send noise floor
+                while not result_queue.empty():
+                    result_queue.get()
+                noise_floor = self.noise_floor_monitor.get_noise_floor()
+                result_queue.put(noise_floor)
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue."
+                )
+                return current_time
+        
+        return last_detection_time
+
+    def _run_detection_loop(self, mic_stream, device_sample_rate, result_queue):
+        """Run the main wake word detection loop.
+        
+        Args:
+            mic_stream: Active microphone stream
+            device_sample_rate: Sample rate of the device
+            result_queue: Queue for detection results
+        """
+        cooldown_time = 2
+        ignore_rms_window = 3
+        last_detection_time = 0
+
+        while not self.stop_event.is_set() and self.pause_event.is_set():
+            try:
+                audio_data = mic_stream.read(self.CHUNK, exception_on_overflow=False)
+                np_audio = self._process_audio_chunk(audio_data, device_sample_rate)
+                prediction = self.owwModel.predict(np_audio)
+                current_time = time.time()
+
+                # Update noise floor monitoring
+                if (current_time - last_detection_time) > ignore_rms_window:
+                    self.noise_floor_monitor.update_and_get_average_rms(audio_data)
+
+                # Check for wake word detection
+                last_detection_time = self._check_wake_word_detection(
+                    prediction, current_time, last_detection_time, 
+                    cooldown_time, result_queue
+                )
+
+            except OSError as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio read error in wake word detection: {e}"
+                )
+                break
+            except Exception as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error in wake word detection: {type(e).__name__}: {e}"
+                )
+                break
+
+    def _cleanup_microphone_stream(self, mic_stream):
+        """Cleanup microphone stream resources.
+        
+        Args:
+            mic_stream: The microphone stream to cleanup
+        """
+        self.ready_event.clear()
+
+        if mic_stream:
+            try:
+                mic_stream.stop_stream()
+                mic_stream.close()
+                self.mic_stream = None
+            except Exception as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error closing mic stream: {e}"
+                )
+
+        time.sleep(1.0)  # Allow time for device cleanup
+
     def listen_for_wake_word(self, result_queue):
-        # Store queue reference for clearing on resume
+        """Main wake word listening loop."""
         self.result_queue = result_queue
 
         while not self.stop_event.is_set():
-
-            # Wait if paused - block until resumed or stopped
+            # Wait if paused
             self.pause_event.wait(timeout=1.0)
 
-            # Check if we were stopped while waiting
             if self.stop_event.is_set():
                 print(
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Stop event detected, breaking"
                 )
                 break
 
-            # Check if still paused after timeout (shouldn't normally happen)
             if not self.pause_event.is_set():
                 continue
 
             mic_stream = None
 
             try:
-                # Open microphone stream with error handling (PyAudio already initialized in __init__)
-                try:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Opening microphone stream..."
-                    )
-
-                    # Query device info if device index is configured
-                    device_sample_rate = self.sample_rate
-                    if self.input_device_index is not None:
-                        try:
-                            device_info = self.audio.get_device_info_by_index(
-                                self.input_device_index
-                            )
-                            device_default_rate = int(
-                                device_info.get("defaultSampleRate", 16000)
-                            )
-                            print(
-                                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Device default sample rate: {device_default_rate} Hz"
-                            )
-                            # Use device's native sample rate
-                            device_sample_rate = device_default_rate
-                        except Exception as dev_err:
-                            print(
-                                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not query device info: {dev_err}"
-                            )
-
-                    stream_params = {
-                        "format": pyaudio.paInt16,
-                        "channels": 1,
-                        "rate": device_sample_rate,
-                        "input": True,
-                        "frames_per_buffer": self.CHUNK,
-                    }
-
-                    # Add input device if configured
-                    if self.input_device_index is not None:
-                        stream_params["input_device_index"] = self.input_device_index
-
-                    self.mic_stream = self.audio.open(**stream_params)
-                    mic_stream = self.mic_stream
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Microphone stream opened successfully at {device_sample_rate} Hz!"
-                    )
-                except OSError as e:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to open microphone: {e}"
-                    )
-                    time.sleep(5)  # Wait before retry
-                    continue
-                except Exception as e:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected stream error: {type(e).__name__}: {e}"
-                    )
-                    time.sleep(5)
+                # Open microphone stream
+                mic_stream, device_sample_rate = self._open_microphone_stream()
+                if mic_stream is None:
                     continue
 
                 print(
                     f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection active and listening..."
                 )
 
-                # Signal that we're ready to detect wake words
                 self.ready_event.set()
-
-                # IMPORTANT: Flush initial audio buffer to discard any TTS echoes
-                # Read and discard ~1 second of audio to clear the pipeline
-                flush_iterations = int(16000 / self.CHUNK)  # ~1 second at 16kHz
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Flushing audio buffer ({flush_iterations} chunks)..."
-                )
-                for _ in range(flush_iterations):
-                    try:
-                        mic_stream.read(self.CHUNK, exception_on_overflow=False)
-                    except:
-                        break  # If read fails, just continue
-
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio buffer flushed, ready for wake word detection"
-                )
-
-                cooldown_time = 2
-                ignore_rms_window = 3
-                last_detection_time = 0
-
-                # Main detection loop - exit if stopped OR paused
-                while not self.stop_event.is_set() and self.pause_event.is_set():
-                    try:
-                        audio_data = mic_stream.read(
-                            self.CHUNK, exception_on_overflow=False
-                        )
-                        np_audio = np.frombuffer(audio_data, dtype=np.int16)
-
-                        # Resample to 16kHz if device is using a different sample rate
-                        # OpenWakeWord models are trained on 16kHz audio
-                        if device_sample_rate != 16000:
-                            from scipy import signal
-
-                            # Calculate the resampling ratio
-                            num_samples = int(
-                                len(np_audio) * 16000 / device_sample_rate
-                            )
-                            np_audio = signal.resample(np_audio, num_samples).astype(
-                                np.int16
-                            )
-
-                        prediction = self.owwModel.predict(np_audio)
-
-                        current_time = time.time()
-
-                        if (current_time - last_detection_time) > ignore_rms_window:
-                            self.noise_floor_monitor.update_and_get_average_rms(
-                                audio_data
-                            )
-
-                        for mdl in self.owwModel.prediction_buffer.keys():
-                            scores = list(self.owwModel.prediction_buffer[mdl])
-                            last_scores = scores[-5:]
-                            avg_score = (
-                                sum(last_scores) / len(last_scores)
-                                if last_scores
-                                else 0
-                            )
-
-                            if (
-                                avg_score >= self.wakeword_thr
-                                and (current_time - last_detection_time) > cooldown_time
-                            ):
-                                last_detection_time = current_time
-                                while not result_queue.empty():
-                                    result_queue.get()
-                                noise_floor = self.noise_floor_monitor.get_noise_floor()
-                                result_queue.put(noise_floor)
-                                print(
-                                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue."
-                                )
-                                break
-                    except OSError as e:
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Audio read error in wake word detection: {e}"
-                        )
-                        break  # Exit inner loop to reinitialize
-                    except Exception as e:
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Unexpected error in wake word detection: {type(e).__name__}: {e}"
-                        )
-                        break  # Exit inner loop to reinitialize
+                self._flush_audio_buffer(mic_stream)
+                self._run_detection_loop(mic_stream, device_sample_rate, result_queue)
 
             except Exception as e:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Wake word listener error: {type(e).__name__}: {e}"
                 )
                 import traceback
-
                 traceback.print_exc()
             finally:
-                # Clear ready flag since we're no longer listening
-                self.ready_event.clear()
+                self._cleanup_microphone_stream(mic_stream)
 
-                # Cleanup resources (only close mic stream, keep PyAudio alive)
-                if mic_stream:
-                    try:
-                        mic_stream.stop_stream()
-                        mic_stream.close()
-                        self.mic_stream = None  # Clear reference
-                    except Exception as e:
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error closing mic stream: {e}"
-                        )
-
-                # Allow time for device cleanup - increased for device release
-                time.sleep(1.0)
-
-            # After cleanup, check if we should restart the detection loop
-            # If still not stopped and not paused, we'll reinitialize on next iteration
+            # Handle restart logic
             if not self.stop_event.is_set():
-                # Brief delay before attempting to reinitialize
                 if not self.pause_event.is_set():
-                    # Paused - will wait at top of loop
                     print(
                         f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detection paused, waiting for resume..."
                     )
                 else:
-                    # Error or other interruption - restart after delay
                     print(
                         f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Restarting wake word detection in 2 seconds..."
                     )
