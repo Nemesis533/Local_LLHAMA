@@ -104,7 +104,7 @@ class SoundPlayer:
                 self.loaded_sounds[sound_name] = pygame.mixer.Sound(audio_path)
             except pygame.error as e:
                 print(
-                    f"{self.class_prefix_message} [{LogLevel.ERROR.name}] Failed to load sound '{sound_name}': {e}"
+                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to load sound '{sound_name}': {e}"
                 )
                 return None
         return self.loaded_sounds[sound_name]
@@ -121,7 +121,7 @@ class SoundPlayer:
             return  # Silently skip if mixer initialization failed
 
         try:
-            # Clamp volume between 0.0 and 1.0
+            
             self.volume = max(0.0, min(volume, 1.0))
 
             # Load the sound object by name
@@ -235,11 +235,10 @@ class TextToSpeech:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error scanning voice directory: {e}"
             )
-        # Load output device settings
-        self._load_output_device_settings()
+
         # Initialize PyAudio with error handling
         # Important: Initialize AFTER pygame to avoid device conflicts
-        # Multiple retries to handle race conditions with pygame
+        # Multiple retries to handle portential race conditions with pygame
         self.p = None
         for init_attempt in range(3):
             try:
@@ -416,11 +415,6 @@ class TextToSpeech:
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"
             )
             self.configured_output_device_index = None
-
-    def _load_output_device_settings(self):
-        """Load and apply output device settings after PyAudio initialization"""
-        # This will be called after PyAudio is initialized
-        pass
 
     def preprocess_text(self, text: str) -> str:
         """
