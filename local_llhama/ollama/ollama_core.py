@@ -317,21 +317,53 @@ class OllamaClient:
         @param stream Whether to stream the response (generator) or return complete response (dict)
         @return Parsed JSON response dict if stream=False, otherwise yields dict chunks
         """
+        if stream:
+            # Delegate to streaming implementation
+            return self._send_message_streaming_impl(
+                user_message,
+                temperature,
+                top_p,
+                max_tokens,
+                message_type,
+                from_chat,
+                conversation_id,
+                original_text,
+            )
+        else:
+            # Non-streaming implementation
+            return self._send_message_impl(
+                user_message,
+                temperature,
+                top_p,
+                max_tokens,
+                message_type,
+                from_chat,
+                conversation_id,
+                original_text,
+            )
+
+    def _send_message_impl(
+        self,
+        user_message: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        message_type: str,
+        from_chat: bool,
+        conversation_id: str,
+        original_text: str,
+    ):
+        """Non-streaming message implementation."""
         # Validate input
         if not user_message or not user_message.strip():
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided"
             )
-            if stream:
-                yield {"response": "", "done": True}
-                return
-            else:
-                return {"commands": []}
+            return {"commands": []}
 
         # Choose system prompt based on message type and origin
         if message_type == "response":
             # SECOND PARSE: Response generation with full context
-            # Add resume conversation and safety prompts
             base_prompt = (
                 self.conversation_processor_prompt
                 if self.last_message_from_chat
@@ -345,9 +377,8 @@ class OllamaClient:
             if self.safety_prompt:
                 system_prompt += f"\n\n{self.safety_prompt}"
 
-            stream_suffix = " (streaming)" if stream else ""
             print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context{stream_suffix} (resume + safety prompts included)"
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (resume + safety prompts included)"
             )
         else:
             # FIRST PARSE: Decision-making with minimal context
@@ -356,17 +387,17 @@ class OllamaClient:
         # Build the prompt with context if available
         prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
 
-        # Use higher temperature for response processing to make it more creative
+        # Use higher temperature for response processing
         if message_type == "response":
-            temperature = 0.8  # More creative for processing Wikipedia/news responses
+            temperature = 0.8
             top_p = 0.90
 
-        # Track from_chat for response processing (for both stream and non-stream)
+        # Track from_chat for response processing
         if message_type == "command" and from_chat:
             self.last_message_from_chat = from_chat
             self.last_user_message = original_text if original_text else user_message
 
-        # Determine if we should use decision model (only for command parsing, not responses)
+        # Determine if we should use decision model
         use_decision_model = message_type == "command"
 
         # Send request to Ollama
@@ -376,55 +407,14 @@ class OllamaClient:
             temperature,
             top_p,
             max_tokens,
-            stream=stream,
+            stream=False,
             use_decision_model=use_decision_model,
         )
 
         if ollama_response is None:
-            if stream:
-                yield {"response": "", "done": True}
-                return
-            else:
-                return {"commands": []}
+            return {"commands": []}
 
-        # Handle streaming response
-        if stream:
-            full_response = ""
-            for chunk in ollama_response:
-                if "response" in chunk:
-                    full_response += chunk["response"]
-                # Always yield the chunk (includes done flag)
-                yield chunk
-
-            # Parse complete response and queue for embedding/storage
-            if conversation_id and original_text and full_response:
-                try:
-                    # Try to parse as JSON to extract nl_response
-                    parsed = json.loads(full_response)
-                    nl_response = parsed.get("nl_response", full_response)
-                except json.JSONDecodeError:
-                    # If not JSON, use full response
-                    nl_response = full_response
-
-                # Queue for embedding and storage
-                if nl_response and self.pg_client and self.embedding_client:
-                    try:
-                        embedding_batch = {
-                            "user_message": original_text,
-                            "assistant_response": nl_response,
-                            "conversation_id": conversation_id,
-                        }
-                        self.embedding_client.queue_messages(embedding_batch)
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued streaming response for embedding and storage"
-                        )
-                    except Exception as e:
-                        print(
-                            f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
-                        )
-            return
-
-        # Handle non-streaming response
+        # Parse and return
         parsed = self._parse_ollama_response(ollama_response)
 
         self._handle_post_processing(
@@ -437,6 +427,112 @@ class OllamaClient:
         )
 
         return parsed
+
+    def _send_message_streaming_impl(
+        self,
+        user_message: str,
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        message_type: str,
+        from_chat: bool,
+        conversation_id: str,
+        original_text: str,
+    ):
+        """Streaming message implementation (generator)."""
+        # Validate input
+        if not user_message or not user_message.strip():
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Empty message provided"
+            )
+            yield {"response": "", "done": True}
+            return
+
+        # Choose system prompt based on message type and origin
+        if message_type == "response":
+            # SECOND PARSE: Response generation with full context
+            base_prompt = (
+                self.conversation_processor_prompt
+                if self.last_message_from_chat
+                else self.response_processor_prompt
+            )
+
+            # Compose: base prompt + resume conversation + safety
+            system_prompt = base_prompt
+            if self.resume_conversation_prompt:
+                system_prompt += f"\n\n{self.resume_conversation_prompt}"
+            if self.safety_prompt:
+                system_prompt += f"\n\n{self.safety_prompt}"
+
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (streaming, resume + safety prompts included)"
+            )
+        else:
+            # FIRST PARSE: Decision-making with minimal context
+            system_prompt = self.system_prompt
+
+        # Build the prompt with context if available
+        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
+
+        # Use higher temperature for response processing
+        if message_type == "response":
+            temperature = 0.8
+            top_p = 0.90
+
+        # Track from_chat for response processing
+        if message_type == "command" and from_chat:
+            self.last_message_from_chat = from_chat
+            self.last_user_message = original_text if original_text else user_message
+
+        # Determine if we should use decision model
+        use_decision_model = message_type == "command"
+
+        # Send streaming request to Ollama
+        ollama_response = self._send_to_ollama(
+            prompt,
+            system_prompt,
+            temperature,
+            top_p,
+            max_tokens,
+            stream=True,
+            use_decision_model=use_decision_model,
+        )
+
+        if ollama_response is None:
+            yield {"response": "", "done": True}
+            return
+
+        # Yield chunks as they arrive
+        full_response = ""
+        for chunk in ollama_response:
+            if "response" in chunk:
+                full_response += chunk["response"]
+            yield chunk
+
+        # Parse complete response and queue for embedding/storage
+        if conversation_id and original_text and full_response:
+            try:
+                parsed = json.loads(full_response)
+                nl_response = parsed.get("nl_response", full_response)
+            except json.JSONDecodeError:
+                nl_response = full_response
+
+            # Queue for embedding and storage
+            if nl_response and self.pg_client and self.embedding_client:
+                try:
+                    embedding_batch = {
+                        "user_message": original_text,
+                        "assistant_response": nl_response,
+                        "conversation_id": conversation_id,
+                    }
+                    self.embedding_client.queue_messages(embedding_batch)
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued streaming response for embedding and storage"
+                    )
+                except Exception as e:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
+                    )
 
     def send_message_streaming(
         self,
