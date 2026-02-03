@@ -439,13 +439,14 @@ class ChatHandler:
 
             # Stream the response conversion - accumulate full response first
             full_response = ""
-            for chunk in self.command_llm.send_message_streaming(
+            for chunk in self.command_llm.send_message(
                 prompt_with_context,
                 max_tokens=self.max_tokens,
                 message_type="response",
                 from_chat=True,
                 conversation_id=conversation_id,
                 original_text=original_user_query,
+                stream=True,
             ):
                 chunk_text = chunk.get("response", "")
                 if chunk_text:
@@ -537,12 +538,13 @@ class ChatHandler:
 
             # Stream the response - accumulate full response first, then extract and stream nl_response
             full_response = ""
-            for chunk in self.command_llm.send_message_streaming(
+            for chunk in self.command_llm.send_message(
                 prompt,
                 max_tokens=self.max_tokens,
                 from_chat=True,
                 conversation_id=conversation_id,
                 original_text=text,
+                stream=True,
             ):
                 chunk_text = chunk.get("response", "")
                 if chunk_text:
