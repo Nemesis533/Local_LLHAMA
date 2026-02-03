@@ -83,7 +83,6 @@ class AutomationManager:
                     -1,
                 )
 
-            # Create the automation
             result = self.pg_client.execute_write_returning_dict(
                 """
                 INSERT INTO automations (user_id, name, description, actions, is_active)
