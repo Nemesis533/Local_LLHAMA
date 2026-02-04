@@ -7,8 +7,6 @@ Ollama LLM server for command parsing and response processing.
 
 # === System Imports ===
 import json
-import threading
-import time
 
 import requests
 
@@ -25,6 +23,7 @@ from ..llm_prompts import (
 from ..shared_logger import LogLevel
 from .ollama_context_builders import ContextBuilder
 from .ollama_embeddings import EmbeddingClient
+from .ollama_keepalive import ModelKeepaliveManager
 
 
 class OllamaClient:
@@ -74,10 +73,6 @@ class OllamaClient:
         self.model = model
         self.decision_model = decision_model if decision_model else model
         self.use_separate_decision_model = use_separate_decision_model
-        self.keepalive_enabled = keepalive_enabled
-        self.keepalive_interval = keepalive_interval
-        self.keepalive_thread = None
-        self.keepalive_running = False
         self.ha_client = ha_client
         self.pg_client = pg_client
         self.conversation_loader = conversation_loader
@@ -106,8 +101,16 @@ class OllamaClient:
             host=self.host, model=embedding_model, pg_client=self.pg_client
         )
 
-        # Initialize models list for keepalive management
-        self._initialize_models_list()
+        # Initialize keepalive manager
+        self.keepalive_manager = ModelKeepaliveManager(
+            host=self.host,
+            interval=keepalive_interval,
+            enabled=keepalive_enabled,
+            log_prefix=self.class_prefix_message,
+        )
+
+        # Register models for keepalive
+        self._register_models_for_keepalive()
 
         # Context management - keep only last request and response
         self.last_user_message = None
@@ -128,122 +131,32 @@ class OllamaClient:
             simple_functions_context=simple_functions_context,
         )
 
-        # Start keepalive thread if enabled
-        if self.keepalive_enabled:
-            self._start_keepalive()
+        # Start keepalive manager
+        self.keepalive_manager.start()
 
-    def _initialize_models_list(self):
-        """Initialize the list of models for keepalive management."""
-        self.models = []
+    def _register_models_for_keepalive(self):
+        """Register models with the keepalive manager."""
+        # Register main text generation model
+        self.keepalive_manager.register_model(
+            model_name=self.model,
+            model_type="text",
+            description="Main text generation model"
+        )
         
-        # Add main text generation model
-        self.models.append({
-            "name": self.model,
-            "type": "text",
-            "description": "Main text generation model"
-        })
-        
-        # Add decision model if it's different from main model
+        # Register decision model if it's different from main model
         if self.use_separate_decision_model and self.decision_model != self.model:
-            self.models.append({
-                "name": self.decision_model,
-                "type": "text",
-                "description": "Decision-making model"
-            })
+            self.keepalive_manager.register_model(
+                model_name=self.decision_model,
+                model_type="text",
+                description="Decision-making model"
+            )
         
-        # Add embedding model if embedding client exists
+        # Register embedding model if embedding client exists
         if self.embedding_client:
-            self.models.append({
-                "name": self.embedding_client.model,
-                "type": "embedding",
-                "description": "Embedding generation model"
-            })
-
-    def _start_keepalive(self):
-        """Start the model keepalive background thread."""
-        if self.keepalive_running:
-            return
-
-        self.keepalive_running = True
-        self.keepalive_thread = threading.Thread(
-            target=self._keepalive_worker, daemon=True
-        )
-        self.keepalive_thread.start()
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model keepalive started (interval: {self.keepalive_interval}s)"
-        )
-
-    def _stop_keepalive(self):
-        """Stop the keepalive thread."""
-        self.keepalive_running = False
-        if self.keepalive_thread:
-            self.keepalive_thread.join(timeout=5)
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Model keepalive stopped"
-        )
-
-    def _keepalive_worker(self):
-        """Background worker that sends keepalive requests to models."""
-        while self.keepalive_running:
-            try:
-                # Wait for the interval
-                for _ in range(self.keepalive_interval):
-                    if not self.keepalive_running:
-                        return
-                    time.sleep(1)
-
-                # Send keepalive to all registered models
-                for model_info in self.models:
-                    is_embedding = model_info["type"] == "embedding"
-                    self._send_keepalive(
-                        model_info["name"],
-                        is_embedding=is_embedding,
-                        description=model_info["description"]
-                    )
-
-            except Exception as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive error: {type(e).__name__}: {e}"
-                )
-
-    def _send_keepalive(self, model_name, is_embedding=False, description=""):
-        """
-        Send a minimal request to keep a model loaded.
-
-        @param model_name Name of the model to ping
-        @param is_embedding Whether this is an embedding model
-        @param description Optional description of the model's purpose
-        """
-        try:
-            url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
-
-            if is_embedding:
-                # For embedding models, embed a single character
-                payload = {"model": model_name, "input": "1"}
-            else:
-                # For LLM models, generate a minimal response
-                payload = {
-                    "model": model_name,
-                    "prompt": "Reply only with the number 1, nothing else.",
-                    "stream": False,
-                    "options": {"num_predict": 2, "temperature": 0},
-                }
-
-            response = requests.post(url, json=payload, timeout=10)
-
-            if response.status_code == 200:
-                desc_suffix = f" ({description})" if description else ""
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Keepalive ping successful: {model_name}{desc_suffix}"
-                )
-            else:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive ping failed for {model_name}: HTTP {response.status_code}"
-                )
-
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Keepalive failed for {model_name}: {type(e).__name__}: {e}"
+            self.keepalive_manager.register_model(
+                model_name=self.embedding_client.model,
+                model_type="embedding",
+                description="Embedding generation model"
             )
 
     def _build_extended_prompt(self):
