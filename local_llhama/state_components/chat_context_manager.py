@@ -62,16 +62,15 @@ class ChatContextManager:
         self.context_word_limits = {}
 
         # Context window configuration
-        self.DEFAULT_CONTEXT_WORDS = default_context_words
-        self.MIN_CONTEXT_WORDS = min_context_words
-        self.CONTEXT_REDUCTION_FACTOR = context_reduction_factor
-        self.HISTORY_EXCHANGES = history_exchanges
-        self.CONTEXT_REDUCTION_FACTOR = context_reduction_factor
+        self.default_context_words = default_context_words
+        self.min_context_words = min_context_words
+        self.context_reduction_factor = context_reduction_factor
+        self.history_exchanges = history_exchanges
 
         # Context summarization configuration
-        self.CONTEXT_MANAGEMENT_MODE = context_management_mode
-        self.CONTEXT_SUMMARIZATION_MODEL = context_summarization_model
-        self.CONTEXT_SUMMARY_TARGET_WORDS = context_summary_target_words
+        self.context_management_mode = context_management_mode
+        self.context_summarization_model = context_summarization_model
+        self.context_summary_target_words = context_summary_target_words
 
         # Initialize context summarizer if summarization is enabled
         self.context_summarizer = None
@@ -177,7 +176,7 @@ class ChatContextManager:
             try:
                 # Get current context word limit for this client
                 if client_id not in self.context_word_limits:
-                    self.context_word_limits[client_id] = self.DEFAULT_CONTEXT_WORDS
+                    self.context_word_limits[client_id] = self.default_context_words
 
                 max_words = self.context_word_limits[client_id]
 
@@ -240,7 +239,7 @@ class ChatContextManager:
             # Check if prompt exceeds target length and process accordingly
             prompt_words = len(prompt.split())
             target_words = self.context_word_limits.get(
-                client_id, self.DEFAULT_CONTEXT_WORDS
+                client_id, self.default_context_words
             )
 
             if prompt_words > target_words:
@@ -274,7 +273,7 @@ class ChatContextManager:
             # Check if prompt exceeds target length and process accordingly
             prompt_words = len(prompt.split())
             target_words = self.context_word_limits.get(
-                client_id, self.DEFAULT_CONTEXT_WORDS
+                client_id, self.default_context_words
             )
 
             if prompt_words > target_words:
@@ -314,9 +313,9 @@ class ChatContextManager:
         )
 
         # Keep only last N interactions (configurable)
-        if len(self.conversation_history[client_id]) > self.HISTORY_EXCHANGES:
+        if len(self.conversation_history[client_id]) > self.history_exchanges:
             self.conversation_history[client_id] = self.conversation_history[client_id][
-                -self.HISTORY_EXCHANGES :
+                -self.history_exchanges :
             ]
 
         print(
@@ -334,7 +333,7 @@ class ChatContextManager:
         @param target_words Target word count for reduced context
         @return Processed context (summarized or truncated)
         """
-        if self.CONTEXT_MANAGEMENT_MODE == "summarize" and self.context_summarizer:
+        if self.context_management_mode == "summarize" and self.context_summarizer:
             return self._handle_context_with_summarization(
                 client_id, context_text, target_words
             )
@@ -392,7 +391,7 @@ class ChatContextManager:
             summary = self.context_summarizer.summarize_context(
                 context_text=text_to_summarize,
                 target_words=summary_words,
-                model_preference=self.CONTEXT_SUMMARIZATION_MODEL,
+                model_preference=self.context_summarization_model,
             )
 
             if summary:
@@ -455,11 +454,11 @@ class ChatContextManager:
         @param client_id Client identifier
         """
         if client_id not in self.context_word_limits:
-            self.context_word_limits[client_id] = self.DEFAULT_CONTEXT_WORDS
+            self.context_word_limits[client_id] = self.default_context_words
 
         old_limit = self.context_word_limits[client_id]
         new_limit = max(
-            int(old_limit * self.CONTEXT_REDUCTION_FACTOR), self.MIN_CONTEXT_WORDS
+            int(old_limit * self.context_reduction_factor), self.min_context_words
         )
         self.context_word_limits[client_id] = new_limit
 
