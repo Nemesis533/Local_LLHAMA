@@ -65,7 +65,7 @@ class SettingLoaderClass:
         missing_vars = []
         warnings = []
 
-        # Check for Home Assistant credentials (critical for HA integration)
+        # Check for Home Assistant credentials
         ha_base_url = os.getenv("HA_BASE_URL", "").strip()
         ha_token = os.getenv("HA_TOKEN", "").strip()
 
@@ -139,7 +139,7 @@ class SettingLoaderClass:
             file_size = os.path.getsize(self.settings_file)
             if file_size == 0:
                 raise ValueError(f"Settings file is empty: {self.settings_file}")
-            elif file_size > 10 * 1024 * 1024:  # 10MB limit
+            elif file_size > 10 * 1024 * 1024:  # 10MB limit, given whats inside, not expected to be large
                 print(
                     f"{self.class_prefix_message} {LogLevel.WARNING} Settings file is very large ({file_size} bytes)"
                 )
