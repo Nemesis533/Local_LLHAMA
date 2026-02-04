@@ -54,7 +54,7 @@ class SimpleFunctions:
         self.ollama_host = ollama_host
         self.ollama_embedding_model = ollama_embedding_model or "nomic-embed-text"
         self.similarity_threshold = (
-            0.5  # Default threshold for memory search similarity
+            0.7  # Default threshold for memory search similarity
         )
         self.settings_loader = settings_loader
 
@@ -78,10 +78,8 @@ class SimpleFunctions:
             )
         self.command_schema = self._load_command_schema(command_schema_path)
 
-        # Initialize calendar manager with PostgreSQL client
         self.calendar = CalendarManager(pg_client)
 
-        # Initialize automation manager with PostgreSQL client
         self.automation = AutomationManager(pg_client)
 
         # Common headers for HTTP requests
@@ -812,25 +810,13 @@ class SimpleFunctions:
                 return entity_info.get("display_name")
         return None
 
-    def find_in_memory(self, query, user_id, limit=3, role=None, days_back=None):
+    def _generate_query_embedding(self, query: str):
         """
-        Find most similar messages using vector similarity search with pgvector
-        and keyword matching.
+        @brief Generate embedding vector for a query using Ollama.
 
-        @param query: Text query to search for in past conversations
-        @param user_id: User ID to filter messages by
-        @param limit: Number of similar messages to return (default 3)
-        @param role: Optional role filter ('user', 'assistant', or None for both)
-        @param days_back: Optional number of days to look back (None = all time)
-        @return: Formatted string describing found memories or error message
+        @param query: Text query to embed
+        @return: Embedding vector or None if generation fails
         """
-        if not self.pg_client or not query:
-            return "No query provided for memory search."
-
-        if not self.ollama_host:
-            return "Ollama host not configured for memory search."
-
-        # Generate embedding from query using Ollama
         try:
             import requests
 
@@ -846,51 +832,83 @@ class SimpleFunctions:
             )
             response.raise_for_status()
             embedding = response.json().get("embedding")
-            if not embedding:
-                return "Could not generate embedding for search."
+            return embedding
         except Exception as e:
             print(
                 f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}"
             )
-            return "Could not generate embedding for search."
+            return None
 
-        try:
-            import re
+    def _extract_keywords(self, query: str):
+        """
+        @brief Extract alphanumeric keywords from a query for keyword matching.
 
-            # Extract alphanumeric keywords from query, lowercase for matching
-            keywords = re.findall(r"\w+", query.lower())
-            print(
-                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}"
-            )
+        @param query: Text query to extract keywords from
+        @return: List of lowercase keywords
+        """
+        import re
+        keywords = re.findall(r"\w+", query.lower())
+        print(
+            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}"
+        )
+        return keywords
 
-            # Build keyword search conditions (OR logic: match any keyword)
-            keyword_conditions = []
-            keyword_params = []
-            for keyword in keywords:
-                keyword_conditions.append("LOWER(m.content) ILIKE %s")
-                keyword_params.append(f"%{keyword}%")
-            keyword_where = (
-                " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
-            )
+    def _build_keyword_conditions(self, keywords: list):
+        """
+        @brief Build SQL conditions and params for keyword matching.
 
-            # Build role filter condition
-            if role:
-                role_condition = "AND m.role = %s"
-                role_params = [role, role]  # For both vector_search and keyword_search
-            else:
-                role_condition = ""
-                role_params = []
+        @param keywords: List of keywords to match
+        @return: Tuple of (keyword_where_clause, keyword_params)
+        """
+        keyword_conditions = []
+        keyword_params = []
+        for keyword in keywords:
+            keyword_conditions.append("LOWER(m.content) ILIKE %s")
+            keyword_params.append(f"%{keyword}%")
+        keyword_where = (
+            " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
+        )
+        return keyword_where, keyword_params
 
-            # Build date filter condition
-            if days_back is not None:
-                date_condition = "AND m.created_at >= CURRENT_DATE - INTERVAL '%s days'"
-                date_params = [days_back, days_back]  # For both searches
-            else:
-                date_condition = ""
-                date_params = []
+    def _build_filter_conditions(self, role: str, days_back: int):
+        """
+        @brief Build SQL filter conditions for role and date filtering.
 
-            # Hybrid search: vector similarity + keyword matching
-            sql_query = f"""
+        @param role: Optional role filter ('user', 'assistant', or None)
+        @param days_back: Optional days to look back (None = all time)
+        @return: Tuple of (role_condition, role_params, date_condition, date_params)
+        """
+        # Build role filter condition
+        if role:
+            role_condition = "AND m.role = %s"
+            role_params = [role, role]  # For both vector_search and keyword_search
+        else:
+            role_condition = ""
+            role_params = []
+
+        # Build date filter condition
+        if days_back is not None:
+            date_condition = "AND m.created_at >= CURRENT_DATE - INTERVAL '%s days'"
+            date_params = [days_back, days_back]  # For both searches
+        else:
+            date_condition = ""
+            date_params = []
+
+        return role_condition, role_params, date_condition, date_params
+
+    def _build_memory_search_query(
+        self, keywords: list, keyword_where: str, role_condition: str, date_condition: str
+    ) -> str:
+        """
+        @brief Build the complete SQL query for hybrid memory search.
+
+        @param keywords: List of keywords for similarity calculation
+        @param keyword_where: WHERE clause for keyword matching
+        @param role_condition: SQL condition for role filtering
+        @param date_condition: SQL condition for date filtering
+        @return: Complete SQL query string
+        """
+        return f"""
             WITH vector_search AS (
                 SELECT m.id, m.content, m.role, m.created_at, m.conversation_id,
                     1 - (me.vector <=> %s::vector) AS similarity
@@ -943,94 +961,177 @@ class SimpleFunctions:
             LIMIT %s
             """
 
-            # Build params tuple
-            params_tuple = [
-                embedding,  # vector_search embedding
-                user_id,
-                *role_params[:1],  # role for vector_search (if any)
-                *date_params[:1],  # days_back for vector_search (if any)
-                embedding,  # vector_search threshold comparison
-                self.similarity_threshold,
-                *keyword_params,  # keyword LIKE params for keyword_search similarity calculation
-                user_id,
-                *role_params[1:2],  # role for keyword_search (if any)
-                *date_params[1:2],  # days_back for keyword_search (if any)
-                *keyword_params,  # keyword LIKE params for WHERE clause
-                limit,
-            ]
+    def _build_query_params(
+        self,
+        embedding: list,
+        user_id: int,
+        role_params: list,
+        date_params: list,
+        keyword_params: list,
+        limit: int,
+    ) -> tuple:
+        """
+        @brief Build the complete parameter tuple for the SQL query.
 
-            # Debug
+        @param embedding: Query embedding vector
+        @param user_id: User ID to filter by
+        @param role_params: Role filter parameters
+        @param date_params: Date filter parameters
+        @param keyword_params: Keyword matching parameters
+        @param limit: Maximum number of results
+        @return: Tuple of query parameters
+        """
+        return [
+            embedding,  # vector_search embedding
+            user_id,
+            *role_params[:1],  # role for vector_search (if any)
+            *date_params[:1],  # days_back for vector_search (if any)
+            embedding,  # vector_search threshold comparison
+            self.similarity_threshold,
+            *keyword_params,  # keyword LIKE params for keyword_search similarity calculation
+            user_id,
+            *role_params[1:2],  # role for keyword_search (if any)
+            *date_params[1:2],  # days_back for keyword_search (if any)
+            *keyword_params,  # keyword LIKE params for WHERE clause
+            limit,
+        ]
+
+    def _process_memory_results(self, results: list) -> list:
+        """
+        @brief Process raw database results into structured memory objects.
+
+        @param results: Raw database query results
+        @return: List of processed memory dictionaries
+        """
+        filtered_results = []
+        for row in results or []:
+            if len(row) < 3:
+                print(
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Skipping malformed row: {row}"
+                )
+                continue
+            filtered_results.append(
+                {
+                    "user_message": row[0],
+                    "created_at": row[1],
+                    "similarity": float(row[2]),
+                    "assistant_response": (
+                        row[3] if len(row) > 3 and row[3] else None
+                    ),
+                    "message_role": (
+                        row[4] if len(row) > 4 else "user"
+                    ),  # Track what role the message was
+                }
+            )
+        return filtered_results
+
+    def _format_memory_response(self, memories: list) -> str:
+        """
+        @brief Format memory search results into a natural language response.
+
+        @param memories: List of memory dictionaries
+        @return: Formatted response string
+        """
+        if not memories:
+            return f"No memories found with similarity above {self.similarity_threshold:.2f}."
+
+        print(
+            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(memories)} memories above threshold {self.similarity_threshold:.2f}"
+        )
+        for idx, result in enumerate(memories, 1):
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f} (Role: {result.get('message_role', 'unknown')})"
+            )
+
+        # Format results as a natural language string
+        response_parts = [
+            f"I found {len(memories)} relevant memory/memories from our past conversations:"
+        ]
+
+        for idx, result in enumerate(memories, 1):
+            timestamp = (
+                result["created_at"].strftime("%B %d, %Y")
+                if hasattr(result["created_at"], "strftime")
+                else str(result["created_at"])
+            )
+            similarity_pct = int(result["similarity"] * 100)
+            msg_role = result.get("message_role", "user")
+
+            response_parts.append(f"\n{idx}. (Similarity: {similarity_pct}%)")
+
+            # Format differently based on whether it's a user or assistant message
+            if msg_role == "assistant":
+                response_parts.append(
+                    f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\""
+                )
+            else:
+                response_parts.append(
+                    f"   You asked: \"{result['user_message']}\""
+                )
+                if result.get("assistant_response"):
+                    response_parts.append(
+                        f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\""
+                    )
+
+            response_parts.append(f"   (from {timestamp})")
+
+        return "\n".join(response_parts)
+
+    def find_in_memory(self, query, user_id, limit=3, role=None, days_back=None):
+        """
+        Find most similar messages using vector similarity search with pgvector
+        and keyword matching.
+
+        @param query: Text query to search for in past conversations
+        @param user_id: User ID to filter messages by
+        @param limit: Number of similar messages to return (default 3)
+        @param role: Optional role filter ('user', 'assistant', or None for both)
+        @param days_back: Optional number of days to look back (None = all time)
+        @return: Formatted string describing found memories or error message
+        """
+        # Validate inputs
+        if not self.pg_client or not query:
+            return "No query provided for memory search."
+
+        if not self.ollama_host:
+            return "Ollama host not configured for memory search."
+
+        # Generate embedding from query
+        embedding = self._generate_query_embedding(query)
+        if not embedding:
+            return "Could not generate embedding for search."
+
+        try:
+            # Extract keywords for hybrid search
+            keywords = self._extract_keywords(query)
+            keyword_where, keyword_params = self._build_keyword_conditions(keywords)
+
+            # Build filter conditions
+            role_condition, role_params, date_condition, date_params = (
+                self._build_filter_conditions(role, days_back)
+            )
+
+            # Build SQL query
+            sql_query = self._build_memory_search_query(
+                keywords, keyword_where, role_condition, date_condition
+            )
+
+            # Build parameters
+            params_tuple = self._build_query_params(
+                embedding, user_id, role_params, date_params, keyword_params, limit
+            )
+
+            # Debug output
             print(
                 f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] SQL placeholders: {sql_query.count('%s')}, Params length: {len(params_tuple)}"
             )
 
+            # Execute query
             results = self.pg_client.execute_query(sql_query, tuple(params_tuple))
 
-            filtered_results = []
-            for row in results or []:
-                if len(row) < 3:
-                    print(
-                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Skipping malformed row: {row}"
-                    )
-                    continue
-                filtered_results.append(
-                    {
-                        "user_message": row[0],
-                        "created_at": row[1],
-                        "similarity": float(row[2]),
-                        "assistant_response": (
-                            row[3] if len(row) > 3 and row[3] else None
-                        ),
-                        "message_role": (
-                            row[4] if len(row) > 4 else "user"
-                        ),  # Track what role the message was
-                    }
-                )
-
-            if filtered_results:
-                print(
-                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Found {len(filtered_results)} memories above threshold {self.similarity_threshold:.2f}"
-                )
-                for idx, result in enumerate(filtered_results, 1):
-                    print(
-                        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}]   {idx}. Similarity: {result['similarity']:.4f} (Role: {result.get('message_role', 'unknown')})"
-                    )
-
-                # Format results as a natural language string
-                response_parts = [
-                    f"I found {len(filtered_results)} relevant memory/memories from our past conversations:"
-                ]
-
-                for idx, result in enumerate(filtered_results, 1):
-                    timestamp = (
-                        result["created_at"].strftime("%B %d, %Y")
-                        if hasattr(result["created_at"], "strftime")
-                        else str(result["created_at"])
-                    )
-                    similarity_pct = int(result["similarity"] * 100)
-                    msg_role = result.get("message_role", "user")
-
-                    response_parts.append(f"\n{idx}. (Similarity: {similarity_pct}%)")
-
-                    # Format differently based on whether it's a user or assistant message
-                    if msg_role == "assistant":
-                        response_parts.append(
-                            f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\""
-                        )
-                    else:
-                        response_parts.append(
-                            f"   You asked: \"{result['user_message']}\""
-                        )
-                        if result.get("assistant_response"):
-                            response_parts.append(
-                                f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\""
-                            )
-
-                    response_parts.append(f"   (from {timestamp})")
-
-                return "\n".join(response_parts)
-
-            return f"No memories found with similarity above {self.similarity_threshold:.2f}."
+            # Process and format results
+            memories = self._process_memory_results(results)
+            return self._format_memory_response(memories)
 
         except Exception as e:
             import traceback
