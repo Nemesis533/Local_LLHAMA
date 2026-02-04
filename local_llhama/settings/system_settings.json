@@ -11,7 +11,7 @@
     },
     "noise_floor_multiplier": {
       "description": "Multiplier applied to noise floor when determining silence threshold (0.1-2.0)",
-      "value": 0.5
+      "value": 0.65
     },
     "noise_monitor_window_seconds": {
       "description": "Duration in seconds for noise floor monitoring window",

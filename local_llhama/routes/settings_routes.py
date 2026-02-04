@@ -149,18 +149,40 @@ def get_prompts():
     try:
         from local_llhama.settings import prompts
 
-        # Build response with all prompts
+        # Build response with all prompts in the format expected by frontend
+        # Each prompt should have 'value' and 'description' properties
         prompts_data = {
-            "response_processor_prompt": prompts.RESPONSE_PROCESSOR_PROMPT,
-            "smart_home_prompt_template": prompts.SMART_HOME_PROMPT_TEMPLATE,
-            "conversation_processor_prompt": prompts.CONVERSATION_PROCESSOR_PROMPT,
-            "calendar_event_prompt": prompts.CALENDAR_EVENT_PROMPT,
-            "resume_conversation_prompt": prompts.RESUME_CONVERSATION_PROMPT,
-            "smart_home_decision_making_extension": prompts.SMART_HOME_DECISION_MAKING_EXTENSION,
-            "safety_instruction_prompt": prompts.SAFETY_INSTRUCTION_PROMPT,
+            "response_processor_prompt": {
+                "value": prompts.RESPONSE_PROCESSOR_PROMPT,
+                "description": "Converts function results into natural language responses for the user"
+            },
+            "smart_home_prompt_template": {
+                "value": prompts.SMART_HOME_PROMPT_TEMPLATE,
+                "description": "Main system prompt for smart home command processing and decision-making"
+            },
+            "conversation_processor_prompt": {
+                "value": prompts.CONVERSATION_PROCESSOR_PROMPT,
+                "description": "Processes conversational responses with full context from chat interactions"
+            },
+            "calendar_event_prompt": {
+                "value": prompts.CALENDAR_EVENT_PROMPT,
+                "description": "Extracts structured calendar event information from natural language"
+            },
+            "resume_conversation_prompt": {
+                "value": prompts.RESUME_CONVERSATION_PROMPT,
+                "description": "Provides context when resuming a previous conversation"
+            },
+            "smart_home_decision_making_extension": {
+                "value": prompts.SMART_HOME_DECISION_MAKING_EXTENSION,
+                "description": "Extension prompt for enhanced smart home decision-making capabilities"
+            },
+            "safety_instruction_prompt": {
+                "value": prompts.SAFETY_INSTRUCTION_PROMPT,
+                "description": "Safety guidelines and content filtering instructions"
+            },
         }
 
-        return {"status": "ok", "prompts": prompts_data}
+        return jsonify({"status": "ok", "prompts": prompts_data})
     except Exception as e:
         return (
             jsonify({"status": "error", "message": f"Error loading prompts: {str(e)}"}),
@@ -218,7 +240,13 @@ Use {assistant_name} placeholder which will be replaced at runtime.
 
     for prompt_name in prompt_names:
         key = prompt_name.lower()
-        value = prompts.get(key, "")
+        prompt_data = prompts.get(key, {})
+        
+        # Handle both formats: direct string or {value, description} object
+        if isinstance(prompt_data, dict):
+            value = prompt_data.get("value", "")
+        else:
+            value = prompt_data or ""
 
         # Escape triple quotes in the value
         value = value.replace('"""', r"\"\"\"")

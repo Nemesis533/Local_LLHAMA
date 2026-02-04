@@ -204,45 +204,160 @@ class SettingLoaderClass:
             traceback.print_exc()
             raise ValueError(f"Failed to load JSON file: {repr(e)}") from e
 
+    def _save_settings(self):
+        """
+        @brief Save current settings data to JSON file.
+        @return True if successful, False otherwise.
+        """
+        try:
+            with open(self.settings_file, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2)
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Settings saved to {self.settings_file}"
+            )
+            return True
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to save settings: {repr(e)}"
+            )
+            return False
+
+    def _load_json_file(self, file_path: str, file_description: str = "file", default_data=None):
+        """
+        @brief Load a JSON file with consistent error handling.
+        @param file_path Path to the JSON file
+        @param file_description Description for logging (e.g., "system settings")
+        @param default_data Default data to return if file not found or on error
+        @return Loaded JSON data or default_data
+        """
+        try:
+            if not os.path.exists(file_path):
+                if default_data is None:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {file_description.capitalize()} file not found: {file_path}"
+                    )
+                    raise FileNotFoundError(f"{file_description.capitalize()} file not found: {file_path}")
+                else:
+                    print(
+                        f"{self.class_prefix_message} [{LogLevel.WARNING.name}] {file_description.capitalize()} file not found: {file_path}, using defaults"
+                    )
+                    return default_data
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded {file_description}"
+            )
+            return data
+
+        except FileNotFoundError:
+            raise
+        except json.JSONDecodeError as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Invalid JSON in {file_description}: {e}"
+            )
+            if default_data is not None:
+                return default_data
+            raise
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error loading {file_description}: {repr(e)}"
+            )
+            if default_data is not None:
+                return default_data
+            raise
+
+    def _get_setting_with_default(self, section: str, key: str, default_value, log_default: bool = True):
+        """
+        @brief Get a setting value with default fallback and logging.
+        @param section Section/class name in settings
+        @param key Setting key within section
+        @param default_value Default value if setting not found
+        @param log_default Whether to log when using default value
+        @return Setting value or default
+        """
+        if section not in self.data:
+            if log_default:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] {section} settings not found, using default for {key}"
+                )
+            return default_value
+
+        section_data = self.data.get(section, {})
+        setting = section_data.get(key, {})
+
+        if not setting or "value" not in setting:
+            if log_default:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] {section}.{key} not configured, using default: {default_value}"
+                )
+            return default_value
+
+        return setting.get("value", default_value)
+
+    def update_setting(self, section: str, key: str, value, value_type: str = "str", log_message: str = None):
+        """
+        @brief Generic method to update a setting and save to file.
+        @param section Section/class name in settings
+        @param key Setting key within section
+        @param value New value for the setting
+        @param value_type Type string for the setting ("str", "int", "dict", etc.)
+        @param log_message Optional custom log message
+        @return True if successful, False otherwise
+        """
+        try:
+            # Ensure section exists
+            if section not in self.data:
+                self.data[section] = {}
+
+            # Update setting
+            self.data[section][key] = {
+                "value": value,
+                "type": value_type,
+            }
+
+            # Save to file
+            if not self._save_settings():
+                return False
+
+            # Log success
+            if log_message:
+                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {log_message}")
+            else:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated {section}.{key} to '{value}'"
+                )
+            return True
+
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to update {section}.{key}: {repr(e)}"
+            )
+            return False
+
     def get_language_models(self):
         """
         @brief Get language-to-TTS-model mapping from settings.
 
         @return: Dictionary mapping language codes (e.g., 'en', 'fr') to TTS model filenames.
         """
-        if "TextToSpeech" not in self.data:
-            print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} TextToSpeech settings not found, using defaults"
-            )
-            return {
-                "en": "en_US-amy-medium.onnx",
-                "fr": "fr_FR-siwis-medium.onnx",
-                "de": "de_DE-thorsten-high.onnx",
-                "it": "it_IT-paola-medium.onnx",
-                "es": "es_AR-daniela-high.onnx",
-                "ru": "ru_RU-ruslan-medium.onnx",
-            }
+        default_models = {
+            "en": "en_US-amy-medium.onnx",
+            "fr": "fr_FR-siwis-medium.onnx",
+            "de": "de_DE-thorsten-high.onnx",
+            "it": "it_IT-paola-medium.onnx",
+            "es": "es_AR-daniela-high.onnx",
+            "ru": "ru_RU-ruslan-medium.onnx",
+        }
 
-        tts_settings = self.data.get("TextToSpeech", {})
-        language_models = tts_settings.get("language_models", {})
-
-        if not language_models or "value" not in language_models:
-            print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} language_models not configured, using defaults"
-            )
-            return {
-                "en": "en_US-amy-medium.onnx",
-                "fr": "fr_FR-siwis-medium.onnx",
-                "de": "de_DE-thorsten-high.onnx",
-                "it": "it_IT-paola-medium.onnx",
-                "es": "es_AR-daniela-high.onnx",
-                "ru": "ru_RU-ruslan-medium.onnx",
-            }
-
-        lang_models = language_models.get("value", {})
-        print(
-            f"{self.class_prefix_message} {LogLevel.INFO} Loaded {len(lang_models)} language model mappings"
+        lang_models = self._get_setting_with_default(
+            "TextToSpeech", "language_models", default_models, log_default=True
         )
+        
+        if lang_models != default_models:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded {len(lang_models)} language model mappings"
+            )
         return lang_models
 
     def update_language_models(self, language_models):
@@ -252,31 +367,13 @@ class SettingLoaderClass:
         @param language_models: Dictionary mapping language codes to TTS model filenames.
         @return: True if successful, False otherwise.
         """
-        try:
-            # Ensure TextToSpeech section exists
-            if "TextToSpeech" not in self.data:
-                self.data["TextToSpeech"] = {}
-
-            # Update language_models
-            self.data["TextToSpeech"]["language_models"] = {
-                "value": language_models,
-                "type": "dict",
-            }
-
-            # Save to file
-            with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2)
-
-            print(
-                f"{self.class_prefix_message} {LogLevel.INFO} Updated and saved {len(language_models)} language model mappings"
-            )
-            return True
-
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} {LogLevel.CRITICAL} Failed to update language models: {repr(e)}"
-            )
-            return False
+        return self.update_setting(
+            "TextToSpeech",
+            "language_models",
+            language_models,
+            value_type="dict",
+            log_message=f"Updated and saved {len(language_models)} language model mappings"
+        )
 
     def update_assistant_name(self, assistant_name):
         """
@@ -285,95 +382,29 @@ class SettingLoaderClass:
         @param assistant_name: String name for the assistant (e.g., 'LLHAMA', 'Jarvis').
         @return: True if successful, False otherwise.
         """
-        try:
-            # Ensure SettingLoaderClass section exists
-            if "SettingLoaderClass" not in self.data:
-                self.data["SettingLoaderClass"] = {}
-
-            # Update assistant_name
-            self.data["SettingLoaderClass"]["assistant_name"] = {
-                "value": assistant_name.strip(),
-                "type": "str",
-            }
-
-            # Save to file
-            with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2)
-
-            print(
-                f"{self.class_prefix_message} {LogLevel.INFO} Updated assistant name to '{assistant_name}'"
-            )
-            return True
-
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} {LogLevel.CRITICAL} Failed to update assistant name: {repr(e)}"
-            )
-            return False
+        return self.update_setting(
+            "SettingLoaderClass",
+            "assistant_name",
+            assistant_name.strip(),
+            value_type="str",
+            log_message=f"Updated assistant name to '{assistant_name}'"
+        )
 
     def _load_system_settings(self):
         """Load system settings from system_settings.json file."""
-        try:
-            settings_file = f"{self.base_path}/settings/system_settings.json"
-
-            if not os.path.exists(settings_file):
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] System settings file not found: {settings_file}"
-                )
-                raise FileNotFoundError(
-                    f"System settings file not found: {settings_file}"
-                )
-
-            with open(settings_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded system settings"
-            )
-            return data
-
-        except FileNotFoundError:
-            raise
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Error loading system settings: {e}"
-            )
-            raise
+        settings_file = f"{self.base_path}/settings/system_settings.json"
+        return self._load_json_file(settings_file, "system settings", default_data=None)
 
     def _load_web_search_config(self):
         """Load web search configuration from web_search_config.json file."""
-        try:
-            config_file = f"{self.base_path}/settings/web_search_config.json"
-
-            if not os.path.exists(config_file):
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Web search config file not found: {config_file}"
-                )
-                # Return default configuration
-                return {
-                    "allowed_websites": [],
-                    "max_results": 3,
-                    "timeout": 10,
-                    "api_tokens": {},
-                }
-
-            with open(config_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded web search config"
-            )
-            return data
-
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Error loading web search config: {e}"
-            )
-            # Return default configuration on error
-            return {
-                "allowed_websites": [],
-                "max_results": 3,
-                "timeout": 10,
-                "api_tokens": {},
-            }
+        config_file = f"{self.base_path}/settings/web_search_config.json"
+        default_config = {
+            "allowed_websites": [],
+            "max_results": 3,
+            "timeout": 10,
+            "api_tokens": {},
+        }
+        return self._load_json_file(config_file, "web search config", default_data=default_config)
 
     def get_system_settings(self):
         """Get the loaded system settings."""
@@ -788,24 +819,11 @@ class SettingLoaderClass:
         @brief Get the configured Whisper model name.
         @return Whisper model name (e.g., 'turbo', 'medium', 'small').
         """
-        if "AudioTranscriptionClass" not in self.data:
-            print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} AudioTranscriptionClass settings not found, using default 'turbo'"
-            )
-            return "turbo"
-
-        atc_settings = self.data.get("AudioTranscriptionClass", {})
-        whisper_model = atc_settings.get("whisper_model", {})
-
-        if not whisper_model or "value" not in whisper_model:
-            print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} whisper_model not configured, using default 'turbo'"
-            )
-            return "turbo"
-
-        model_name = whisper_model.get("value", "turbo")
+        model_name = self._get_setting_with_default(
+            "AudioTranscriptionClass", "whisper_model", "turbo", log_default=True
+        )
         print(
-            f"{self.class_prefix_message} {LogLevel.INFO} Using Whisper model: {model_name}"
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using Whisper model: {model_name}"
         )
         return model_name
 
@@ -818,35 +836,17 @@ class SettingLoaderClass:
         valid_models = ["turbo", "large", "medium", "small", "base", "tiny"]
         if model_name not in valid_models:
             print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} Invalid Whisper model '{model_name}'. Valid options: {valid_models}"
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Invalid Whisper model '{model_name}'. Valid options: {valid_models}"
             )
             return False
 
-        try:
-            # Ensure AudioTranscriptionClass section exists
-            if "AudioTranscriptionClass" not in self.data:
-                self.data["AudioTranscriptionClass"] = {}
-
-            # Update whisper_model
-            self.data["AudioTranscriptionClass"]["whisper_model"] = {
-                "value": model_name,
-                "type": "str",
-            }
-
-            # Save to file
-            with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2)
-
-            print(
-                f"{self.class_prefix_message} {LogLevel.INFO} Updated Whisper model to '{model_name}' and saved to file"
-            )
-            return True
-
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} {LogLevel.CRITICAL} Failed to update Whisper model: {repr(e)}"
-            )
-            return False
+        return self.update_setting(
+            "AudioTranscriptionClass",
+            "whisper_model",
+            model_name,
+            value_type="str",
+            log_message=f"Updated Whisper model to '{model_name}' and saved to file"
+        )
 
     def get_chat_handler_config(self):
         """
@@ -865,32 +865,17 @@ class SettingLoaderClass:
             "context_summary_target_words": 150,
         }
 
-        if "ChatHandler" not in self.data:
-            print(
-                f"{self.class_prefix_message} {LogLevel.WARNING} ChatHandler settings not found, using defaults"
-            )
-            # Add history_exchanges from system settings
-            defaults["history_exchanges"] = self.get_history_exchanges()
-            return defaults
-
-        ch_settings = self.data.get("ChatHandler", {})
-
         config = {}
         for key, default_value in defaults.items():
-            setting = ch_settings.get(key, {})
-            if not setting or "value" not in setting:
-                print(
-                    f"{self.class_prefix_message} {LogLevel.INFO} ChatHandler.{key} not configured, using default: {default_value}"
-                )
-                config[key] = default_value
-            else:
-                config[key] = setting.get("value", default_value)
+            config[key] = self._get_setting_with_default(
+                "ChatHandler", key, default_value, log_default=True
+            )
 
         # Always get history_exchanges from system settings
         config["history_exchanges"] = self.get_history_exchanges()
 
         print(
-            f"{self.class_prefix_message} {LogLevel.INFO} ChatHandler config: max_tokens={config['max_tokens']}, "
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] ChatHandler config: max_tokens={config['max_tokens']}, "
             f"default_context_words={config['default_context_words']}, min_context_words={config['min_context_words']}, "
             f"history_exchanges={config['history_exchanges']}, "
             f"context_reduction_factor={config['context_reduction_factor']}, "
