@@ -447,45 +447,6 @@ class OllamaClient:
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
                     )
 
-    def send_message_streaming(
-        self,
-        user_message: str,
-        temperature: float = 0.8,
-        top_p: float = 0.90,
-        max_tokens: int = 4096,
-        message_type: str = "command",
-        from_chat: bool = False,
-        conversation_id: str = None,
-        original_text: str = None,
-    ):
-        """
-        Send message to Ollama for processing with streaming response.
-        
-        DEPRECATED: Use send_message() with stream=True instead.
-
-        @param user_message The message to process (may include context for LLM)
-        @param temperature Sampling temperature (default 0.8 for more creative NL responses)
-        @param top_p Nucleus sampling parameter
-        @param max_tokens Maximum tokens to generate
-        @param message_type Either "command" for command parsing or "response" for processing function results
-        @param from_chat Whether this command originates from chat (tracked for response processing)
-        @param conversation_id Optional UUID of the conversation for message storage
-        @param original_text The original user text without LLM context (used for storage only)
-        @yield Dict chunks with partial responses
-        """
-        # Delegate to unified send_message with stream=True
-        yield from self.send_message(
-            user_message=user_message,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_tokens,
-            message_type=message_type,
-            from_chat=from_chat,
-            conversation_id=conversation_id,
-            original_text=original_text,
-            stream=True,
-        )
-
     def _build_prompt_with_context(
         self, user_message: str, message_type: str, from_chat: bool
     ):
