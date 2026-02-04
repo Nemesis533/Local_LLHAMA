@@ -306,6 +306,7 @@ class StateHandlers:
         @param language Language code for response
         """
         from_webui = getattr(self.sm, "from_webui", False)
+        client_id = getattr(self.sm, "client_id", None)
 
         if isinstance(self.sm.command_llm, OllamaClient):
             nl_output = self.sm.command_processor.process_command_result(
@@ -320,25 +321,9 @@ class StateHandlers:
                 )
 
                 message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                client_id = getattr(self.sm, "client_id", None)
-                self.sm.message_handler.send_to_web_server(message, client_id=client_id)
-
-                # Only queue for speaking if NOT from WebUI
-                if not from_webui:
-                    success = self.sm.queue_manager.put_safe(
-                        self.sm.queue_manager.speech_queue,
-                        [nl_message, lang],
-                        log_prefix=self.log_prefix,
-                    )
-                    if success:
-                        self.sm.state_manager.transition(self.sm.State.SPEAKING)
-                    else:
-                        self.sm.state_manager.transition(self.sm.State.LISTENING)
-                else:
-                    print(
-                        f"{self.log_prefix} [{LogLevel.INFO.name}] Skipping speech for WebUI request"
-                    )
-                    self.sm.state_manager.transition(self.sm.State.LISTENING)
+                self._send_response_and_transition(
+                    message, nl_message, lang, from_webui, client_id
+                )
             else:
                 # Fallback: use raw response
                 simple_function_results = [
@@ -348,43 +333,43 @@ class StateHandlers:
                 ]
                 fallback_msg = str(simple_function_results)
                 message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
-                client_id = getattr(self.sm, "client_id", None)
-                self.sm.message_handler.send_to_web_server(message, client_id=client_id)
-
-                # Only queue for speaking if NOT from WebUI
-                if not from_webui:
-                    success = self.sm.queue_manager.put_safe(
-                        self.sm.queue_manager.speech_queue,
-                        [fallback_msg, language],
-                        log_prefix=self.log_prefix,
-                    )
-                    if success:
-                        self.sm.state_manager.transition(self.sm.State.SPEAKING)
-                    else:
-                        self.sm.state_manager.transition(self.sm.State.LISTENING)
-                else:
-                    self.sm.state_manager.transition(self.sm.State.LISTENING)
+                self._send_response_and_transition(
+                    message, fallback_msg, language, from_webui, client_id
+                )
         else:
             # Non-Ollama client: use raw response
             message = f"{self.log_prefix} [Command Result]: {command_result}"
-            client_id = getattr(self.sm, "client_id", None)
-            self.sm.message_handler.send_to_web_server(message, client_id=client_id)
+            self._send_response_and_transition(
+                message, str(command_result), language, from_webui, client_id
+            )
 
-            # Only queue for speaking if NOT from WebUI
-            if not from_webui:
-                success = self.sm.queue_manager.put_safe(
-                    self.sm.queue_manager.speech_queue,
-                    [str(command_result), language],
-                    log_prefix=self.log_prefix,
-                )
-                if success:
-                    self.sm.state_manager.transition(self.sm.State.SPEAKING)
-                else:
-                    self.sm.state_manager.transition(self.sm.State.LISTENING)
-            else:
-                self.sm.state_manager.transition(self.sm.State.LISTENING)
+    def _send_response_and_transition(
+        self, web_message, speech_text, language, from_webui, client_id
+    ):
+        """
+        @brief Send response to web and optionally queue for speech, then transition.
+        @param web_message Message to send to web UI
+        @param speech_text Text to speak (if not from web UI)
+        @param language Language code for speech
+        @param from_webui Whether request originated from web UI
+        @param client_id Client identifier for routing
+        """
+        # Send to web UI
+        self.sm.message_handler.send_to_web_server(web_message, client_id=client_id)
 
+        # Only queue for speaking if NOT from WebUI
+        if not from_webui:
+            success = self.sm.queue_manager.put_safe(
+                self.sm.queue_manager.speech_queue,
+                [speech_text, language],
+                log_prefix=self.log_prefix,
+            )
             if success:
                 self.sm.state_manager.transition(self.sm.State.SPEAKING)
             else:
                 self.sm.state_manager.transition(self.sm.State.LISTENING)
+        else:
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Skipping speech for WebUI request"
+            )
+            self.sm.state_manager.transition(self.sm.State.LISTENING)
