@@ -10,7 +10,6 @@ import time
 from queue import Empty
 
 # === Custom Imports ===
-from ..audio_output import SoundActions
 from ..home_assistant import HomeAssistantClient
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
@@ -73,6 +72,72 @@ class StateMachineInstance:
         """
         print(f"[State Machine] [{LogLevel.INFO.name}] Initializing state machine...")
 
+        # Initialize core attributes
+        self._initialize_attributes(
+            base_path,
+            system_controller,
+            preset_response_queue,
+            language_models,
+            whisper_model,
+            chat_config,
+        )
+
+        # Initialize component managers
+        self._initialize_component_managers(
+            base_path, language_models, whisper_model, action_message_queue, web_server_message_queue, command_llm
+        )
+
+        # Initialize state handlers and workers
+        self._initialize_handlers_and_workers()
+
+        # Initialize LLM
+        self._initialize_llm(command_llm)
+
+        # Set up Home Assistant client
+        self.ha_client: HomeAssistantClient = ha_client
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Home Assistant client connected"
+        )
+
+        # Initialize chat handler for WebUI
+        self._initialize_chat_handler(chat_message_queue, command_llm, ha_client)
+
+        # Start worker threads
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting worker threads..."
+        )
+        self._start_worker_threads()
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Worker threads started"
+        )
+
+        print(
+            f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine initialization completed successfully"
+        )
+
+    # ===============================
+    # Initialization Helper Methods
+    # ===============================
+
+    def _initialize_attributes(
+        self,
+        base_path,
+        system_controller,
+        preset_response_queue,
+        language_models,
+        whisper_model,
+        chat_config,
+    ):
+        """
+        Initialize core instance attributes.
+
+        @param base_path Base path for audio files
+        @param system_controller Reference to the system controller
+        @param preset_response_queue Queue for preset API responses
+        @param language_models Dictionary mapping language codes to TTS model filenames
+        @param whisper_model Whisper model name to use
+        @param chat_config Dictionary with ChatHandler configuration
+        """
         self.base_path = base_path
         self.system_controller = system_controller
         self.preset_response_queue = preset_response_queue
@@ -82,17 +147,37 @@ class StateMachineInstance:
         self.whisper_model = whisper_model  # Store for restart
         self.chat_config = chat_config or {}  # Store for restart
 
+    def _initialize_component_managers(
+        self,
+        base_path,
+        language_models,
+        whisper_model,
+        action_message_queue,
+        web_server_message_queue,
+        command_llm,
+    ):
+        """
+        Initialize all component managers (queue, audio, thread, state, message, command).
+
+        @param base_path Base path for audio files
+        @param language_models Dictionary mapping language codes to TTS model filenames
+        @param whisper_model Whisper model name to use
+        @param action_message_queue Queue for action messages
+        @param web_server_message_queue Queue for web server messages
+        @param command_llm The LLM instance used for command parsing
+        """
         voice_dir = "/home/llhama-usr/Local_LLHAMA/piper_voices"
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Voice directory: {voice_dir}"
         )
 
-        # Initialize component managers
+        # Queue manager
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing queue manager..."
         )
         self.queue_manager = QueueManager()
 
+        # Audio manager
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing audio components (this may take a moment)..."
         )
@@ -103,11 +188,13 @@ class StateMachineInstance:
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Audio components initialized successfully"
         )
 
+        # Thread manager
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing thread manager..."
         )
         self.thread_manager = ThreadManager()
 
+        # State transition manager
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing state transition manager..."
         )
@@ -115,6 +202,7 @@ class StateMachineInstance:
             State.LOADING, self.class_prefix_message
         )
 
+        # Message handler
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing message handler..."
         )
@@ -122,6 +210,7 @@ class StateMachineInstance:
             action_message_queue, web_server_message_queue, self.class_prefix_message
         )
 
+        # Command processor
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing command processor..."
         )
@@ -129,16 +218,25 @@ class StateMachineInstance:
             command_llm, self.class_prefix_message
         )
 
-        # Initialize state handlers (delegates for state-specific logic)
+    def _initialize_handlers_and_workers(self):
+        """
+        Initialize state handlers and worker thread managers.
+        """
+        # State handlers (delegates for state-specific logic)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing state handlers..."
         )
         self.state_handlers = StateHandlers(self)
 
-        # Initialize worker threads manager
+        # Worker threads manager
         self.workers = WorkerThreads(self)
 
-        # Load the command LLM
+    def _initialize_llm(self, command_llm):
+        """
+        Initialize and load the command LLM.
+
+        @param command_llm The LLM instance used for command parsing
+        """
         self.command_llm = command_llm
         if not isinstance(self.command_llm, OllamaClient):
             print(
@@ -153,13 +251,14 @@ class StateMachineInstance:
                 f"{self.class_prefix_message} [{LogLevel.INFO.name}] Using Ollama client (no local model loading required)"
             )
 
-        # Home Assistant client interface
-        self.ha_client: HomeAssistantClient = ha_client
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Home Assistant client connected"
-        )
+    def _initialize_chat_handler(self, chat_message_queue, command_llm, ha_client):
+        """
+        Initialize the ChatHandler for WebUI chat messages.
 
-        # Initialize ChatHandler for WebUI chat messages (bypasses state machine)
+        @param chat_message_queue Queue for WebUI chat messages
+        @param command_llm The LLM instance used for chat
+        @param ha_client The Home Assistant client interface
+        """
         self.chat_handler = None
         if chat_message_queue:
             print(
@@ -198,19 +297,6 @@ class StateMachineInstance:
             print(
                 f"{self.class_prefix_message} [{LogLevel.INFO.name}] No chat queue provided - chat handler disabled"
             )
-
-        # Start worker threads
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Starting worker threads..."
-        )
-        self._start_worker_threads()
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] Worker threads started"
-        )
-
-        print(
-            f"{self.class_prefix_message} [{LogLevel.INFO.name}] State machine initialization completed successfully"
-        )
 
     # ===============================
     # Thread Workers
