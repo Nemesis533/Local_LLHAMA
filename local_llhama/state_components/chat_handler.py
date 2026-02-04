@@ -417,10 +417,8 @@ class ChatHandler:
         """
         try:
             # Add full conversation context for response generation
-            context_prompt, used_persistent = (
-                self.context_manager.get_context_for_prompt(
-                    client_id, original_user_query
-                )
+            context_prompt, _ = self.context_manager.get_context_for_prompt(
+                client_id, original_user_query
             )
 
             # Combine context with function result conversion instruction
@@ -515,7 +513,7 @@ class ChatHandler:
         """
         try:
             # Get context-enhanced prompt from context manager
-            prompt, used_persistent = self.context_manager.get_context_for_prompt(
+            prompt, _ = self.context_manager.get_context_for_prompt(
                 client_id, text
             )
 
