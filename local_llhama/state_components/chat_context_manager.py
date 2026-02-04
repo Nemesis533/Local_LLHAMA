@@ -163,139 +163,203 @@ class ChatContextManager:
         @param text Current user message
         @return tuple of (prompt, used_persistent_context)
         """
+        # Load persistent context from DB if not cached
+        persistent_context = self._load_persistent_context_from_db(client_id)
+
+        # Build appropriate prompt based on available context
+        if persistent_context:
+            return self._build_prompt_with_persistent_context(
+                client_id, text, persistent_context
+            )
+        elif self._has_memory_history(client_id):
+            return self._build_prompt_with_memory_only(client_id, text)
+        else:
+            return text, False
+
+    def _load_persistent_context_from_db(self, client_id):
+        """
+        Load and cache persistent context from database.
+
+        @param client_id The client identifier
+        @return Cached or newly loaded persistent context, or None
+        """
         conversation_id = self.client_conversations.get(client_id)
 
-        # Cache persistent context per client after first load
+        # Initialize cache if needed
         if not hasattr(self, "_persistent_context_cache"):
             self._persistent_context_cache = {}
 
+        # Return cached context if available
         persistent_context = self._persistent_context_cache.get(client_id)
+        if persistent_context is not None:
+            return persistent_context
 
-        # Load full context from DB if not already cached
-        if persistent_context is None and self.conversation_loader and conversation_id:
-            try:
-                # Get current context word limit for this client
-                if client_id not in self.context_word_limits:
-                    self.context_word_limits[client_id] = self.default_context_words
+        # Load from DB if available
+        if not (self.conversation_loader and conversation_id):
+            return None
 
-                max_words = self.context_word_limits[client_id]
+        try:
+            # Get current context word limit for this client
+            if client_id not in self.context_word_limits:
+                self.context_word_limits[client_id] = self.default_context_words
 
-                persistent_context = (
-                    self.conversation_loader.get_conversation_context_for_llm(
-                        conversation_id, max_words=max_words
-                    )
+            max_words = self.context_word_limits[client_id]
+
+            persistent_context = (
+                self.conversation_loader.get_conversation_context_for_llm(
+                    conversation_id, max_words=max_words
                 )
+            )
 
-                if persistent_context:
-                    # Cache it for subsequent messages
-                    self._persistent_context_cache[client_id] = persistent_context
+            if persistent_context:
+                # Cache for subsequent messages
+                self._persistent_context_cache[client_id] = persistent_context
 
-                    context_chars = len(persistent_context)
-                    context_words = len(persistent_context.split())
-                    print(
-                        f"{self.log_prefix} [{LogLevel.INFO.name}] Loaded and cached full context ({context_chars} chars, ~{context_words} words, limit: {max_words})"
-                    )
-                else:
-                    print(
-                        f"{self.log_prefix} [{LogLevel.INFO.name}] No persistent context for conversation {conversation_id}"
-                    )
-
-            except Exception as e:
+                context_chars = len(persistent_context)
+                context_words = len(persistent_context.split())
                 print(
-                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to load conversation context: {repr(e)}"
-                )
-
-        # Build prompt combining cached persistent context + in-memory history
-        if persistent_context:
-            from ..llm_prompts import RESUME_CONVERSATION_PROMPT
-
-            # Start with persistent context from DB (cached)
-            prompt = f"{RESUME_CONVERSATION_PROMPT}\n\n{persistent_context}"
-
-            # Add recent in-memory history if available
-            if (
-                client_id in self.conversation_history
-                and self.conversation_history[client_id]
-            ):
-                history = self.conversation_history[client_id]
-                prompt += (
-                    "\n\n---\n\nMost recent interactions (after the above history):\n"
-                )
-                for interaction in history:
-                    prompt += f"User: {interaction['user']}\n"
-                    prompt += f"Assistant: {interaction['assistant']}\n"
-
-                print(
-                    f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context + {len(history)} in-memory interactions"
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Loaded and cached full context ({context_chars} chars, ~{context_words} words, limit: {max_words})"
                 )
             else:
                 print(
-                    f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context only"
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] No persistent context for conversation {conversation_id}"
                 )
 
-            # Add current message
-            prompt += f"\n---\n\nThis is the user's next message: {text}"
+            return persistent_context
 
-            # Check if prompt exceeds target length and process accordingly
-            prompt_words = len(prompt.split())
-            target_words = self.context_word_limits.get(
-                client_id, self.default_context_words
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to load conversation context: {repr(e)}"
             )
+            return None
 
-            if prompt_words > target_words:
-                print(
-                    f"{self.log_prefix} [{LogLevel.INFO.name}] Context overflow detected ({prompt_words} > {target_words} words)"
-                )
-                # Extract just the context part (without current message) for processing
-                context_part = prompt.replace(
-                    f"\n---\n\nThis is the user's next message: {text}", ""
-                )
-                processed_context = self.handle_context_overflow(
-                    client_id, context_part, target_words - 50
-                )  # Reserve words for current message
-                prompt = f"{processed_context}\n---\n\nThis is the user's next message: {text}"
+    def _build_prompt_with_persistent_context(
+        self, client_id, text, persistent_context
+    ):
+        """
+        Build prompt combining persistent DB context with in-memory history.
 
-            return prompt, True
+        @param client_id The client identifier
+        @param text Current user message
+        @param persistent_context Cached persistent context from DB
+        @return tuple of (prompt, used_persistent_context)
+        """
+        from ..llm_prompts import RESUME_CONVERSATION_PROMPT
 
-        # No persistent context - use only in-memory history
-        elif (
-            client_id in self.conversation_history
-            and self.conversation_history[client_id]
-        ):
+        # Start with persistent context from DB
+        prompt = f"{RESUME_CONVERSATION_PROMPT}\n\n{persistent_context}"
+
+        # Add recent in-memory history if available
+        if self._has_memory_history(client_id):
             history = self.conversation_history[client_id]
-            history_text = "Previous interactions with the user:\n"
-            for interaction in history:
-                history_text += f"User: {interaction['user']}\n"
-                history_text += f"Assistant: {interaction['assistant']}\n"
-
-            prompt = f"{history_text}\nThis is the last thing the user asked: {text}"
-
-            # Check if prompt exceeds target length and process accordingly
-            prompt_words = len(prompt.split())
-            target_words = self.context_word_limits.get(
-                client_id, self.default_context_words
+            prompt += (
+                "\n\n---\n\nMost recent interactions (after the above history):\n"
             )
-
-            if prompt_words > target_words:
-                print(
-                    f"{self.log_prefix} [{LogLevel.INFO.name}] In-memory context overflow detected ({prompt_words} > {target_words} words)"
-                )
-                # Extract just the history part for processing
-                history_part = prompt.replace(
-                    f"\nThis is the last thing the user asked: {text}", ""
-                )
-                processed_history = self.handle_context_overflow(
-                    client_id, history_part, target_words - 30
-                )  # Reserve words for current message
-                prompt = f"{processed_history}\nThis is the last thing the user asked: {text}"
+            prompt += self._format_history_text(history)
 
             print(
-                f"{self.log_prefix} [{LogLevel.INFO.name}] Using in-memory history ({len(history)} interactions)"
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context + {len(history)} in-memory interactions"
             )
-            return prompt, False
+        else:
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Using cached persistent context only"
+            )
 
-        # No context available, use original text
-        return text, False
+        # Add current message and handle overflow
+        current_msg_marker = "\n---\n\nThis is the user's next message: "
+        prompt = self._check_and_handle_overflow(
+            client_id, prompt, text, current_msg_marker, reserve_words=50
+        )
+
+        return prompt, True
+
+    def _build_prompt_with_memory_only(self, client_id, text):
+        """
+        Build prompt using only in-memory history (no DB context).
+
+        @param client_id The client identifier
+        @param text Current user message
+        @return tuple of (prompt, used_persistent_context)
+        """
+        history = self.conversation_history[client_id]
+        history_text = "Previous interactions with the user:\n"
+        history_text += self._format_history_text(history)
+
+        # Add current message and handle overflow
+        current_msg_marker = "\nThis is the last thing the user asked: "
+        prompt = self._check_and_handle_overflow(
+            client_id, history_text, text, current_msg_marker, reserve_words=30
+        )
+
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Using in-memory history ({len(history)} interactions)"
+        )
+        return prompt, False
+
+    def _has_memory_history(self, client_id):
+        """
+        Check if client has in-memory conversation history.
+
+        @param client_id The client identifier
+        @return True if history exists, False otherwise
+        """
+        return (
+            client_id in self.conversation_history
+            and self.conversation_history[client_id]
+        )
+
+    def _format_history_text(self, history):
+        """
+        Format conversation history as text.
+
+        @param history List of interaction dictionaries
+        @return Formatted history string
+        """
+        formatted = ""
+        for interaction in history:
+            formatted += f"User: {interaction['user']}\n"
+            formatted += f"Assistant: {interaction['assistant']}\n"
+        return formatted
+
+    def _check_and_handle_overflow(
+        self, client_id, context_text, current_message, message_marker, reserve_words
+    ):
+        """
+        Check if prompt exceeds limits and handle overflow if needed.
+
+        @param client_id The client identifier
+        @param context_text Context text (without current message)
+        @param current_message Current user message
+        @param message_marker Marker text to separate context from message
+        @param reserve_words Words to reserve for current message
+        @return Final prompt with overflow handling applied
+        """
+        # Build full prompt
+        prompt = f"{context_text}{message_marker}{current_message}"
+
+        # Check if within limits
+        prompt_words = len(prompt.split())
+        target_words = self.context_word_limits.get(
+            client_id, self.default_context_words
+        )
+
+        if prompt_words <= target_words:
+            return prompt
+
+        # Handle overflow
+        overflow_type = (
+            "Context overflow"
+            if "persistent" in context_text.lower()
+            else "In-memory context overflow"
+        )
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] {overflow_type} detected ({prompt_words} > {target_words} words)"
+        )
+
+        processed_context = self.handle_context_overflow(
+            client_id, context_text, target_words - reserve_words
+        )
+        return f"{processed_context}{message_marker}{current_message}"
 
     def add_to_history(self, client_id, user_text, assistant_text):
         """
