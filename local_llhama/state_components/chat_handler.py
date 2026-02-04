@@ -511,6 +511,7 @@ class ChatHandler:
         @param client_id Client identifier for routing
         @param conversation_id Conversation identifier
         """
+        chunk_size = 5  # how many characters to send, used for smooth streaming
         try:
             # Get context-enhanced prompt from context manager
             prompt, _ = self.context_manager.get_context_for_prompt(
@@ -550,7 +551,6 @@ class ChatHandler:
                 nl_response = full_response
 
             # Now stream the extracted nl_response character by character for smooth display
-            chunk_size = 5  # Send a few characters at a time for smooth streaming
             for i in range(0, len(nl_response), chunk_size):
                 chunk_text = nl_response[i : i + chunk_size]
                 is_complete = i + chunk_size >= len(nl_response)
