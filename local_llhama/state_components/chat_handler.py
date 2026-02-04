@@ -288,13 +288,6 @@ class ChatHandler:
             results = self.ha_client.send_commands(structured_output, user_id=user_id)
 
             if results:
-                # Check if any simple function results need LLM conversion
-                has_simple_function = any(
-                    result.get("type") == "simple_function"
-                    for result in results
-                    if isinstance(result, dict)
-                )
-
                 # Always use LLM for natural response (handles both simple functions and HA commands)
                 if isinstance(self.command_llm, OllamaClient):
                     self._handle_simple_function_result(
