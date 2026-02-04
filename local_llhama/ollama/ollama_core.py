@@ -255,6 +255,77 @@ class OllamaClient:
                 original_text,
             )
 
+    def _prepare_system_prompt(self, message_type: str, is_streaming: bool = False):
+        """
+        Prepare system prompt based on message type.
+        
+        @param message_type Type of message (command/response)
+        @param is_streaming Whether this is for streaming (affects log message)
+        @return System prompt string
+        """
+        if message_type == "response":
+            # SECOND PARSE: Response generation with full context
+            base_prompt = (
+                self.conversation_processor_prompt
+                if self.last_message_from_chat
+                else self.response_processor_prompt
+            )
+
+            # Compose: base prompt + resume conversation + safety
+            system_prompt = base_prompt
+            if self.resume_conversation_prompt:
+                system_prompt += f"\n\n{self.resume_conversation_prompt}"
+            if self.safety_prompt:
+                system_prompt += f"\n\n{self.safety_prompt}"
+
+            mode_str = "streaming, " if is_streaming else ""
+            print(
+                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context ({mode_str}resume + safety prompts included)"
+            )
+        else:
+            # FIRST PARSE: Decision-making with minimal context
+            system_prompt = self.system_prompt
+        
+        return system_prompt
+
+    def _prepare_request_parameters(
+        self,
+        user_message: str,
+        temperature: float,
+        top_p: float,
+        message_type: str,
+        from_chat: bool,
+        original_text: str,
+    ):
+        """
+        Prepare request parameters and update internal state.
+        
+        @param user_message User's message
+        @param temperature Sampling temperature
+        @param top_p Nucleus sampling
+        @param message_type Type of message
+        @param from_chat Whether from chat
+        @param original_text Original text without context
+        @return Tuple of (prompt, temperature, top_p, use_decision_model)
+        """
+        # Build the prompt with context if available
+        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
+
+        # Use higher temperature for response processing
+        if message_type == "response":
+            temperature = 0.8
+            top_p = 0.90
+
+        # Track from_chat for response processing
+        if message_type == "command" and from_chat:
+            self.last_message_from_chat = from_chat
+            self.last_user_message = original_text if original_text else user_message
+
+        # Determine if we should use decision model
+        use_decision_model = message_type == "command"
+        
+        return prompt, temperature, top_p, use_decision_model
+
     def _send_message_impl(
         self,
         user_message: str,
@@ -274,44 +345,11 @@ class OllamaClient:
             )
             return {"commands": []}
 
-        # Choose system prompt based on message type and origin
-        if message_type == "response":
-            # SECOND PARSE: Response generation with full context
-            base_prompt = (
-                self.conversation_processor_prompt
-                if self.last_message_from_chat
-                else self.response_processor_prompt
-            )
-
-            # Compose: base prompt + resume conversation + safety
-            system_prompt = base_prompt
-            if self.resume_conversation_prompt:
-                system_prompt += f"\n\n{self.resume_conversation_prompt}"
-            if self.safety_prompt:
-                system_prompt += f"\n\n{self.safety_prompt}"
-
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (resume + safety prompts included)"
-            )
-        else:
-            # FIRST PARSE: Decision-making with minimal context
-            system_prompt = self.system_prompt
-
-        # Build the prompt with context if available
-        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
-
-        # Use higher temperature for response processing
-        if message_type == "response":
-            temperature = 0.8
-            top_p = 0.90
-
-        # Track from_chat for response processing
-        if message_type == "command" and from_chat:
-            self.last_message_from_chat = from_chat
-            self.last_user_message = original_text if original_text else user_message
-
-        # Determine if we should use decision model
-        use_decision_model = message_type == "command"
+        # Prepare system prompt and request parameters
+        system_prompt = self._prepare_system_prompt(message_type, is_streaming=False)
+        prompt, temperature, top_p, use_decision_model = self._prepare_request_parameters(
+            user_message, temperature, top_p, message_type, from_chat, original_text
+        )
 
         # Send request to Ollama
         ollama_response = self._send_to_ollama(
@@ -341,6 +379,45 @@ class OllamaClient:
 
         return parsed
 
+    def _queue_streaming_embeddings(
+        self,
+        conversation_id: str,
+        original_text: str,
+        full_response: str,
+    ):
+        """
+        Queue streaming response for embedding and storage.
+        
+        @param conversation_id Conversation UUID
+        @param original_text Original user text
+        @param full_response Complete accumulated response
+        """
+        if not (conversation_id and original_text and full_response):
+            return
+            
+        try:
+            parsed = json.loads(full_response)
+            nl_response = parsed.get("nl_response", full_response)
+        except json.JSONDecodeError:
+            nl_response = full_response
+
+        # Queue for embedding and storage
+        if nl_response and self.pg_client and self.embedding_client:
+            try:
+                embedding_batch = {
+                    "user_message": original_text,
+                    "assistant_response": nl_response,
+                    "conversation_id": conversation_id,
+                }
+                self.embedding_client.queue_messages(embedding_batch)
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued streaming response for embedding and storage"
+                )
+            except Exception as e:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
+                )
+
     def _send_message_streaming_impl(
         self,
         user_message: str,
@@ -361,44 +438,11 @@ class OllamaClient:
             yield {"response": "", "done": True}
             return
 
-        # Choose system prompt based on message type and origin
-        if message_type == "response":
-            # SECOND PARSE: Response generation with full context
-            base_prompt = (
-                self.conversation_processor_prompt
-                if self.last_message_from_chat
-                else self.response_processor_prompt
-            )
-
-            # Compose: base prompt + resume conversation + safety
-            system_prompt = base_prompt
-            if self.resume_conversation_prompt:
-                system_prompt += f"\n\n{self.resume_conversation_prompt}"
-            if self.safety_prompt:
-                system_prompt += f"\n\n{self.safety_prompt}"
-
-            print(
-                f"{self.class_prefix_message} [{LogLevel.INFO.name}] Response generation with context (streaming, resume + safety prompts included)"
-            )
-        else:
-            # FIRST PARSE: Decision-making with minimal context
-            system_prompt = self.system_prompt
-
-        # Build the prompt with context if available
-        prompt = self._build_prompt_with_context(user_message, message_type, from_chat)
-
-        # Use higher temperature for response processing
-        if message_type == "response":
-            temperature = 0.8
-            top_p = 0.90
-
-        # Track from_chat for response processing
-        if message_type == "command" and from_chat:
-            self.last_message_from_chat = from_chat
-            self.last_user_message = original_text if original_text else user_message
-
-        # Determine if we should use decision model
-        use_decision_model = message_type == "command"
+        # Prepare system prompt and request parameters
+        system_prompt = self._prepare_system_prompt(message_type, is_streaming=True)
+        prompt, temperature, top_p, use_decision_model = self._prepare_request_parameters(
+            user_message, temperature, top_p, message_type, from_chat, original_text
+        )
 
         # Send streaming request to Ollama
         ollama_response = self._send_to_ollama(
@@ -422,30 +466,8 @@ class OllamaClient:
                 full_response += chunk["response"]
             yield chunk
 
-        # Parse complete response and queue for embedding/storage
-        if conversation_id and original_text and full_response:
-            try:
-                parsed = json.loads(full_response)
-                nl_response = parsed.get("nl_response", full_response)
-            except json.JSONDecodeError:
-                nl_response = full_response
-
-            # Queue for embedding and storage
-            if nl_response and self.pg_client and self.embedding_client:
-                try:
-                    embedding_batch = {
-                        "user_message": original_text,
-                        "assistant_response": nl_response,
-                        "conversation_id": conversation_id,
-                    }
-                    self.embedding_client.queue_messages(embedding_batch)
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.INFO.name}] Queued streaming response for embedding and storage"
-                    )
-                except Exception as e:
-                    print(
-                        f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Failed to queue streaming messages: {repr(e)}"
-                    )
+        # Queue complete response for embedding/storage
+        self._queue_streaming_embeddings(conversation_id, original_text, full_response)
 
     def _build_prompt_with_context(
         self, user_message: str, message_type: str, from_chat: bool
