@@ -80,7 +80,6 @@ class LocalLLHamaSupervisor:
                 web_server_message_queue=web_server_message_queue,
                 chat_message_queue=chat_message_queue,
                 preset_response_queue=preset_response_queue,
-                pg_client=pg_client,
             )
             webservice.settings_data = loader.data
             webservice.settings_file = loader.settings_file

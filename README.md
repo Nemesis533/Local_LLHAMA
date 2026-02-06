@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-alpha-yellow)
 ![License](https://img.shields.io/badge/license-CC%20BY%204.0-blue)
 
-**Now on version 0.7** 
+**Now on version 0.8** 
 
 **Local_LLAMA** is anorchestration middleware that sits between Home Assistant and Ollama, enabling smaller LLM models (8-20B parameters) to handle complex multi-intent, multi-language workloads through intelligent task decomposition, adaptive context management, and multi-pass prompt engineering.
 
@@ -60,6 +60,7 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - Dynamic context windows (1000+→100 words) based on latency feedback
 - Per-user conversation history with semantic memory search
 - Configurable thresholds via preset system
+- **NEW!** Context reduction can now be performed either via summarization or context truncation.
 
 **Multi-Pass Prompt Engineering**
 - Modular composable layers: base → decision → safety → format + auxiliary
@@ -104,6 +105,7 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - Set reminders, alarms, and appointments with natural language
 - Per-user calendar with automatic notifications, both voical and in chat
 - Unified interface for all event types; each users sees only their calendar, the admin can only see voice-created events.
+- **NEW!** You can now create automations via Chat/Voice commands, which are then stored in the database.
 
 **Semantic Memory Search**
 - Vector-based conversation history search using Ollama embeddings
@@ -124,6 +126,7 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - Customizable model name for chat usage
 - Admin panel with user, language, prompt, system, web settings and more.
 - Role-based access control (admin, chat permission)
+- **NEW** Added system resource monitoring (CPU, RAM, GPU) in the chat panel (for admins only).
 
 ![Admin Prompt Page](screenshots/admin_window.png)
 
@@ -448,7 +451,7 @@ Open discussions before submitting major PRs.
 
 **Performance Optimization:**
 - Context caching for repeated queries ✓
-- Predictive context scaling/summaries based on intent complexity ✓
+- Adaptive context scaling/summaries based on intent complexity ✓
 ~~- Parallel intent execution benchmarking~~
 
 ### v0.85 — Coding Abilities
