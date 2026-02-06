@@ -47,7 +47,6 @@ class LocalLLHAMA_WebService:
         web_server_message_queue=None,
         chat_message_queue=None,
         preset_response_queue=None,
-        pg_client=None,
     ):
         # Load environment variables
         load_dotenv()
@@ -77,7 +76,7 @@ class LocalLLHAMA_WebService:
         self.class_prefix_message = "[WebServer]"
 
         # Allowed IPs - load from environment variable
-        allowed_ips_str = os.getenv("ALLOWED_IP_PREFIXES", "192.168.88.,127.0.0.1")
+        allowed_ips_str = os.getenv("ALLOWED_IP_PREFIXES", "192.168.0.,127.0.0.1")
         self.ALLOWED_IP_PREFIXES = [ip.strip() for ip in allowed_ips_str.split(",")]
 
         # Paths
