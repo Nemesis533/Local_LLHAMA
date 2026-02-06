@@ -11,7 +11,7 @@ let availableAudioDevices = {
 };
 
 /**
- * Load available GPUs from server
+ * Load available GPUs from local server
  */
 async function loadAvailableGpus() {
     try {
