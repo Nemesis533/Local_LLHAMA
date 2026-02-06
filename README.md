@@ -422,36 +422,19 @@ Open discussions before submitting major PRs.
 
 ## Roadmap: Advancing Orchestration Patterns
 
-### Completed Orchestration Features (v0.7)
-
-**Core Middleware:**
-- Multi-backend parallel execution (HA + Calendar + Web APIs)
-- Adaptive context management with automatic scaling
-- Multi-pass prompt engineering with modular layers
-- Hardware-validated preset system (8-24GB VRAM)
-
-**Production Features:**
-- One-command installation with dependency resolution
-- Interactive configuration wizard
-- Dual pipeline architecture (voice + chat)
-- Per-user context isolation and memory search
-- Role-based access control
-- Real-time WebSocket communication
-- PostgreSQL with vector embeddings
-
-### v0.8 — Enhanced Orchestration
+### Completed Enhanced Orchestration (v0.8)
 
 **Based on feedback and testing, the scope of work was updated**
 
 **Improved Backend Integration:**
-- Automation creation via LLM function calling ✓
-- Enhanced error recovery with retry logic ✓
-- Backend health monitoring with real-time system metrics (CPU, RAM, GPU) ✓
-- ADDED: improved memory search that now also include assistant replies and temporal information ✓
+- Automation creation via LLM function calling 
+- Enhanced error recovery with retry logic 
+- Backend health monitoring with real-time system metrics (CPU, RAM, GPU) 
+- ADDED: improved memory search that now also include assistant replies and temporal information 
 
 **Performance Optimization:**
-- Context caching for repeated queries ✓
-- Adaptive context scaling/summaries based on intent complexity ✓
+- Context caching for repeated queries 
+- Adaptive context scaling/summaries based on intent complexity 
 ~~- Parallel intent execution benchmarking~~
 
 ### v0.85 — Coding Abilities
