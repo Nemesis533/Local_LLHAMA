@@ -314,14 +314,14 @@ export async function saveModelConfig() {
         
         if (!assistantName) {
             statusDiv.className = 'save-status error';
-            statusDiv.textContent = '✗ Assistant name cannot be empty';
+            statusDiv.textContent = '❌ Assistant name cannot be empty';
             statusDiv.style.display = 'block';
             return;
         }
         
         if (useSeparateDecisionModel && !decisionModel) {
             statusDiv.className = 'save-status error';
-            statusDiv.textContent = '✗ Decision model name cannot be empty when enabled';
+            statusDiv.textContent = '❌ Decision model name cannot be empty when enabled';
             statusDiv.style.display = 'block';
             return;
         }
@@ -343,7 +343,7 @@ export async function saveModelConfig() {
         
         if (data.status === 'ok') {
             statusDiv.className = 'save-status success';
-            statusDiv.textContent = '✓ Assistant name saved successfully! Restart the system to apply changes.';
+            statusDiv.textContent = '✅ Assistant name saved successfully! Restart the system to apply changes.';
             statusDiv.style.display = 'block';
             
             // Update local config
@@ -358,7 +358,7 @@ export async function saveModelConfig() {
         
     } catch (error) {
         statusDiv.className = 'save-status error';
-        statusDiv.textContent = '✗ Error saving model configuration: ' + error.message;
+        statusDiv.textContent = '❌ Error saving model configuration: ' + error.message;
         statusDiv.style.display = 'block';
     }
 }
