@@ -23,7 +23,8 @@
   border-radius: var(--radius-md);
   width: 90%;
   max-width: 500px;
-  border: 3px solid var(--color-primary);\n  position: relative;
+  border: 3px solid var(--color-primary);
+  position: relative;
   animation: modalSlideIn 0.3s ease-out;
 }
 
@@ -56,7 +57,8 @@
 .modal-content h2 {
   margin: 0 0 var(--space-lg) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-2xl);\n  text-transform: uppercase;
+  font-size: var(--font-size-2xl);
+  text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: var(--font-weight-bold);
 }
