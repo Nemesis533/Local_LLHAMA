@@ -12,10 +12,10 @@ from datetime import datetime, timedelta
 from queue import Empty
 
 # === Custom Imports ===
-from ..audio_output import SoundActions
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
 from .core_state import State
+from ..audio_output import SoundActions
 
 
 class WorkerThreads:
@@ -208,7 +208,7 @@ class WorkerThreads:
                 )
                 sound_thread.start()
 
-                # Generate LLM text for the reminder
+                # Generate LLM text for the reminder - keeping the propmt here as it's mostly local variables anyways
                 if isinstance(self.sm.command_llm, OllamaClient):
                     event_description = event.get("description", "")
                     llm_input = f"""Generate a brief spoken reminder (one sentence) for:
@@ -267,9 +267,6 @@ Keep it short and natural for voice output."""
         @param duration_seconds How long to play the sound
         """
         try:
-            import pygame
-
-            from ..audio_output import SoundActions
 
             # Start playing the sound
             self.sm.play_sound(SoundActions.reminder)

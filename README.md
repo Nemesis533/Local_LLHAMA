@@ -453,7 +453,7 @@ Open discussions before submitting major PRs.
 
 ### v0.85 — Coding Abilities
 - Streamlined custom function integration with examples 
-- Creation of dedicated functionality for a coding assistant that integrates with vscode.
+- TBC: Creation of dedicated functionality for a coding assistant that integrates with vscode.
 
 ### v0.9 — Advanced Capabilities
 
