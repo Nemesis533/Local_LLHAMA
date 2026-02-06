@@ -168,10 +168,17 @@
           if (data.is_admin) {
             document.getElementById('admin-btn').style.display = 'block';
           }
-          // Dashboard button will be shown by /api/current_user call in chat.js
+          // Dashboard button will be shown by /api/current_user call in chat-core.js
         }
       });
   </script>
-  <script src="/static/chat.js?v=4"></script>
+  <!-- Shared utilities - must load first -->
+  <script src="/static/utils.js?v=5"></script>
+  <!-- Feature-specific handlers -->
+  <script src="/static/calendar-handler.js?v=5"></script>
+  <script src="/static/conversation-handler.js?v=5"></script>
+  <script src="/static/metrics-handler.js?v=5"></script>
+  <!-- Main chat core logic - must load last -->
+  <script src="/static/chat-core.js?v=5"></script>
 </body>
 </html>
