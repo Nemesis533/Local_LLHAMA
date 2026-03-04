@@ -60,6 +60,25 @@ class MessageHandler:
                 f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to send streaming chunk to web server: {type(e).__name__}: {e}"
             )
 
+    def send_image_ready(self, image_data: dict, client_id=None):
+        """
+        @brief Notify the web server that an image has been generated.
+
+        @param image_data Dict with keys: image_id, title, comment, url, download_url.
+        @param client_id  Optional client identifier for per-user routing.
+        """
+        try:
+            message_dict = {
+                "type": "image_ready",
+                "data": image_data,
+                "client_id": client_id,
+            }
+            self.web_server_message_queue.put(message_dict, timeout=1)
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Failed to send image_ready to web server: {type(e).__name__}: {e}"
+            )
+
     def check_incoming_messages(self):
         """
         @brief Check for and return any incoming messages from the action queue.

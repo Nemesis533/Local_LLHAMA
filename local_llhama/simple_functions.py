@@ -1064,3 +1064,27 @@ class SimpleFunctions:
         """
         success, message = self.automation.delete_automation(name, user_id)
         return message
+
+    def generate_image(self, prompt: str, title: str = None, user_id: int = None) -> dict:
+        """
+        @brief Signal that an image generation request has been received.
+
+        This method does NOT perform the heavy generation work directly.
+        It returns a sentinel dict that is detected by ChatHandler, which then
+        offloads the LLM and runs the diffusion pipeline in a background thread.
+
+        @param prompt   Detailed image description from the LLM.
+        @param title    Optional image title (LLM will suggest one if absent).
+        @param user_id  ID of the requesting user.
+        @return Sentinel dict with type="image_generation_request".
+        """
+        print(
+            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Image generation request received: "
+            f"title={title!r}, user_id={user_id}"
+        )
+        return {
+            "type": "image_generation_request",
+            "prompt": prompt or "",
+            "title": title or "",
+            "user_id": user_id,
+        }

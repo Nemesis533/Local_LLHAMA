@@ -128,3 +128,46 @@ function addMessage(content, type = 'system') {
   chatMessages.appendChild(messageDiv);
   scrollToBottom();
 }
+
+// Add an AI-generated image message to the chat
+function addImageMessage(imageId, title, comment, imageUrl, downloadUrl) {
+  const chatMessages = document.getElementById('chat-messages');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message assistant-message image-message';
+  messageDiv.dataset.imageId = imageId;
+
+  const timestamp = new Date().toLocaleTimeString();
+  const safeComment = escapeHtml(comment || '');
+  const safeTitle = escapeHtml(title || 'Generated Image');
+
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-type">${window.currentAssistantName || 'Assistant'}</span>
+      <span class="message-time">${timestamp}</span>
+    </div>
+    <div class="message-content">
+      <p class="image-comment">${safeComment}</p>
+      <div class="generated-image-wrapper">
+        <p class="image-title"><strong>${safeTitle}</strong></p>
+        <img
+          class="generated-image"
+          src="${escapeHtml(imageUrl)}"
+          alt="${safeTitle}"
+          loading="lazy"
+          onerror="this.closest('.generated-image-wrapper').innerHTML='<p class=\\'image-error\\'>Image could not be loaded.</p>'"
+        />
+        <div class="image-actions">
+          <a
+            class="image-download-btn"
+            href="${escapeHtml(downloadUrl)}"
+            download
+            title="Download image"
+          >⬇ Download</a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  chatMessages.appendChild(messageDiv);
+  scrollToBottom();
+}

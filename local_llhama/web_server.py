@@ -23,6 +23,7 @@ from .routes import (
     admin_bp,
     auth_bp,
     calendar_bp,
+    image_bp,
     llm_bp,
     main_bp,
     preset_bp,
@@ -133,6 +134,7 @@ class LocalLLHAMA_WebService:
         self.app.register_blueprint(user_bp)
         self.app.register_blueprint(calendar_bp)
         self.app.register_blueprint(admin_bp)
+        self.app.register_blueprint(image_bp)  # Serve user-generated images
         self.app.register_blueprint(
             chat_history_bp
         )  # Register chat_history_bp before init
@@ -342,6 +344,32 @@ class LocalLLHAMA_WebService:
                 )
                 self.connected_clients.discard(sid)
 
+    def emit_image_ready(self, image_data: dict, client_id=None):
+        """
+        @brief Emit an image_ready SocketIO event to the requesting client.
+
+        @param image_data Dict with keys: image_id, title, comment, url, download_url.
+        @param client_id  Optional client identifier for per-user routing.
+        """
+        with self.clients_lock:
+            if client_id and client_id in self.client_sessions:
+                target_sid = self.client_sessions[client_id]
+                if target_sid in self.connected_clients:
+                    try:
+                        self.socketio.emit("image_ready", image_data, room=target_sid)
+                    except Exception as e:
+                        print(
+                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] "
+                            f"Failed to emit image_ready to client {target_sid}: {repr(e)}"
+                        )
+                return
+            # Broadcast fallback (should not normally occur)
+            for sid in list(self.connected_clients):
+                try:
+                    self.socketio.emit("image_ready", image_data, room=sid)
+                except Exception:
+                    pass
+
     def handle_connect(self):
         ip = request.remote_addr
         if not self._is_ip_allowed(ip):
@@ -513,6 +541,16 @@ class LocalLLHAMA_WebService:
                                 print(
                                     f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit streaming chunk: {repr(e)}"
                                 )
+
+                    elif message_type == "image_ready":
+                        image_data = message.get("data", {})
+                        client_id = message.get("client_id")
+                        try:
+                            self.emit_image_ready(image_data, client_id=client_id)
+                        except Exception as e:
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit image_ready: {repr(e)}"
+                            )
 
             except Empty:
                 pass  # Queue empty, that's fine

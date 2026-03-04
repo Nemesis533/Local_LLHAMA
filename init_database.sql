@@ -141,12 +141,32 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO llha
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO llhama_usr;
 
 -- ============================================================
+-- TABLE: generated_images
+-- ============================================================
+-- Stores AI-generated images per user, linked to conversation history
+CREATE TABLE IF NOT EXISTS generated_images (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id UUID,                -- soft reference, no FK to avoid permission issues
+    filename TEXT NOT NULL,          -- unique filename on disk (uuid-based)
+    title TEXT NOT NULL,             -- image title (from user or LLM)
+    prompt TEXT NOT NULL,            -- exact prompt used for generation
+    model_id TEXT,                   -- diffusion model used
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX idx_generated_images_user ON generated_images(user_id);
+CREATE INDEX idx_generated_images_conversation ON generated_images(conversation_id);
+
+GRANT ALL PRIVILEGES ON TABLE generated_images TO llhama_usr;
+
+-- ============================================================
 -- COMPLETION MESSAGE
 -- ============================================================
 \echo '============================================================'
 \echo 'Database initialization complete!'
 \echo '============================================================'
-\echo 'Tables created: users, conversations, messages, message_embeddings, events, automations'
+\echo 'Tables created: users, conversations, messages, message_embeddings, events, automations, generated_images'
 \echo 'Default admin user: admin / admin123'
 \echo 'IMPORTANT: Change the admin password after first login!'
 \echo '============================================================'

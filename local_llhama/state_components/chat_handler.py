@@ -6,9 +6,13 @@ Allows concurrent chat interactions without interfering with voice workflow.
 """
 
 import json
+import os
 import threading
 import time
+from pathlib import Path
 from queue import Empty
+
+import requests
 
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
@@ -99,6 +103,9 @@ class ChatHandler:
 
         self.running = False
         self.worker_thread = None
+
+        # Image generation manager (created lazily on first request)
+        self._image_manager = None
 
         print(f"{self.log_prefix} [{LogLevel.INFO.name}] Chat handler initialized")
 
@@ -340,10 +347,37 @@ class ChatHandler:
                 if isinstance(r, dict) and r.get("type") == "simple_function"
             ]
 
+            # --- Separate image generation requests from regular results ---
+            image_gen_requests = [
+                r for r in simple_function_results
+                if isinstance(r.get("response"), dict)
+                and r["response"].get("type") == "image_generation_request"
+            ]
+            regular_results = [
+                r for r in simple_function_results
+                if r not in image_gen_requests
+            ]
+
+            # Handle image generation (runs in background thread)
+            for img_req in image_gen_requests:
+                self._handle_image_generation(
+                    img_req["response"], client_id, conversation_id
+                )
+
+            # If there are no regular results left, return now
+            if not regular_results and not image_gen_requests:
+                return
+            if not regular_results:
+                # Image gen was the only request; return — thread will finish later
+                # Clean up pending query since we're handing off to the thread
+                self.pending_user_queries.pop(client_id, None)
+                return
+
+            # --- Process remaining regular results normally ---
             # Extract display names for showing what the assistant is doing
             display_names = [
                 r.get("display_name")
-                for r in simple_function_results
+                for r in regular_results
                 if r.get("display_name")
             ]
 
@@ -354,9 +388,7 @@ class ChatHandler:
                 self.message_handler.send_to_web_server(message, client_id=client_id)
 
             # Send to LLM for natural language conversion
-            # This is an internal processing step, so we pass the original user query as original_text
-            # This ensures the DB saves the user's actual question, not the conversion instruction
-            llm_input = f"Convert these function results into a natural language response in {language} language: {simple_function_results}"
+            llm_input = f"Convert these function results into a natural language response in {language} language: {regular_results}"
             original_user_query = self.pending_user_queries.get(client_id, "")
 
             # Use streaming if from chat, otherwise regular response
@@ -390,7 +422,7 @@ class ChatHandler:
                         del self.pending_user_queries[client_id]
                 else:
                     # Fallback
-                    fallback_msg = str(simple_function_results)
+                    fallback_msg = str(regular_results)
                     message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
                     self.message_handler.send_to_web_server(
                         message, client_id=client_id
@@ -648,6 +680,261 @@ class ChatHandler:
 
         # If all else fails, return original text
         return text
+
+    # =========================================================
+    # Image generation
+    # =========================================================
+
+    def _get_image_settings(self) -> dict:
+        """
+        @brief Load image generation settings from system_settings.json.
+
+        Uses the package-relative path, same pattern as llm_prompts.py.
+
+        @return Dict with keys: enabled, model_id, cache_dir, num_steps,
+                guidance_scale, max_sequence_length.
+        """
+        defaults = {
+            "enabled": True,
+            "model_id": "stabilityai/stable-diffusion-3.5-large-turbo",
+            "cache_dir": "/mnt/fast_storage/diffusers",
+            "num_steps": 4,
+            "guidance_scale": 0.0,
+            "max_sequence_length": 512,
+        }
+        try:
+            settings_path = (
+                Path(__file__).parent.parent / "settings" / "system_settings.json"
+            )
+            if settings_path.exists():
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                section = data.get("image_generation", {})
+                for key in defaults:
+                    entry = section.get(key, {})
+                    if isinstance(entry, dict) and "value" in entry:
+                        defaults[key] = entry["value"]
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not load image settings: {e}"
+            )
+        return defaults
+
+    def _get_image_manager(self):
+        """
+        @brief Return a (lazily-created) ImageGenerationManager instance.
+
+        @return ImageGenerationManager configured from system_settings.json.
+        """
+        if self._image_manager is not None:
+            return self._image_manager
+
+        from ..image_generation import ImageGenerationManager
+
+        settings = self._get_image_settings()
+        storage_base = (
+            Path(__file__).parent.parent / "data" / "generated_images"
+        )
+        self._image_manager = ImageGenerationManager(
+            model_id=settings["model_id"],
+            cache_dir=settings["cache_dir"],
+            hf_token=os.environ.get("HF_TOKEN"),
+            storage_base_path=str(storage_base),
+            num_steps=settings["num_steps"],
+            guidance_scale=settings["guidance_scale"],
+            max_sequence_length=settings["max_sequence_length"],
+        )
+        return self._image_manager
+
+    def _generate_image_intro(
+        self, prompt: str, title_hint: str, ollama_host: str, model: str
+    ) -> tuple:
+        """
+        @brief Ask Ollama for a title and brief intro comment for the image.
+
+        Makes a raw HTTP call to Ollama (not stored in conversation history).
+
+        @param prompt       The image generation prompt.
+        @param title_hint   Suggested title from user (may be empty).
+        @param ollama_host  Ollama server URL.
+        @param model        Ollama model name.
+        @return Tuple of (title: str, comment: str).
+        """
+        default_title = title_hint or "Generated Image"
+        default_comment = "Here's the image I generated for you!"
+
+        if not ollama_host or not model:
+            return default_title, default_comment
+
+        try:
+            host = ollama_host.rstrip("/")
+            if not host.startswith("http"):
+                host = f"http://{host}"
+
+            title_instruction = (
+                f'The user has given this title: "{title_hint}". Keep it exactly.'
+                if title_hint
+                else "Invent a short, creative title (3-6 words)."
+            )
+
+            system = (
+                "You are a helpful assistant. Respond ONLY with valid JSON — "
+                "no markdown, no code fences, no extra text."
+            )
+            user_msg = (
+                f"An image is being generated with this description:\n\"{prompt}\"\n\n"
+                f"{title_instruction}\n"
+                "Also write a single friendly sentence introducing the image to the user.\n"
+                'Respond with exactly this JSON format:\n'
+                '{"title": "...", "comment": "..."}'
+            )
+
+            resp = requests.post(
+                f"{host}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0.7, "num_predict": 120},
+                },
+                timeout=30,
+            )
+
+            if resp.status_code == 200:
+                content = resp.json().get("message", {}).get("content", "")
+                # Strip possible markdown fences
+                content = content.strip().strip("```json").strip("```").strip()
+                parsed = json.loads(content)
+                title = parsed.get("title") or default_title
+                comment = parsed.get("comment") or default_comment
+                return title, comment
+
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not get image intro from LLM: {e}"
+            )
+
+        return default_title, default_comment
+
+    def _handle_image_generation(
+        self, image_request: dict, client_id: str, conversation_id: str
+    ):
+        """
+        @brief Orchestrate image generation in a background thread.
+
+        Flow:
+          1. Get title + comment from LLM (while LLM is still loaded)
+          2. Show "Generating image…" status to user
+          3. Spawn background thread:
+               a. Offload Ollama model (free VRAM)
+               b. Load SD3.5 pipeline, generate image
+               c. Save to disk + DB
+               d. Unload pipeline
+               e. Push image_ready message to web_server_message_queue
+
+        @param image_request  Dict with keys: prompt, title, user_id.
+        @param client_id      Socket client identifier.
+        @param conversation_id UUID of the conversation.
+        """
+        settings = self._get_image_settings()
+        if not settings.get("enabled", True):
+            self._send_error_response(
+                "Image generation is disabled in system settings.", client_id
+            )
+            return
+
+        prompt = image_request.get("prompt", "")
+        title_hint = image_request.get("title", "")
+        user_id_val = image_request.get("user_id")
+        user_id = int(user_id_val) if user_id_val is not None else None
+
+        if not prompt:
+            self._send_error_response("No image prompt was provided.", client_id)
+            return
+
+        # Step 1: Get title + intro comment from LLM while it is still loaded
+        ollama_host = getattr(self.command_llm, "host", None)
+        ollama_model = getattr(self.command_llm, "model", None)
+
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] "
+            f"Requesting image intro from LLM (host={ollama_host}, model={ollama_model})"
+        )
+
+        title, comment = self._generate_image_intro(
+            prompt, title_hint, ollama_host, ollama_model
+        )
+
+        # Step 2: Send status to client — shows the spinner
+        status_msg = f"{self.log_prefix} [Status]: Generating image: {title}"
+        self.message_handler.send_to_web_server(status_msg, client_id=client_id)
+
+        # Step 3: Add entry to conversation history for the user request
+        original_query = self.pending_user_queries.pop(client_id, prompt)
+        self.context_manager.add_to_history(
+            client_id,
+            original_query,
+            f"[Image generated: {title}]",
+        )
+
+        # Step 4: Capture everything in thread closure and spawn
+        pg_client = getattr(self.command_llm, "pg_client", None)
+        message_handler = self.message_handler
+        log_prefix = self.log_prefix
+
+        def _generation_thread():
+            try:
+                image_manager = self._get_image_manager()
+                result = image_manager.generate_and_save(
+                    prompt=prompt,
+                    title=title,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    pg_client=pg_client,
+                    ollama_host=ollama_host,
+                    ollama_model=ollama_model,
+                )
+
+                if "error" in result:
+                    error_msg = f"{log_prefix} [Error]: Image generation failed: {result['error']}"
+                    message_handler.send_to_web_server(error_msg, client_id=client_id)
+                else:
+                    message_handler.send_image_ready(
+                        {
+                            "image_id": result["image_id"],
+                            "title": title,
+                            "comment": comment,
+                            "url": result["url"],
+                            "download_url": result["download_url"],
+                        },
+                        client_id=client_id,
+                    )
+                    print(
+                        f"{log_prefix} [{LogLevel.INFO.name}] "
+                        f"Image generation complete: {result['image_id']}"
+                    )
+
+            except Exception as e:
+                print(
+                    f"{log_prefix} [{LogLevel.CRITICAL.name}] "
+                    f"Image generation thread error: {type(e).__name__}: {e}"
+                )
+                error_msg = f"{log_prefix} [Error]: Image generation failed: {e}"
+                message_handler.send_to_web_server(error_msg, client_id=client_id)
+
+        thread = threading.Thread(target=_generation_thread, daemon=True)
+        thread.start()
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] "
+            f"Image generation thread started for client {client_id}"
+        )
+
+    # =========================================================
+    # Error / utility helpers
+    # =========================================================
 
     def _handle_nl_response(self, structured_output, client_id):
         """

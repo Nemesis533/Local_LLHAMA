@@ -134,5 +134,16 @@
     "parameters": {
       "name": {"required": true, "description": "Name of the automation to delete"}
     }
+  },
+  "generate_image": {
+    "entity_id": "generate_image",
+    "actions": ["generate_image"],
+    "description": "Generate an image using Stable Diffusion AI based on a detailed text description. Use when the user asks to generate, create, draw, paint, visualise, or produce an image or picture.",
+    "display_name": "Generating Image...",
+    "example": {"action": "generate_image", "target": "generate_image", "data": {"prompt": "A serene mountain lake at sunrise, photorealistic", "title": "Mountain Lake"}},
+    "parameters": {
+      "prompt": {"required": true, "description": "Detailed visual description of the image to generate. Be as specific as possible about style, lighting, composition, mood, and content."},
+      "title": {"required": false, "description": "Short title for the image. If not provided, the assistant will suggest one."}
+    }
   }
 }

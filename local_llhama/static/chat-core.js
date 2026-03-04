@@ -190,6 +190,18 @@ socket.on('streaming_chunk', (data) => {
   }
 });
 
+// ── Image generation result ──────────────────────────────────────────────────
+socket.on('image_ready', (data) => {
+  hideLoadingIndicator();
+  addImageMessage(
+    data.image_id,
+    data.title,
+    data.comment,
+    data.url,
+    data.download_url
+  );
+});
+
 // Listen for responses from the system via WebSocket
 socket.on('log_line', (data) => {
   const message = data.line || data;

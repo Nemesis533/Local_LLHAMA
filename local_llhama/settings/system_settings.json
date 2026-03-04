@@ -44,6 +44,33 @@
     },
     "description": "Hardware and GPU configuration settings"
   },
+  "image_generation": {
+    "description": "Settings for AI image generation via Stable Diffusion",
+    "enabled": {
+      "description": "Enable or disable the image generation feature entirely",
+      "value": true
+    },
+    "model_id": {
+      "description": "HuggingFace model repository ID for image generation",
+      "value": "stabilityai/stable-diffusion-3.5-large-turbo"
+    },
+    "cache_dir": {
+      "description": "Local directory where model weights are cached",
+      "value": "/mnt/fast_storage/diffusers"
+    },
+    "num_steps": {
+      "description": "Number of denoising inference steps (4 is optimal for turbo models)",
+      "value": 4
+    },
+    "guidance_scale": {
+      "description": "Classifier-free guidance scale (0.0 disables CFG, recommended for turbo)",
+      "value": 0.0
+    },
+    "max_sequence_length": {
+      "description": "Maximum token length for the T5 text encoder prompt",
+      "value": 512
+    }
+  },
   "home_assistant": {
     "allowed_domains": {
       "description": "List of Home Assistant device domains that are allowed to be controlled",

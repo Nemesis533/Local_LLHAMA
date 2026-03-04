@@ -426,20 +426,11 @@ Open discussions before submitting major PRs.
 
 **Based on feedback and testing, the scope of work was updated**
 
-**Improved Backend Integration:**
-- Automation creation via LLM function calling 
-- Enhanced error recovery with retry logic 
-- Backend health monitoring with real-time system metrics (CPU, RAM, GPU) 
-- ADDED: improved memory search that now also include assistant replies and temporal information 
+**0.85 version was scrapped and functionality moved to a separate project**
 
-**Performance Optimization:**
-- Context caching for repeated queries 
-- Adaptive context scaling/summaries based on intent complexity 
-~~- Parallel intent execution benchmarking~~
-
-### v0.85 — Coding Abilities
-- Streamlined custom function integration with examples 
-- TBC: Creation of dedicated functionality for a coding assistant that integrates with vscode.
+~~### v0.85 — Coding Abilities~~ 
+~~- Streamlined custom function integration with examples ~~
+~~- TBC: Creation of dedicated functionality for a coding assistant that integrates with vscode.~~
 
 ### v0.9 — Advanced Capabilities
 
@@ -447,7 +438,7 @@ Open discussions before submitting major PRs.
 - Vision capabilities with multimodal routing
 - Contextual model swapping (task-specific model selection)
 - Test coverage for orchestration patterns
-- Performance regression testing
+~~- Performance regression testing~~
 
 ### v0.95 — Advanced Capabilities
 
