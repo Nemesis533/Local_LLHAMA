@@ -887,37 +887,67 @@ class ChatHandler:
         message_handler = self.message_handler
         log_prefix = self.log_prefix
 
+        def _send_status(text: str):
+            message_handler.send_to_web_server(
+                f"{log_prefix} [Status]: {text}", client_id=client_id
+            )
+
         def _generation_thread():
+            image_manager = self._get_image_manager()
             try:
-                image_manager = self._get_image_manager()
-                result = image_manager.generate_and_save(
-                    prompt=prompt,
-                    title=title,
+                # Step 1: free VRAM
+                _send_status("Freeing GPU memory for image generation…")
+                image_manager.offload_ollama_model(ollama_host, ollama_model)
+
+                # Step 2: load diffusion pipeline — this is the slow part
+                _send_status("Loading image model weights (this may take ~30 s)…")
+                image_manager.load_pipeline()
+
+                # Step 3: run inference
+                _send_status(f"Generating image: {title}…")
+                image = image_manager.generate(prompt)
+
+                # Step 4: save to disk + DB
+                _send_status("Saving image…")
+                result = image_manager.save_image(
+                    image,
                     user_id=user_id,
+                    title=title,
+                    prompt=prompt,
                     conversation_id=conversation_id,
                     pg_client=pg_client,
-                    ollama_host=ollama_host,
-                    ollama_model=ollama_model,
                 )
 
-                if "error" in result:
-                    error_msg = f"{log_prefix} [Error]: Image generation failed: {result['error']}"
-                    message_handler.send_to_web_server(error_msg, client_id=client_id)
-                else:
-                    message_handler.send_image_ready(
-                        {
-                            "image_id": result["image_id"],
-                            "title": title,
-                            "comment": comment,
-                            "url": result["url"],
-                            "download_url": result["download_url"],
-                        },
-                        client_id=client_id,
-                    )
-                    print(
-                        f"{log_prefix} [{LogLevel.INFO.name}] "
-                        f"Image generation complete: {result['image_id']}"
-                    )
+                message_handler.send_image_ready(
+                    {
+                        "image_id": result["image_id"],
+                        "title": title,
+                        "comment": comment,
+                        "url": result["url"],
+                        "download_url": result["download_url"],
+                    },
+                    client_id=client_id,
+                )
+
+                # Persist user message + image marker to DB so conversation
+                # reload can reconstruct the image display.
+                if pg_client and conversation_id:
+                    try:
+                        pg_client.insert_message(conversation_id, "user", original_query)
+                        pg_client.insert_message(
+                            conversation_id,
+                            "assistant",
+                            f"[image:{result['image_id']}]",
+                        )
+                    except Exception as db_err:
+                        print(
+                            f"{log_prefix} [WARNING] Could not persist image messages to DB: {db_err}"
+                        )
+
+                print(
+                    f"{log_prefix} [{LogLevel.INFO.name}] "
+                    f"Image generation complete: {result['image_id']}"
+                )
 
             except BaseException as e:
                 import traceback
@@ -926,8 +956,9 @@ class ChatHandler:
                     f"Image generation thread error: {type(e).__name__}: {e}\n"
                     + traceback.format_exc()
                 )
-                error_msg = f"{log_prefix} [Error]: Image generation failed: {e}"
-                message_handler.send_to_web_server(error_msg, client_id=client_id)
+                _send_status(f"Image generation failed: {e}")
+            finally:
+                image_manager.unload_pipeline()
 
         thread = threading.Thread(target=_generation_thread, daemon=True)
         thread.start()

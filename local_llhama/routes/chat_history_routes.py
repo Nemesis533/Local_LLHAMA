@@ -94,10 +94,33 @@ def get_conversation(conversation_id):
         if conversation.user_id != current_user.id:
             return jsonify({"success": False, "error": "Unauthorized"}), 403
 
+        conv_dict = conversation.to_dict(include_messages=True)
+
+        # Attach generated images for this conversation so the frontend can render them
+        try:
+            pg_client = conversation_loader.pg_client
+            rows = pg_client.execute_query(
+                "SELECT id, title, filename FROM generated_images WHERE conversation_id = %s ORDER BY created_at ASC",
+                (conversation_id,),
+            )
+            # Key by image_id (as plain string) for O(1) frontend lookup
+            conv_dict["images"] = {
+                str(row[0]): {
+                    "image_id": str(row[0]),
+                    "title": row[1] or "",
+                    "url": f"/api/images/{row[0]}",
+                    "download_url": f"/api/images/{row[0]}/download",
+                }
+                for row in (rows or [])
+            }
+        except Exception as e:
+            print(f"[chat_history_routes] Could not fetch images for conversation: {e}")
+            conv_dict["images"] = {}
+
         return jsonify(
             {
                 "success": True,
-                "conversation": conversation.to_dict(include_messages=True),
+                "conversation": conv_dict,
             }
         )
     except Exception as e:

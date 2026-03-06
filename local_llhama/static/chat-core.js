@@ -193,13 +193,45 @@ socket.on('streaming_chunk', (data) => {
 // ── Image generation result ──────────────────────────────────────────────────
 socket.on('image_ready', (data) => {
   hideLoadingIndicator();
-  addImageMessage(
-    data.image_id,
-    data.title,
-    data.comment,
-    data.url,
-    data.download_url
-  );
+
+  // If the shimmer placeholder exists, replace its content in-place so the
+  // image appears exactly where the preview was (no jump to bottom).
+  const placeholder = document.getElementById('image-preview-placeholder');
+  if (placeholder) {
+    const timeStr = new Date().toLocaleTimeString();
+    const safeComment  = escapeHtml(data.comment || '');
+    const safeTitle    = escapeHtml(data.title || 'Generated Image');
+    const safeUrl      = escapeHtml(data.url);
+    const safeDlUrl    = escapeHtml(data.download_url);
+
+    placeholder.removeAttribute('id'); // no longer the placeholder
+    placeholder.dataset.imageId = data.image_id;
+    placeholder.innerHTML = `
+      <div class="message-header">
+        <span class="message-type">${window.currentAssistantName || 'Assistant'}</span>
+        <span class="message-time">${timeStr}</span>
+      </div>
+      <div class="message-content">
+        <p class="image-comment">${safeComment}</p>
+        <div class="generated-image-wrapper">
+          <p class="image-title"><strong>${safeTitle}</strong></p>
+          <img
+            class="generated-image"
+            src="${safeUrl}"
+            alt="${safeTitle}"
+            loading="lazy"
+            onerror="this.closest('.generated-image-wrapper').innerHTML='<p class=\\'image-error\\'>Image could not be loaded.</p>'"
+          />
+          <div class="image-actions">
+            <a class="image-download-btn" href="${safeDlUrl}" download title="Download image">⬇ Download</a>
+          </div>
+        </div>
+      </div>
+    `;
+    scrollToBottom();
+  } else {
+    addImageMessage(data.image_id, data.title, data.comment, data.url, data.download_url);
+  }
 });
 
 // Listen for responses from the system via WebSocket

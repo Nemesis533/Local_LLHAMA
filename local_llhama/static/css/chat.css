@@ -487,3 +487,46 @@
   color: var(--color-danger, #ffb8c2);
   font-size: var(--font-size-sm, 0.875rem);
 }
+
+/* ── Image generation shimmer preview ───────────────────────────────────── */
+@keyframes image-shimmer {
+  0%   { background-position: -500px 0; }
+  100% { background-position:  500px 0; }
+}
+
+.image-preview-placeholder .shimmer-wrapper {
+  border-radius: var(--border-radius-md, 8px);
+  overflow: hidden;
+  border: 1px solid var(--color-gray-200, #e8e8e8);
+  background: var(--bg-secondary, #fafafa);
+  display: inline-block;
+  max-width: min(512px, 100%);
+  width: 100%;
+}
+
+.image-preview-placeholder .shimmer-title-bar {
+  height: 22px;
+  margin: 10px 12px 8px;
+  border-radius: 4px;
+  width: 50%;
+  background: linear-gradient(90deg, #d8d8d8 25%, #eeeeee 50%, #d8d8d8 75%);
+  background-size: 500px 100%;
+  animation: image-shimmer 1.4s ease-in-out infinite;
+}
+
+.image-preview-placeholder .shimmer-image-area {
+  aspect-ratio: 4 / 3;
+  max-height: 384px;
+  background: linear-gradient(90deg, #e4e4e4 25%, #f7f7f7 50%, #e4e4e4 75%);
+  background-size: 500px 100%;
+  animation: image-shimmer 1.4s ease-in-out infinite;
+  filter: blur(3px);
+}
+
+.image-preview-placeholder .shimmer-status {
+  padding: 5px 12px;
+  font-size: var(--font-size-xs, 0.78rem);
+  color: var(--text-secondary, #888);
+  background: var(--bg-tertiary, #f0f0f0);
+  border-top: 1px solid var(--color-gray-200, #e8e8e8);
+}

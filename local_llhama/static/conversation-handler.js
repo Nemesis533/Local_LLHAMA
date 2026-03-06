@@ -133,15 +133,49 @@ async function loadConversation(conversationId) {
     if (data.success && data.conversation) {
       // Clear chat area and load messages
       messagesContainer.innerHTML = '';
+
+      // images is now a dict keyed by image_id; also build a title fallback for legacy entries
+      const imagesById = data.conversation.images || {};
+      const imagesByTitle = {};
+      Object.values(imagesById).forEach(img => {
+        if (img.title) imagesByTitle[img.title.toLowerCase()] = img;
+      });
       
       // Display all messages
       if (data.conversation.messages && data.conversation.messages.length > 0) {
         data.conversation.messages.forEach(msg => {
-          const messageDiv = document.createElement('div');
-          messageDiv.className = `chat-message ${msg.role}-message`;
-          
           const timestamp = new Date(msg.timestamp);
           const timeStr = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          // Detect assistant image messages:
+          //   New format: [image:uuid]
+          //   Legacy format: [Image generated: Some Title]
+          let imgData = null;
+          if (msg.role === 'assistant' && msg.content) {
+            const idMatch = msg.content.match(/^\[image:([a-f0-9-]{36})\]$/i);
+            if (idMatch) {
+              imgData = imagesById[idMatch[1]];
+            } else {
+              const titleMatch = msg.content.match(/^\[Image generated:\s*(.+?)\]$/);
+              if (titleMatch) imgData = imagesByTitle[titleMatch[1].trim().toLowerCase()];
+            }
+          }
+
+          if (imgData) {
+              // Render as a proper image message
+              addImageMessage(
+                imgData.image_id,
+                imgData.title,
+                '',          // no comment stored — leave blank
+                imgData.url,
+                imgData.download_url,
+                timeStr      // pass original timestamp
+              );
+              return;
+          }
+
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `chat-message ${msg.role}-message`;
           
           messageDiv.innerHTML = `
             <div class="message-header">

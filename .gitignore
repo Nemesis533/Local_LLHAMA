@@ -238,3 +238,6 @@ CHANGES_SINCE_COMMIT.md
 # Root-level .md files except README.md
 /*.md
 !README.md
+
+# Local developer reference — not for version control
+Codebase_Guidelines.md

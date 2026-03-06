@@ -75,6 +75,12 @@ function hideLoadingIndicator() {
 
 // Show status message (what assistant is doing)
 function showStatusMessage(status) {
+  // Route image-generation statuses to the dedicated shimmer placeholder
+  if (/image|GPU memory|model weights/i.test(status)) {
+    showImagePreviewStatus(status);
+    return;
+  }
+
   // Remove existing status if any
   hideStatusMessage();
   
@@ -96,6 +102,37 @@ function showStatusMessage(status) {
   
   chatMessages.appendChild(statusDiv);
   scrollToBottom();
+}
+
+// Show (or update) the fuzzy shimmer placeholder for image generation
+function showImagePreviewStatus(status) {
+  hideStatusMessage(); // remove any plain status bubble
+
+  let placeholder = document.getElementById('image-preview-placeholder');
+  if (!placeholder) {
+    const chatMessages = document.getElementById('chat-messages');
+    placeholder = document.createElement('div');
+    placeholder.className = 'chat-message assistant-message image-message image-preview-placeholder';
+    placeholder.id = 'image-preview-placeholder';
+    placeholder.innerHTML = `
+      <div class="message-header">
+        <span class="message-type">${window.currentAssistantName || 'Assistant'}</span>
+      </div>
+      <div class="message-content">
+        <div class="shimmer-wrapper">
+          <div class="shimmer-title-bar"></div>
+          <div class="shimmer-image-area"></div>
+          <div class="shimmer-status">⚙️ <span id="image-preview-status-text"></span></div>
+        </div>
+      </div>
+    `;
+    chatMessages.appendChild(placeholder);
+    scrollToBottom();
+  }
+
+  // Just update the status text — leave the shimmer in place
+  const statusText = document.getElementById('image-preview-status-text');
+  if (statusText) statusText.textContent = status;
 }
 
 // Hide status message
@@ -130,13 +167,13 @@ function addMessage(content, type = 'system') {
 }
 
 // Add an AI-generated image message to the chat
-function addImageMessage(imageId, title, comment, imageUrl, downloadUrl) {
+function addImageMessage(imageId, title, comment, imageUrl, downloadUrl, timeStr) {
   const chatMessages = document.getElementById('chat-messages');
   const messageDiv = document.createElement('div');
   messageDiv.className = 'chat-message assistant-message image-message';
   messageDiv.dataset.imageId = imageId;
 
-  const timestamp = new Date().toLocaleTimeString();
+  const timestamp = timeStr || new Date().toLocaleTimeString();
   const safeComment = escapeHtml(comment || '');
   const safeTitle = escapeHtml(title || 'Generated Image');
 
