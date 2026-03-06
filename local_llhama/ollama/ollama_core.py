@@ -565,8 +565,9 @@ class OllamaClient:
                 response.raise_for_status()
                 return self._stream_response(response)
             else:
-                # Regular non-streaming response
-                response = requests.post(url, json=payload, timeout=60)
+                # Regular non-streaming response — use a longer timeout to allow
+                # large models time to load and generate structured output
+                response = requests.post(url, json=payload, timeout=120)
                 response.raise_for_status()
                 return response.json()
 

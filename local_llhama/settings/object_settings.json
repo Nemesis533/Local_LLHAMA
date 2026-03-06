@@ -13,7 +13,7 @@
       "type": "str"
     },
     "ollama_decision_model": {
-      "value": "qwen3:4b-q4_K_M",
+      "value": "qwen3.5:9b-q4_K_M",
       "type": "str"
     },
     "use_separate_decision_model": {

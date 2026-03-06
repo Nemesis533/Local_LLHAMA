@@ -36,13 +36,10 @@ def _resolve_image(image_id: str) -> dict:
         abort(503, description="Database unavailable")
 
     try:
-        with pg_client.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id, user_id, filename FROM generated_images WHERE id = %s",
-                    (image_id,),
-                )
-                row = cur.fetchone()
+        row = pg_client.execute_one(
+            "SELECT id, user_id, filename FROM generated_images WHERE id = %s",
+            (image_id,),
+        )
     except Exception as e:
         print(f"[ImageRoutes] [{LogLevel.CRITICAL.name}] DB error: {e}")
         abort(500, description="Database error")
@@ -50,7 +47,7 @@ def _resolve_image(image_id: str) -> dict:
     if row is None:
         abort(404, description="Image not found")
 
-    record = dict(row) if hasattr(row, "keys") else {
+    record = {
         "id": row[0],
         "user_id": row[1],
         "filename": row[2],
@@ -110,20 +107,17 @@ def download_image(image_id: str):
     pg_client = _get_pg_client()
     download_name = record["filename"]
     try:
-        with pg_client.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT title FROM generated_images WHERE id = %s",
-                    (image_id,),
-                )
-                row = cur.fetchone()
-                if row:
-                    title = (row[0] if not hasattr(row, "keys") else row["title"]) or ""
-                    safe_title = "".join(
-                        c if c.isalnum() or c in " _-" else "_" for c in title
-                    ).strip()
-                    if safe_title:
-                        download_name = f"{safe_title}.png"
+        row = pg_client.execute_one(
+            "SELECT title FROM generated_images WHERE id = %s",
+            (image_id,),
+        )
+        if row:
+            title = row[0] or ""
+            safe_title = "".join(
+                c if c.isalnum() or c in " _-" else "_" for c in title
+            ).strip()
+            if safe_title:
+                download_name = f"{safe_title}.png"
     except Exception:
         pass
 

@@ -413,6 +413,7 @@ Read the full license here: [https://creativecommons.org/licenses/by/4.0/](https
 - Home Assistant open-source platform [https://www.home-assistant.io/]
 - GDELT Project for real-time global event data [https://www.gdeltproject.org/]
 - Developers of Pygame ([https://github.com/pygame/pygame]) and other community-driven tools
+- StabilityAI for the image generation model ([https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo])
 
 ## Contributing
 

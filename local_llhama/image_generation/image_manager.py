@@ -40,7 +40,7 @@ class ImageGenerationManager:
         cache_dir: str = "/mnt/fast_storage/diffusers",
         hf_token: str = None,
         storage_base_path: str = None,
-        cuda_device: str = "auto",
+        cuda_device: str = "cuda:0",
         num_steps: int = 4,
         guidance_scale: float = 0.0,
         max_sequence_length: int = 512,
@@ -59,7 +59,7 @@ class ImageGenerationManager:
         """
         self.model_id = model_id
         self.cache_dir = cache_dir
-        self.hf_token = hf_token or os.environ.get("HF_TOKEN")
+        self.hf_token = hf_token or os.environ.get("HF_TOKEN") or self._load_hf_token()
         self.storage_base_path = storage_base_path or os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "data",
@@ -77,6 +77,38 @@ class ImageGenerationManager:
             f"{CLASS_PREFIX} [{LogLevel.INFO.name}] ImageGenerationManager initialised. "
             f"model={model_id}, storage={self.storage_base_path}"
         )
+
+    # === Token helpers ===
+
+    @staticmethod
+    def _load_hf_token() -> str:
+        """
+        @brief Try to read the HuggingFace token from the CLI login cache.
+
+        Checks the location written by `huggingface-cli login`, falling back
+        to the legacy path.  Returns an empty string if nothing is found.
+
+        @return Token string or empty string.
+        """
+        try:
+            from huggingface_hub import get_token
+            token = get_token()
+            if token:
+                return token
+        except Exception:
+            pass
+
+        # Manual fallback: read the file directly
+        for candidate in [
+            Path.home() / ".cache" / "huggingface" / "token",
+            Path.home() / ".huggingface" / "token",
+        ]:
+            if candidate.exists():
+                token = candidate.read_text(encoding="utf-8").strip()
+                if token:
+                    return token
+
+        return ""
 
     # === Storage ===
 
@@ -140,7 +172,8 @@ class ImageGenerationManager:
 
         if not self.hf_token:
             raise RuntimeError(
-                "No HuggingFace token found. Set HF_TOKEN in .env or run `huggingface-cli login`."
+                "No HuggingFace token found. Set HF_TOKEN env var, add it to .env, "
+                "or run `huggingface-cli login` and restart the service."
             )
 
         try:
@@ -159,7 +192,35 @@ class ImageGenerationManager:
                 f"Original error: {e}"
             )
 
-        print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Loading SD3.5 NF4 pipeline…")
+        # Resolve target CUDA device — default cuda:0, fall back to cpu gracefully
+        cuda_device = self.cuda_device or "cuda:0"
+        if cuda_device.startswith("cuda"):
+            if not torch.cuda.is_available():
+                print(
+                    f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
+                    f"CUDA not available, falling back to CPU."
+                )
+                cuda_device = "cpu"
+            else:
+                # Validate the requested device index is actually available
+                device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
+                if device_index >= torch.cuda.device_count():
+                    print(
+                        f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
+                        f"Device {cuda_device} not found (only {torch.cuda.device_count()} device(s)), "
+                        f"falling back to cuda:0."
+                    )
+                    device_index = 0
+                    cuda_device = "cuda:0"
+                else:
+                    device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
+        else:
+            device_index = None  # CPU path
+
+        print(
+            f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+            f"Loading SD3.5 NF4 pipeline on {cuda_device}…"
+        )
 
         nf4_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -196,10 +257,19 @@ class ImageGenerationManager:
         pipeline.vae = pipeline.vae.to(torch.bfloat16)
         pipeline.text_encoder = pipeline.text_encoder.to(torch.bfloat16)
         pipeline.text_encoder_2 = pipeline.text_encoder_2.to(torch.bfloat16)
-        pipeline.enable_model_cpu_offload()
+
+        # Pin to the explicit GPU and allow spilling excess tensors to CPU RAM
+        if device_index is not None:
+            pipeline.enable_model_cpu_offload(gpu_id=device_index)
+        else:
+            # Pure CPU — no GPU offloading
+            pipeline.to("cpu")
 
         self._pipeline = pipeline
-        print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline loaded successfully.")
+        print(
+            f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+            f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
+        )
 
     def unload_pipeline(self):
         """
@@ -213,7 +283,7 @@ class ImageGenerationManager:
             del self._pipeline
             self._pipeline = None
             torch.cuda.empty_cache()
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.")
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.", flush=True)
         except Exception as e:
             print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Error during pipeline unload: {e}")
             self._pipeline = None
@@ -275,33 +345,30 @@ class ImageGenerationManager:
 
         # Save image to disk
         image.save(str(file_path))
-        print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image saved to {file_path}")
+        print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image saved to {file_path}", flush=True)
 
         image_id = image_uuid  # re-use the same uuid for both filename and DB id
 
         # Persist to database
         if pg_client:
             try:
-                with pg_client.get_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            INSERT INTO generated_images
-                                (id, user_id, conversation_id, filename, title, prompt, model_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            """,
-                            (
-                                image_uuid,
-                                user_id,
-                                conversation_id,
-                                filename,
-                                title,
-                                prompt,
-                                self.model_id,
-                            ),
-                        )
-                    conn.commit()
-                print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image record saved to DB, id={image_uuid}")
+                pg_client.execute_write(
+                    """
+                    INSERT INTO generated_images
+                        (id, user_id, conversation_id, filename, title, prompt, model_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        image_uuid,
+                        user_id,
+                        conversation_id,
+                        filename,
+                        title,
+                        prompt,
+                        self.model_id,
+                    ),
+                )
+                print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image record saved to DB, id={image_uuid}", flush=True)
             except Exception as e:
                 print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] DB insert failed: {e}")
 
@@ -343,14 +410,16 @@ class ImageGenerationManager:
         """
         try:
             # Step 1: free VRAM by unloading Ollama model
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Offloading Ollama model before generation…")
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Offloading Ollama model before generation…", flush=True)
             self.offload_ollama_model(ollama_host, ollama_model)
 
             # Step 2: load diffusion pipeline
             self.load_pipeline()
 
             # Step 3: generate
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Running inference…", flush=True)
             image = self.generate(prompt)
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Inference complete, decoding image…", flush=True)
 
             # Step 4: save to disk + DB
             result = self.save_image(
@@ -361,10 +430,16 @@ class ImageGenerationManager:
                 conversation_id=conversation_id,
                 pg_client=pg_client,
             )
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] generate_and_save complete: {result.get('image_id')}", flush=True)
             return result
 
-        except Exception as e:
-            print(f"{CLASS_PREFIX} [{LogLevel.CRITICAL.name}] Generation failed: {type(e).__name__}: {e}")
+        except BaseException as e:
+            import traceback
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.CRITICAL.name}] Generation failed: {type(e).__name__}: {e}\n"
+                + traceback.format_exc(),
+                flush=True,
+            )
             return {"error": str(e)}
 
         finally:

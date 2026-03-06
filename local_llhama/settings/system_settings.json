@@ -69,6 +69,10 @@
     "max_sequence_length": {
       "description": "Maximum token length for the T5 text encoder prompt",
       "value": 512
+    },
+    "cuda_device": {
+      "description": "CUDA device to use for image generation (e.g. 'cuda:0', 'cuda:1'). Use 'cpu' to force CPU.",
+      "value": "cuda:0"
     }
   },
   "home_assistant": {

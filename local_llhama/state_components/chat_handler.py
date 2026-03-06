@@ -701,6 +701,7 @@ class ChatHandler:
             "num_steps": 4,
             "guidance_scale": 0.0,
             "max_sequence_length": 512,
+            "cuda_device": "cuda:0",
         }
         try:
             settings_path = (
@@ -740,6 +741,7 @@ class ChatHandler:
             cache_dir=settings["cache_dir"],
             hf_token=os.environ.get("HF_TOKEN"),
             storage_base_path=str(storage_base),
+            cuda_device=settings["cuda_device"],
             num_steps=settings["num_steps"],
             guidance_scale=settings["guidance_scale"],
             max_sequence_length=settings["max_sequence_length"],
@@ -800,7 +802,7 @@ class ChatHandler:
                     "stream": False,
                     "options": {"temperature": 0.7, "num_predict": 120},
                 },
-                timeout=30,
+                timeout=60,
             )
 
             if resp.status_code == 200:
@@ -917,10 +919,12 @@ class ChatHandler:
                         f"Image generation complete: {result['image_id']}"
                     )
 
-            except Exception as e:
+            except BaseException as e:
+                import traceback
                 print(
                     f"{log_prefix} [{LogLevel.CRITICAL.name}] "
-                    f"Image generation thread error: {type(e).__name__}: {e}"
+                    f"Image generation thread error: {type(e).__name__}: {e}\n"
+                    + traceback.format_exc()
                 )
                 error_msg = f"{log_prefix} [Error]: Image generation failed: {e}"
                 message_handler.send_to_web_server(error_msg, client_id=client_id)
