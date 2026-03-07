@@ -1065,6 +1065,66 @@ class SimpleFunctions:
         success, message = self.automation.delete_automation(name, user_id)
         return message
 
+    def get_wikipedia_image(self, topic: str = None, user_id: int = None) -> dict:
+        """
+        @brief Fetch the main cover image for a topic from Wikipedia.
+
+        Uses the Wikipedia REST summary API which returns originalimage metadata.
+        Returns a sentinel dict detected by ChatHandler, which emits the image
+        URL to the frontend to display inline above the LLM response.
+
+        @param topic   Topic or subject to look up on Wikipedia.
+        @param user_id Optional user ID (unused, kept for consistency).
+        @return Sentinel dict with type="wikipedia_image_request", or error string.
+        """
+        if not helpers.check_internet_access(self.allow_internet_searches):
+            return "Internet searches are currently disabled in system settings."
+
+        if not self.web_search_config.get("wikipedia_images_enabled", True):
+            return "Wikipedia images are disabled in system settings."
+
+        error_msg = helpers.validate_input(topic, "topic")
+        if error_msg:
+            return error_msg
+
+        wiki_base_url = helpers.get_config_url(self.web_search_config, "wikipedia", "")
+        topic_formatted = "_".join(topic.strip().split())
+        timeout = self.web_search_config.get("timeout", 10)
+
+        try:
+            summary_url = f"{wiki_base_url}/page/summary/{topic_formatted}"
+            summary_data = helpers.make_http_request(
+                summary_url, self.headers, timeout=timeout
+            )
+
+            if not summary_data:
+                return f"No Wikipedia page found for: {topic}"
+
+            # Prefer full-resolution original image; fall back to thumbnail
+            img_data = summary_data.get("originalimage") or summary_data.get("thumbnail")
+            if not img_data or not img_data.get("source"):
+                return f"No image available on Wikipedia for: {topic}"
+
+            page_title = summary_data.get("title", topic)
+            image_url = img_data["source"]
+
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Wikipedia image found for "
+                f"{page_title!r}: {image_url}"
+            )
+            return {
+                "type": "wikipedia_image_request",
+                "url": image_url,
+                "title": page_title,
+                "topic": topic,
+            }
+
+        except Exception as e:
+            ErrorHandler.log_error(
+                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia image fetch error"
+            )
+            return f"Could not fetch Wikipedia image for: {topic}"
+
     def generate_image(self, prompt: str, title: str = None, user_id: int = None) -> dict:
         """
         @brief Signal that an image generation request has been received.

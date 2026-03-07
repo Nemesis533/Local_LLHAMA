@@ -88,7 +88,7 @@ class ModelKeepaliveManager:
             )
 
     def start(self):
-        """Start the keepalive background thread."""
+        """Start the keepalive background thread and send startup warm-up pings."""
         if not self.enabled:
             print(
                 f"{self.log_prefix} [{LogLevel.INFO.name}] Keepalive is disabled, not starting"
@@ -108,6 +108,18 @@ class ModelKeepaliveManager:
             f"{self.log_prefix} [{LogLevel.INFO.name}] Model keepalive started (interval: {self.interval}s, {len(self.models)} models)"
         )
 
+    def warm_up(self):
+        """Send immediate warm-up pings so models are loaded in GPU memory.
+
+        Call this once after ALL other components (state machine, audio, image
+        pipeline, etc.) have finished initialising, so the warm-up does not
+        compete for VRAM with those components.
+        """
+        if not self.enabled:
+            return
+        warm_up_thread = threading.Thread(target=self._warm_up_worker, daemon=True)
+        warm_up_thread.start()
+
     def stop(self):
         """Stop the keepalive thread."""
         if not self.running:
@@ -119,6 +131,22 @@ class ModelKeepaliveManager:
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Model keepalive stopped"
         )
+
+    def _warm_up_worker(self):
+        """Send immediate warm-up pings at startup with a longer timeout for model loading."""
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Sending startup warm-up pings to {len(self.models)} model(s)..."
+        )
+        for model_info in self.models:
+            if not self.running:
+                return
+            is_embedding = model_info["type"] == "embedding"
+            self._send_keepalive(
+                model_info["name"],
+                is_embedding=is_embedding,
+                description=model_info["description"],
+                timeout=120,
+            )
 
     def _worker(self):
         """Background worker that sends keepalive requests to models."""
@@ -147,13 +175,14 @@ class ModelKeepaliveManager:
                     f"{self.log_prefix} [{LogLevel.WARNING.name}] Keepalive error: {type(e).__name__}: {e}"
                 )
 
-    def _send_keepalive(self, model_name: str, is_embedding: bool = False, description: str = ""):
+    def _send_keepalive(self, model_name: str, is_embedding: bool = False, description: str = "", timeout: int = 10):
         """
         Send a minimal request to keep a model loaded.
 
         @param model_name Name of the model to ping
         @param is_embedding Whether this is an embedding model
         @param description Optional description of the model's purpose
+        @param timeout Request timeout in seconds
         """
         try:
             url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
@@ -170,7 +199,7 @@ class ModelKeepaliveManager:
                     "options": {"num_predict": 2, "temperature": 0},
                 }
 
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=timeout)
 
             if response.status_code == 200:
                 desc_suffix = f" ({description})" if description else ""

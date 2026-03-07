@@ -380,5 +380,19 @@ class LocalLLHamaSystemController:
 
         print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] System Started")
 
+        # 8. Warm up LLM models — done last so no other component competes for
+        #    GPU memory during model loading.
+        try:
+            keepalive = getattr(self.command_llm, "keepalive_manager", None)
+            if keepalive is not None:
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] Triggering model warm-up pings..."
+                )
+                keepalive.warm_up()
+        except Exception as e:
+            print(
+                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model warm-up failed: {repr(e)}"
+            )
+
         self.started = True
         return True

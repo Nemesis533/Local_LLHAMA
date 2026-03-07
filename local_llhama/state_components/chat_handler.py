@@ -353,9 +353,17 @@ class ChatHandler:
                 if isinstance(r.get("response"), dict)
                 and r["response"].get("type") == "image_generation_request"
             ]
+
+            # --- Separate Wikipedia image requests from regular results ---
+            wiki_image_requests = [
+                r for r in simple_function_results
+                if isinstance(r.get("response"), dict)
+                and r["response"].get("type") == "wikipedia_image_request"
+            ]
+
             regular_results = [
                 r for r in simple_function_results
-                if r not in image_gen_requests
+                if r not in image_gen_requests and r not in wiki_image_requests
             ]
 
             # Handle image generation (runs in background thread)
@@ -364,12 +372,38 @@ class ChatHandler:
                     img_req["response"], client_id, conversation_id
                 )
 
+            # Handle Wikipedia image requests
+            if wiki_image_requests:
+                pg_client = getattr(self.command_llm, "pg_client", None)
+                for wiki_req in wiki_image_requests:
+                    wiki_data = wiki_req["response"]
+                    self.message_handler.send_wikipedia_image_ready(
+                        {
+                            "url": wiki_data["url"],
+                            "title": wiki_data["title"],
+                            "topic": wiki_data["topic"],
+                        },
+                        client_id=client_id,
+                    )
+                    # Persist inline tag to DB so conversation recovery can re-render
+                    if pg_client and conversation_id:
+                        try:
+                            pg_client.insert_message(
+                                conversation_id,
+                                "assistant",
+                                f"[wikipedia_image:{wiki_data['url']}]",
+                            )
+                        except Exception as db_err:
+                            print(
+                                f"{self.log_prefix} [WARNING] Could not persist "
+                                f"wikipedia image tag to DB: {db_err}"
+                            )
+
             # If there are no regular results left, return now
-            if not regular_results and not image_gen_requests:
+            if not regular_results and not image_gen_requests and not wiki_image_requests:
                 return
             if not regular_results:
-                # Image gen was the only request; return — thread will finish later
-                # Clean up pending query since we're handing off to the thread
+                # Image gen or wiki image was the only request; clean up and hand off
                 self.pending_user_queries.pop(client_id, None)
                 return
 

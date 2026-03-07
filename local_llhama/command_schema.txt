@@ -145,5 +145,15 @@
       "prompt": {"required": true, "description": "Detailed visual description of the image to generate. Be as specific as possible about style, lighting, composition, mood, and content."},
       "title": {"required": false, "description": "Short title for the image. If not provided, the assistant will suggest one."}
     }
+  },
+  "get_wikipedia_image": {
+    "entity_id": "get_wikipedia_image",
+    "actions": ["get_wikipedia_image"],
+    "description": "Fetch the main cover image for a topic from Wikipedia and display it inline in the chat. Use when the user asks to show, display, or see a picture/image of a real-world subject, person, place, animal, or concept that is likely to have a Wikipedia article.",
+    "display_name": "Fetching Wikipedia Image...",
+    "example": {"action": "get_wikipedia_image", "target": "get_wikipedia_image", "data": {"topic": "Eiffel Tower"}},
+    "parameters": {
+      "topic": {"required": true, "description": "Topic or subject whose Wikipedia cover image should be displayed"}
+    }
   }
 }

@@ -379,6 +379,7 @@ CRITICAL:
 - News/events → get_news_summary
 - weather → weather_function
 - Conversation/stories/chat → generate_conversational_response
+- Showing a real-world image (person, place, animal, concept) → get_wikipedia_image (independent of get_wikipedia_summary — use it alone when the user just wants to see an image, without necessarily needing article text)
 
 - When unsure → use a function
 

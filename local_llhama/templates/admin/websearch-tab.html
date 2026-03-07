@@ -33,7 +33,19 @@
             <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
                 Configure which websites can be used for information retrieval.
             </p>
-            
+
+            <!-- Wikipedia Image Toggle -->
+            <div style="margin-bottom: 18px; padding: 14px; background: #f0f7ff; border-radius: 6px; border: 1px solid #cce0ff;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; color: #2c3e50;">
+                    <input type="checkbox" id="wikipedia-images-enabled" style="width: 16px; height: 16px; cursor: pointer;">
+                    Enable Wikipedia cover images
+                </label>
+                <p style="color: #666; font-size: 13px; margin: 6px 0 0 26px;">
+                    When enabled, the assistant can fetch and display the main Wikipedia image for a topic inline in chat.
+                    Image URLs are stored in the conversation history but images are not saved locally.
+                </p>
+            </div>
+
             <div style="margin-bottom: 15px;">
                 <button class="btn btn-primary btn-small" onclick="addWebsite()">➕ Add Website</button>
             </div>

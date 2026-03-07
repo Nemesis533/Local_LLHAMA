@@ -234,6 +234,12 @@ socket.on('image_ready', (data) => {
   }
 });
 
+// ── Wikipedia cover image ────────────────────────────────────────────────────
+socket.on('wikipedia_image_ready', (data) => {
+  hideLoadingIndicator();
+  addWikipediaImageMessage(data.url, data.title);
+});
+
 // Listen for responses from the system via WebSocket
 socket.on('log_line', (data) => {
   const message = data.line || data;

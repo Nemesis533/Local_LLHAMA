@@ -150,6 +150,7 @@ async function loadConversation(conversationId) {
           // Detect assistant image messages:
           //   New format: [image:uuid]
           //   Legacy format: [Image generated: Some Title]
+          //   Wikipedia image: [wikipedia_image:https://...]
           let imgData = null;
           if (msg.role === 'assistant' && msg.content) {
             const idMatch = msg.content.match(/^\[image:([a-f0-9-]{36})\]$/i);
@@ -158,6 +159,15 @@ async function loadConversation(conversationId) {
             } else {
               const titleMatch = msg.content.match(/^\[Image generated:\s*(.+?)\]$/);
               if (titleMatch) imgData = imagesByTitle[titleMatch[1].trim().toLowerCase()];
+            }
+          }
+
+          // Detect Wikipedia image tag
+          if (!imgData && msg.role === 'assistant' && msg.content) {
+            const wikiMatch = msg.content.match(/^\[wikipedia_image:(.+?)\]$/i);
+            if (wikiMatch) {
+              addWikipediaImageMessage(wikiMatch[1], '', timeStr);
+              return;
             }
           }
 

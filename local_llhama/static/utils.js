@@ -208,3 +208,37 @@ function addImageMessage(imageId, title, comment, imageUrl, downloadUrl, timeStr
   chatMessages.appendChild(messageDiv);
   scrollToBottom();
 }
+
+// Display a Wikipedia cover image inline in the chat (not saved locally, just a URL)
+function addWikipediaImageMessage(imageUrl, title, timeStr) {
+  const chatMessages = document.getElementById('chat-messages');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message assistant-message wikipedia-image-message';
+
+  const timestamp = timeStr || new Date().toLocaleTimeString();
+  const safeUrl   = escapeHtml(imageUrl);
+  const safeTitle = escapeHtml(title || 'Wikipedia Image');
+
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-type">${window.currentAssistantName || 'Assistant'}</span>
+      <span class="message-time">${timestamp}</span>
+    </div>
+    <div class="message-content">
+      <div class="wikipedia-image-wrapper">
+        <p class="image-title"><strong>${safeTitle}</strong></p>
+        <img
+          class="wikipedia-image"
+          src="${safeUrl}"
+          alt="${safeTitle}"
+          loading="lazy"
+          onerror="this.closest('.wikipedia-image-wrapper').innerHTML='<p class=\\'image-error\\'>Image could not be loaded.</p>'"
+        />
+        <p class="wikipedia-image-caption" style="font-size:12px;color:#666;margin-top:4px;">Source: Wikipedia</p>
+      </div>
+    </div>
+  `;
+
+  chatMessages.appendChild(messageDiv);
+  scrollToBottom();
+}

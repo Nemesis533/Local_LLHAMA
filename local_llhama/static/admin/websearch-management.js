@@ -37,6 +37,12 @@ export function displayWebSearchConfig() {
     // Set general settings
     document.getElementById('max-results').value = webSearchConfig.max_results || 3;
     document.getElementById('search-timeout').value = webSearchConfig.timeout || 10;
+
+    // Set Wikipedia images toggle
+    const wikiImgToggle = document.getElementById('wikipedia-images-enabled');
+    if (wikiImgToggle) {
+        wikiImgToggle.checked = webSearchConfig.wikipedia_images_enabled !== false;
+    }
     
     // Display allowed websites
     displayWebsites();
@@ -224,6 +230,12 @@ export async function saveWebSearchConfig() {
         // Gather current form values
         webSearchConfig.max_results = parseInt(document.getElementById('max-results').value);
         webSearchConfig.timeout = parseInt(document.getElementById('search-timeout').value);
+
+        // Gather Wikipedia images toggle
+        const wikiImgToggle = document.getElementById('wikipedia-images-enabled');
+        if (wikiImgToggle) {
+            webSearchConfig.wikipedia_images_enabled = wikiImgToggle.checked;
+        }
         
         // Send to server
         const response = await fetch('/settings/web-search', {

@@ -370,6 +370,32 @@ class LocalLLHAMA_WebService:
                 except Exception:
                     pass
 
+    def emit_wikipedia_image_ready(self, image_data: dict, client_id=None):
+        """
+        @brief Emit a wikipedia_image_ready SocketIO event to the requesting client.
+
+        @param image_data Dict with keys: url, title, topic.
+        @param client_id  Optional client identifier for per-user routing.
+        """
+        with self.clients_lock:
+            if client_id and client_id in self.client_sessions:
+                target_sid = self.client_sessions[client_id]
+                if target_sid in self.connected_clients:
+                    try:
+                        self.socketio.emit("wikipedia_image_ready", image_data, room=target_sid)
+                    except Exception as e:
+                        print(
+                            f"{self.class_prefix_message} [{LogLevel.WARNING.name}] "
+                            f"Failed to emit wikipedia_image_ready to client {target_sid}: {repr(e)}"
+                        )
+                return
+            # Broadcast fallback
+            for sid in list(self.connected_clients):
+                try:
+                    self.socketio.emit("wikipedia_image_ready", image_data, room=sid)
+                except Exception:
+                    pass
+
     def handle_connect(self):
         ip = request.remote_addr
         if not self._is_ip_allowed(ip):
@@ -550,6 +576,16 @@ class LocalLLHAMA_WebService:
                         except Exception as e:
                             print(
                                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit image_ready: {repr(e)}"
+                            )
+
+                    elif message_type == "wikipedia_image_ready":
+                        image_data = message.get("data", {})
+                        client_id = message.get("client_id")
+                        try:
+                            self.emit_wikipedia_image_ready(image_data, client_id=client_id)
+                        except Exception as e:
+                            print(
+                                f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit wikipedia_image_ready: {repr(e)}"
                             )
 
             except Empty:
