@@ -155,5 +155,16 @@
     "parameters": {
       "topic": {"required": true, "description": "Topic or subject whose Wikipedia cover image should be displayed"}
     }
+  },
+  "analyze_image": {
+    "entity_id": "analyze_image",
+    "actions": ["analyze_image"],
+    "description": "Analyze an image using the LLaVA vision model. Use when the user asks to analyze, describe, explain, read text from, or answer questions about an image. The image can be provided as a URL or a previously generated image path.",
+    "display_name": "Analyzing Image...",
+    "example": {"action": "analyze_image", "target": "analyze_image", "data": {"image": "https://example.com/photo.jpg", "query": "What is in this image?"}},
+    "parameters": {
+      "image": {"required": true, "description": "Image URL, file path, or base64-encoded image data"},
+      "query": {"required": false, "description": "Question or instruction about the image (default: describe what you see)"}
+    }
   }
 }

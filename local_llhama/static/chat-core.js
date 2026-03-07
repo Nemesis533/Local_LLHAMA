@@ -9,6 +9,10 @@ let pendingUpdates = 0;
 // Track current streaming message element
 let currentStreamingMessage = null;
 
+// Track uploaded image
+let uploadedImageId = null;
+let uploadedImageUrl = null;
+
 // DOM elements
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
@@ -51,16 +55,163 @@ logoutBtn.addEventListener('click', async () => {
   }
 });
 
+// ── Image Upload ──────────────────────────────────────────────────────────────
+// Image upload input and preview elements
+const imageUploadInput = document.getElementById('image-upload-input');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const removeImageBtn = document.getElementById('remove-image-btn');
+
+// Handle file selection
+imageUploadInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    await handleImageUpload(file);
+  }
+});
+
+// Handle remove image
+removeImageBtn.addEventListener('click', () => {
+  clearUploadedImage();
+});
+
+// Drag and drop handlers
+const chatInputContainer = document.querySelector('.chat-input-container');
+
+chatInputContainer.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  chatInputContainer.classList.add('drag-over');
+});
+
+chatInputContainer.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  chatInputContainer.classList.remove('drag-over');
+});
+
+chatInputContainer.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  chatInputContainer.classList.remove('drag-over');
+  
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    const file = files[0];
+    if (file.type.startsWith('image/')) {
+      await handleImageUpload(file);
+    } else {
+      alert('Please drop an image file (PNG, JPG, GIF, or WebP)');
+    }
+  }
+});
+
+// Handle image upload
+async function handleImageUpload(file) {
+  // Validate file size (10 MB max)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert(`File too large. Maximum size is ${maxSize / 1024 / 1024} MB`);
+    return;
+  }
+  
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    imagePreview.src = e.target.result;
+    imagePreviewContainer.style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+  
+  // Upload to server
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  // Add conversation_id if available
+  const conversationId = chatInput.dataset.conversationId || null;
+  if (conversationId) {
+    formData.append('conversation_id', conversationId);
+  }
+  
+  try {
+    const response = await fetch('/api/images/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      uploadedImageId = data.image_id;
+      uploadedImageUrl = data.url;
+      console.log('Image uploaded:', uploadedImageId);
+    } else {
+      throw new Error(data.error || 'Upload failed');
+    }
+  } catch (error) {
+    console.error('Image upload error:', error);
+    alert('Failed to upload image: ' + error.message);
+    clearUploadedImage();
+  }
+}
+
+// Clear uploaded image
+function clearUploadedImage() {
+  uploadedImageId = null;
+  uploadedImageUrl = null;
+  imagePreview.src = '';
+  imagePreviewContainer.style.display = 'none';
+  imageUploadInput.value = '';
+}
+
 // Send message
 async function sendMessage() {
   const message = chatInput.value.trim();
   
-  if (!message) {
+  // Allow empty message if image is present
+  if (!message && !uploadedImageId) {
     return;
   }
   
-  // Add user message to chat
-  addMessage(message, 'user');
+  // Prepare message text and request body
+  let messageText = message;
+  let requestBody = {
+    from_webui: true,
+    conversation_id: chatInput.dataset.conversationId || null
+  };
+  
+  // If image is uploaded, include it in the request
+  if (uploadedImageId) {
+    requestBody.uploaded_image_url = uploadedImageUrl;
+    requestBody.uploaded_image_id = uploadedImageId;
+    
+    // Format message to trigger image analysis
+    if (messageText) {
+      messageText = `analyze this image: ${messageText}`;
+    } else {
+      messageText = 'Please analyze this image';
+    }
+  }
+  
+  requestBody.text = messageText;
+  
+  // Add user message to chat (show original message if typed, and show uploaded image)
+  if (message) {
+    addMessage(message, 'user');
+  }
+  if (uploadedImageId) {
+    addMessage(`<img src="${uploadedImageUrl}" style="max-width: 200px; max-height: 200px; border-radius: 4px; margin-top: 5px;">`, 'user');
+  }
+  
+  // Clear uploaded image state after sending
+  const hadUploadedImage = Boolean(uploadedImageId);
+  if (hadUploadedImage) {
+    clearUploadedImage();
+  }
   
   // Clear input
   chatInput.value = '';
@@ -75,17 +226,12 @@ async function sendMessage() {
   
   try {
     // Send to backend using existing route
-    const conversationId = chatInput.dataset.conversationId || null;
     const response = await fetch('/from_user_text', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        text: message,
-        from_webui: true,
-        conversation_id: conversationId
-      })
+      body: JSON.stringify(requestBody)
     });
     
     if (!response.ok) {

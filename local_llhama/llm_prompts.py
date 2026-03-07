@@ -49,6 +49,8 @@ try:
     )
     from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
     from local_llhama.settings.prompts import IMAGE_INTRO_USER_PROMPT
+    from local_llhama.settings.prompts import IMAGE_ANALYSIS_PROMPT as _RAW_IMAGE_ANALYSIS
+    from local_llhama.settings.prompts import IMAGE_ANALYSIS_SAFETY_PROMPT as _RAW_IMAGE_ANALYSIS_SAFETY
     from local_llhama.settings.prompts import (
         RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
     )
@@ -77,8 +79,10 @@ try:
         _RAW_DECISION, _assistant_name
     )
     SAFETY_INSTRUCTION_PROMPT = _inject_assistant_name(_RAW_SAFETY, _assistant_name)
+    IMAGE_ANALYSIS_PROMPT = _RAW_IMAGE_ANALYSIS
+    IMAGE_ANALYSIS_SAFETY_PROMPT = _RAW_IMAGE_ANALYSIS_SAFETY
 
-    print(f"[LLM_Prompts] Loaded 9 prompts (assistant: {_assistant_name})")
+    print(f"[LLM_Prompts] Loaded 11 prompts (assistant: {_assistant_name})")
 
 except Exception as e:
     print(f"[LLM_Prompts] Error importing prompts: {e}, using defaults")
@@ -94,6 +98,8 @@ except Exception as e:
     SMART_HOME_DECISION_MAKING_EXTENSION = ""
     SAFETY_INSTRUCTION_PROMPT = ""
     CONTEXT_SUMMARY_PROMPT = "Summarize the following context: {context_text}"
+    IMAGE_ANALYSIS_PROMPT = "Analyze the image and answer the user's question."
+    IMAGE_ANALYSIS_SAFETY_PROMPT = "Do not assist with harmful content in images."
     IMAGE_INTRO_USER_PROMPT = (
         'An image is being generated with this description:\n"{description}"\n\n'
         "{title_instruction}\n"
@@ -130,6 +136,7 @@ def reload_prompts(settings_loader=None, system_settings=None):
     global RESPONSE_PROCESSOR_PROMPT, SMART_HOME_PROMPT_TEMPLATE
     global CONVERSATION_PROCESSOR_PROMPT, CALENDAR_EVENT_PROMPT, RESUME_CONVERSATION_PROMPT
     global SMART_HOME_DECISION_MAKING_EXTENSION, SAFETY_INSTRUCTION_PROMPT, CONTEXT_SUMMARY_PROMPT
+    global IMAGE_ANALYSIS_PROMPT, IMAGE_ANALYSIS_SAFETY_PROMPT
 
     # Reload assistant name
     _assistant_name = _load_assistant_name()
@@ -147,6 +154,8 @@ def reload_prompts(settings_loader=None, system_settings=None):
             CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION,
         )
         from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
+        from local_llhama.settings.prompts import IMAGE_ANALYSIS_PROMPT as _RAW_IMAGE_ANALYSIS
+        from local_llhama.settings.prompts import IMAGE_ANALYSIS_SAFETY_PROMPT as _RAW_IMAGE_ANALYSIS_SAFETY
         from local_llhama.settings.prompts import (
             RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
         )
@@ -181,6 +190,8 @@ def reload_prompts(settings_loader=None, system_settings=None):
             _RAW_DECISION, _assistant_name
         )
         SAFETY_INSTRUCTION_PROMPT = _inject_assistant_name(_RAW_SAFETY, _assistant_name)
+        IMAGE_ANALYSIS_PROMPT = _RAW_IMAGE_ANALYSIS
+        IMAGE_ANALYSIS_SAFETY_PROMPT = _RAW_IMAGE_ANALYSIS_SAFETY
 
         print(
             f"[LLM_Prompts] Prompts reloaded successfully (assistant: {_assistant_name})"

@@ -156,9 +156,11 @@ class ChatHandler:
                     conversation_id = message.get(
                         "conversation_id"
                     )  # Get conversation_id from queue
+                    uploaded_image_url = message.get("uploaded_image_url")
+                    uploaded_image_id = message.get("uploaded_image_id")
 
                     if text:
-                        self._handle_chat_message(text, client_id, conversation_id)
+                        self._handle_chat_message(text, client_id, conversation_id, uploaded_image_url, uploaded_image_id)
 
             except Empty:
                 continue
@@ -168,13 +170,15 @@ class ChatHandler:
                 )
                 time.sleep(0.1)
 
-    def _handle_chat_message(self, text, client_id, passed_conversation_id=None):
+    def _handle_chat_message(self, text, client_id, passed_conversation_id=None, uploaded_image_url=None, uploaded_image_id=None):
         """
         Process a single chat message.
 
         @param text The user's message text
         @param client_id The client identifier for routing responses
         @param passed_conversation_id Optional conversation_id from frontend (when continuing existing chat)
+        @param uploaded_image_url Optional URL of uploaded image for analysis
+        @param uploaded_image_id Optional UUID of uploaded image in database
         """
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Processing chat message from client {client_id}: {text}"
@@ -185,6 +189,37 @@ class ChatHandler:
             conversation_id = self.context_manager.ensure_conversation_exists(
                 client_id, passed_conversation_id
             )
+
+            # If uploaded image is present, directly handle image analysis
+            if uploaded_image_url:
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Uploaded image detected, routing to image analysis"
+                )
+                # Send user message to WebUI
+                user_message = f"{self.log_prefix} [User Prompt]: {text}"
+                self.message_handler.send_to_web_server(user_message, client_id=client_id)
+                
+                # Extract query from text (remove "analyze this image:" prefix if present)
+                query = text
+                if text.lower().startswith("analyze this image:"):
+                    query = text[len("analyze this image:"):].strip()
+                elif text == "Please analyze this image":
+                    query = None
+                
+                # Build analysis request dict
+                analysis_request = {
+                    "type": "image_analysis_request",
+                    "image": uploaded_image_url,
+                    "query": query or "Describe what you see in this image.",
+                    "user_id": client_id,
+                    "uploaded_image_id": uploaded_image_id  # UUID for conversation storage
+                }
+                
+                # Start image analysis in background thread
+                self._handle_image_analysis(
+                    analysis_request, client_id, conversation_id
+                )
+                return
 
             # Send user message to WebUI
             user_message = f"{self.log_prefix} [User Prompt]: {text}"
@@ -354,6 +389,13 @@ class ChatHandler:
                 and r["response"].get("type") == "image_generation_request"
             ]
 
+            # --- Separate image analysis requests from regular results ---
+            image_analysis_requests = [
+                r for r in simple_function_results
+                if isinstance(r.get("response"), dict)
+                and r["response"].get("type") == "image_analysis_request"
+            ]
+
             # --- Separate Wikipedia image requests from regular results ---
             wiki_image_requests = [
                 r for r in simple_function_results
@@ -363,13 +405,21 @@ class ChatHandler:
 
             regular_results = [
                 r for r in simple_function_results
-                if r not in image_gen_requests and r not in wiki_image_requests
+                if r not in image_gen_requests
+                and r not in image_analysis_requests
+                and r not in wiki_image_requests
             ]
 
             # Handle image generation (runs in background thread)
             for img_req in image_gen_requests:
                 self._handle_image_generation(
                     img_req["response"], client_id, conversation_id
+                )
+
+            # Handle image analysis (runs in background thread, bypasses main LLM)
+            for analysis_req in image_analysis_requests:
+                self._handle_image_analysis(
+                    analysis_req["response"], client_id, conversation_id
                 )
 
             # Handle Wikipedia image requests
@@ -405,7 +455,7 @@ class ChatHandler:
                             )
 
             # If there are no regular results left, return now
-            if not regular_results and not image_gen_requests and not wiki_image_requests:
+            if not regular_results and not image_gen_requests and not image_analysis_requests and not wiki_image_requests:
                 return
             if not regular_results:
                 if wiki_image_requests and conversation_id and isinstance(self.command_llm, OllamaClient):
@@ -957,6 +1007,296 @@ class ChatHandler:
             )
 
         return default_title, default_comment
+
+    def _get_image_analysis_settings(self) -> dict:
+        """
+        @brief Load image analysis settings from object_settings.json.
+
+        @return Dict with ImageAnalysisManager config keys.
+        """
+        defaults = {
+            "enabled": True,
+            "llava_model": "llava:13b-v1.6-vicuna-q8_0",
+        }
+        try:
+            settings_path = (
+                Path(__file__).parent.parent / "settings" / "object_settings.json"
+            )
+            if settings_path.exists():
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                section = data.get("ImageAnalysisManager", {})
+                for key in defaults:
+                    entry = section.get(key, {})
+                    if isinstance(entry, dict) and "value" in entry:
+                        defaults[key] = entry["value"]
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not load image analysis settings: {e}"
+            )
+        return defaults
+
+    @staticmethod
+    def _prepare_image_for_llava(image_source: str) -> str:
+        """
+        @brief Fetch/decode an image, resize to the best-matching LLaVA 1.6 resolution,
+               and return it as a base64-encoded PNG string.
+
+        LLaVA 1.6 natively supports three tile resolutions (up to 4× the base
+        336×336 pixel budget):
+            672×672  — square  (ratio ≈ 1.0)
+            336×1344 — portrait (ratio ≈ 0.25)
+            1344×336 — landscape (ratio ≈ 4.0)
+
+        The resolution whose aspect ratio is closest to the source image is
+        chosen. Resizing uses LANCZOS for maximum quality.
+
+        @param image_source  URL, data-URI, or raw base64 string of the image.
+        @return Base64-encoded PNG string ready to embed in the Ollama API payload.
+        """
+        import base64
+        import io
+
+        import requests as _req
+        from PIL import Image
+
+        # LLaVA 1.6 supported resolutions: (width, height)
+        LLAVA_RESOLUTIONS = [
+            (672, 672),   # square     — aspect 1.0
+            (336, 1344),  # portrait   — aspect 0.25
+            (1344, 336),  # landscape  — aspect 4.0
+        ]
+
+        # --- Load image bytes ---
+        if image_source.startswith("data:"):
+            # data:image/png;base64,<data>
+            _, encoded = image_source.split(",", 1)
+            image_bytes = base64.b64decode(encoded)
+        elif image_source.startswith("http://") or image_source.startswith("https://"):
+            resp = _req.get(image_source, timeout=15)
+            resp.raise_for_status()
+            image_bytes = resp.content
+        else:
+            # Assume raw base64 or file path
+            try:
+                image_bytes = base64.b64decode(image_source)
+            except Exception:
+                # Try as file path
+                with open(image_source, "rb") as fh:
+                    image_bytes = fh.read()
+
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        # --- Pick best resolution by closest aspect ratio ---
+        orig_w, orig_h = image.size
+        orig_ratio = orig_w / orig_h
+        target_w, target_h = min(
+            LLAVA_RESOLUTIONS,
+            key=lambda r: abs((r[0] / r[1]) - orig_ratio),
+        )
+
+        print(
+            f"[Chat Handler] [INFO] Scaling image {orig_w}×{orig_h} "
+            f"(ratio {orig_ratio:.2f}) → {target_w}×{target_h} for LLaVA"
+        )
+
+        image = image.resize((target_w, target_h), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    def _handle_image_analysis(
+        self, analysis_request: dict, client_id: str, conversation_id: str
+    ):
+        """
+        @brief Analyse an image with LLaVA in a background thread, bypassing the main LLM.
+
+        Flow:
+          1. Show "Analysing image…" status to the user.
+          2. Spawn a background thread that:
+               a. Offloads the main Ollama model to free VRAM.
+               b. Scales the image to the best LLaVA 1.6 resolution.
+               c. Calls LLaVA via /api/generate with the image + query.
+               d. Streams the answer directly to the client.
+               e. Unloads LLaVA and warms the main model back up.
+
+        @param analysis_request Dict with keys: image, query, user_id.
+        @param client_id        Socket client identifier.
+        @param conversation_id  UUID of the conversation.
+        """
+        settings = self._get_image_analysis_settings()
+        if not settings.get("enabled", True):
+            self._send_error_response(
+                "Image analysis is disabled in system settings.", client_id
+            )
+            return
+
+        image_source = analysis_request.get("image", "")
+        query = analysis_request.get("query", "Describe what you see in this image.")
+        user_id_val = analysis_request.get("user_id")
+        user_id = int(user_id_val) if user_id_val is not None else None  # noqa: F841
+        uploaded_image_id = analysis_request.get("uploaded_image_id")  # UUID if uploaded
+
+        if not image_source:
+            self._send_error_response("No image source was provided.", client_id)
+            return
+
+        llava_model = settings.get("llava_model", "llava:13b-v1.6-vicuna-q8_0")
+        ollama_host = getattr(self.command_llm, "host", None)
+        ollama_model = getattr(self.command_llm, "model", None)
+
+        original_query = self.pending_user_queries.pop(client_id, query)
+
+        status_msg = f"{self.log_prefix} [Status]: Analysing image…"
+        self.message_handler.send_to_web_server(status_msg, client_id=client_id)
+
+        pg_client = getattr(self.command_llm, "pg_client", None)
+        message_handler = self.message_handler
+        context_manager = self.context_manager
+        log_prefix = self.log_prefix
+
+        def _send_status(text: str):
+            message_handler.send_to_web_server(
+                f"{log_prefix} [Status]: {text}", client_id=client_id
+            )
+
+        def _analysis_thread():
+            try:
+                from ..image_generation import ImageGenerationManager as _IM
+
+                host_url = _IM._normalize_ollama_host(ollama_host)
+
+                # Step 1: scale image to best LLaVA resolution
+                _send_status("Preparing image…")
+                try:
+                    image_b64 = self._prepare_image_for_llava(image_source)
+                except Exception as img_err:
+                    print(
+                        f"{log_prefix} [{LogLevel.CRITICAL.name}] Image prep failed: {img_err}"
+                    )
+                    _send_status(f"Could not load image: {img_err}")
+                    return
+
+                # Step 2: offload main LLM to free VRAM
+                _send_status("Freeing GPU memory for vision model…")
+                try:
+                    requests.post(
+                        f"{host_url}/api/generate",
+                        json={"model": ollama_model, "keep_alive": 0},
+                        timeout=10,
+                    )
+                except Exception:
+                    pass  # non-critical
+
+                # Step 3: build system prompt (with optional safety prepend)
+                from ..llm_prompts import (
+                    IMAGE_ANALYSIS_PROMPT,
+                    IMAGE_ANALYSIS_SAFETY_PROMPT,
+                    is_safety_enabled,
+                )
+
+                system_prompt = (
+                    IMAGE_ANALYSIS_SAFETY_PROMPT + "\n\n" + IMAGE_ANALYSIS_PROMPT
+                    if is_safety_enabled()
+                    else IMAGE_ANALYSIS_PROMPT
+                )
+
+                # Step 4: call LLaVA
+                _send_status("Running vision model…")
+                resp = requests.post(
+                    f"{host_url}/api/generate",
+                    json={
+                        "model": llava_model,
+                        "prompt": query,
+                        "images": [image_b64],
+                        "system": system_prompt,
+                        "stream": False,
+                        "options": {"temperature": 0.1, "num_predict": 1024},
+                    },
+                    timeout=120,
+                )
+
+                if resp.status_code != 200:
+                    _send_status(f"Vision model returned HTTP {resp.status_code}")
+                    return
+
+                response_text = resp.json().get("response", "").strip()
+
+                # Step 5: stream the answer directly to the client
+                chunk_size = 5
+                for i in range(0, len(response_text), chunk_size):
+                    chunk = response_text[i : i + chunk_size]
+                    is_complete = i + chunk_size >= len(response_text)
+                    message_handler.send_streaming_chunk(
+                        chunk, client_id=client_id, is_complete=is_complete
+                    )
+
+                # Step 6: persist to conversation history and DB
+                context_manager.add_to_history(client_id, original_query, response_text)
+                if pg_client and conversation_id:
+                    try:
+                        # Store user query
+                        pg_client.insert_message(conversation_id, "user", original_query)
+                        # Store uploaded image reference if present (like generated images)
+                        if uploaded_image_id:
+                            pg_client.insert_message(
+                                conversation_id, "assistant", f"[uploaded_image:{uploaded_image_id}]"
+                            )
+                        # Store analysis response
+                        pg_client.insert_message(
+                            conversation_id, "assistant", response_text
+                        )
+                    except Exception as db_err:
+                        print(
+                            f"{log_prefix} [WARNING] Could not persist image analysis to DB: {db_err}"
+                        )
+
+                print(
+                    f"{log_prefix} [{LogLevel.INFO.name}] Image analysis complete for client {client_id}"
+                )
+
+            except Exception as e:
+                import traceback
+
+                print(
+                    f"{log_prefix} [{LogLevel.CRITICAL.name}] "
+                    f"Image analysis thread error: {type(e).__name__}: {e}\n"
+                    + traceback.format_exc()
+                )
+                _send_status(f"Image analysis failed: {e}")
+            finally:
+                # Step 7: unload LLaVA then warm up the main model
+                try:
+                    from ..image_generation import ImageGenerationManager as _IM
+
+                    host_url = _IM._normalize_ollama_host(ollama_host)
+                    requests.post(
+                        f"{host_url}/api/generate",
+                        json={"model": llava_model, "keep_alive": 0},
+                        timeout=10,
+                    )
+                    if ollama_model:
+                        requests.post(
+                            f"{host_url}/api/generate",
+                            json={
+                                "model": ollama_model,
+                                "prompt": "",
+                                "keep_alive": "5m",
+                            },
+                            timeout=60,
+                        )
+                except Exception:
+                    pass  # non-critical — keepalive will reload on next request
+
+        thread = threading.Thread(target=_analysis_thread, daemon=True)
+        thread.start()
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] "
+            f"Image analysis thread started for client {client_id}"
+        )
 
     def _handle_image_generation(
         self, image_request: dict, client_id: str, conversation_id: str

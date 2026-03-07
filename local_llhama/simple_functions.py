@@ -1280,3 +1280,28 @@ class SimpleFunctions:
             "title": title or "",
             "user_id": user_id,
         }
+
+    def analyze_image(self, image: str, query: str = None, user_id: int = None) -> dict:
+        """
+        @brief Signal that an image analysis request has been received.
+
+        This method does NOT perform the heavy inference directly.
+        It returns a sentinel dict detected by ChatHandler, which then offloads
+        the main LLM, loads LLaVA, runs analysis, streams the answer, unloads
+        LLaVA, and reloads the main model.
+
+        @param image    Image source: a URL, a file path, or a base64-encoded string.
+        @param query    Question or instruction about the image.
+        @param user_id  ID of the requesting user.
+        @return Sentinel dict with type="image_analysis_request".
+        """
+        print(
+            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Image analysis request received: "
+            f"query={query!r}, user_id={user_id}"
+        )
+        return {
+            "type": "image_analysis_request",
+            "image": image or "",
+            "query": query or "Describe what you see in this image.",
+            "user_id": user_id,
+        }

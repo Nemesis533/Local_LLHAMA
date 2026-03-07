@@ -481,13 +481,17 @@ class LocalLLHAMA_WebService:
             raise RuntimeError(f"Failed to queue command: {repr(e)}")
 
     def send_chat_message(
-        self, text: str, client_id: str = None, conversation_id: str = None
+        self, text: str, client_id: str = None, conversation_id: str = None,
+        uploaded_image_url: str = None, uploaded_image_id: str = None
     ):
         """
         Send chat message to dedicated chat handler (bypasses state machine).
 
         Returns the conversation_id so frontend can track it for subsequent messages.
         If new conversation is created, this will return the newly created ID.
+        
+        @param uploaded_image_url Optional URL of uploaded image for analysis
+        @param uploaded_image_id Optional UUID of uploaded image in database
         """
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Received Chat from User: {text} (client={client_id}, conversation={conversation_id})"
@@ -503,6 +507,12 @@ class LocalLLHAMA_WebService:
             "client_id": client_id,
             "conversation_id": conversation_id,
         }
+        
+        # Include uploaded image data if provided
+        if uploaded_image_url:
+            message["uploaded_image_url"] = uploaded_image_url
+        if uploaded_image_id:
+            message["uploaded_image_id"] = uploaded_image_id
 
         try:
             self.chat_message_queue.put(message, timeout=2.0)

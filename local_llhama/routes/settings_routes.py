@@ -180,6 +180,14 @@ def get_prompts():
                 "value": prompts.SAFETY_INSTRUCTION_PROMPT,
                 "description": "Safety guidelines and content filtering instructions"
             },
+            "image_analysis_prompt": {
+                "value": prompts.IMAGE_ANALYSIS_PROMPT,
+                "description": "System prompt for LLaVA image analysis — instructs the vision model how to answer user questions about images"
+            },
+            "image_analysis_safety_prompt": {
+                "value": prompts.IMAGE_ANALYSIS_SAFETY_PROMPT,
+                "description": "Safety guardrails prepended to the image analysis prompt when safety mode is enabled"
+            },
         }
 
         return jsonify({"status": "ok", "prompts": prompts_data})
@@ -236,6 +244,8 @@ Use {assistant_name} placeholder which will be replaced at runtime.
         "RESUME_CONVERSATION_PROMPT",
         "SMART_HOME_DECISION_MAKING_EXTENSION",
         "SAFETY_INSTRUCTION_PROMPT",
+        "IMAGE_ANALYSIS_PROMPT",
+        "IMAGE_ANALYSIS_SAFETY_PROMPT",
     ]
 
     for prompt_name in prompt_names:

@@ -144,6 +144,16 @@
       "type": "float"
     }
   },
+  "ImageAnalysisManager": {
+    "enabled": {
+      "value": true,
+      "type": "bool"
+    },
+    "llava_model": {
+      "value": "llava:13b-v1.6-vicuna-q8_0",
+      "type": "str"
+    }
+  },
   "_system": {
     "active_preset": {
       "value": "multi_lingual_large",
