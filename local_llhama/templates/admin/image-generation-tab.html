@@ -1,0 +1,150 @@
+<!-- Image Generation Tab -->
+<div id="image-generation-tab" class="tab-content" style="display: none;">
+    <div class="language-settings-container">
+        <h2>◈ Image Generation</h2>
+        <p style="color: #666; margin-bottom: 20px;">
+            Configure the Stable Diffusion image generation pipeline (SD 3.5 NF4).
+            Changes require a system restart to take effect.
+        </p>
+
+        <div style="margin-bottom: 20px;">
+            <button class="btn btn-success" onclick="saveImageGenerationConfig()">■ Save Configuration</button>
+        </div>
+
+        <!-- Enable / Disable -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Feature Toggle</h3>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="img-enabled" style="margin-right: 10px; width: 18px; height: 18px;">
+                    <span style="font-weight: 500;">Enable image generation</span>
+                </label>
+                <div style="font-size: 12px; color: #666; margin-top: 5px; margin-left: 28px;">
+                    When disabled, the assistant will decline image generation requests without loading the pipeline.
+                </div>
+            </div>
+        </div>
+
+        <!-- Model & Storage -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Model & Storage</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                HuggingFace model repo and local cache location for downloaded weights.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="img-model-id">Model ID:</label>
+                <input type="text"
+                       id="img-model-id"
+                       placeholder="e.g., stabilityai/stable-diffusion-3.5-large-turbo"
+                       style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">HuggingFace repository ID for the diffusion model.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="img-cache-dir">Cache Directory:</label>
+                <input type="text"
+                       id="img-cache-dir"
+                       placeholder="e.g., /mnt/fast_storage/diffusers"
+                       style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">Local path where model weights are cached. Use a fast SSD if available.</div>
+            </div>
+        </div>
+
+        <!-- Inference Parameters -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">Inference Parameters</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Tune the generation quality and speed trade-off.
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 600px;">
+                <div class="form-group">
+                    <label for="img-num-steps">Inference Steps:</label>
+                    <input type="number" id="img-num-steps" min="1" max="50"
+                           style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">Default: 4 (turbo). Higher = slower but better.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="img-guidance-scale">Guidance Scale (CFG):</label>
+                    <input type="number" id="img-guidance-scale" min="0" max="20" step="0.5"
+                           style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">Default: 0.0 for turbo variant.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="img-max-seq-len">Max Sequence Length:</label>
+                    <input type="number" id="img-max-seq-len" min="64" max="1024" step="64"
+                           style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">Token limit for the T5 text encoder. Default: 512.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="img-output-format">Output Format:</label>
+                    <select id="img-output-format"
+                            style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="png">PNG (lossless)</option>
+                        <option value="jpeg">JPEG (smaller)</option>
+                        <option value="webp">WebP (best ratio)</option>
+                    </select>
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">JPEG / WebP use quality 92.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPU & VRAM -->
+        <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #000;">GPU & VRAM</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                Select which device to use and configure persistent-pipeline behaviour.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="img-cuda-device">Target Device:</label>
+                <select id="img-cuda-device"
+                        style="width: 280px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="cuda:0">cuda:0 (default)</option>
+                    <option value="cpu">CPU only</option>
+                </select>
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                    Detected GPUs are listed above CPU. The pipeline always enables CPU spillover for oversized models.
+                </div>
+            </div>
+
+            <!-- Keep pipeline loaded -->
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="img-keep-loaded" style="margin-right: 10px; width: 18px; height: 18px;"
+                           onchange="toggleKeepLoadedSection()">
+                    <span style="font-weight: 500;">Keep pipeline loaded between requests</span>
+                </label>
+                <div style="font-size: 12px; color: #666; margin-top: 5px; margin-left: 28px;">
+                    When enabled, the system will check at load time whether any GPU has enough free VRAM.
+                    If found, the model stays resident — skipping the ~30 s reload on consecutive requests.
+                    The pipeline is still unloaded on system shutdown.
+                </div>
+            </div>
+
+            <div id="img-keep-loaded-section" style="display: none; margin-left: 28px;">
+                <div class="form-group">
+                    <label for="img-min-vram">Minimum Free VRAM (GB):</label>
+                    <input type="number" id="img-min-vram" min="1" max="80" step="0.5"
+                           style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                        A GPU must have at least this much free memory before the pipeline will stay resident.
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px; color: #856404;">
+                <strong>Note:</strong> Keeping the pipeline loaded while the LLM is also active requires
+                enough VRAM for both models simultaneously. On shared-VRAM setups the system will fall back
+                to unload-per-request automatically if the threshold is not met.
+            </div>
+        </div>
+
+        <div id="img-save-status" style="margin-top: 15px; display: none;"></div>
+    </div>
+</div>

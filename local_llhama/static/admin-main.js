@@ -12,6 +12,7 @@ import * as webSearchManagement from './admin/websearch-management.js';
 import * as presetManagement from './admin/preset-management.js';
 import * as modelManagement from './admin/model-management.js';
 import * as systemSettingsManagement from './admin/system-settings-management.js';
+import * as imageGenerationManagement from './admin/image-generation-management.js';
 
 // Expose modules to global window object for onclick handlers in HTML
 window.userManagement = userManagement;
@@ -21,6 +22,7 @@ window.webSearchManagement = webSearchManagement;
 window.presetManagement = presetManagement;
 window.modelManagement = modelManagement;
 window.systemSettingsManagement = systemSettingsManagement;
+window.imageGenerationManagement = imageGenerationManagement;
 
 // Also expose individual functions at top level for legacy compatibility
 window.closeModal = utils.closeModal;
@@ -41,6 +43,8 @@ window.restartSystem = presetManagement.restartSystem;
 window.applyPreset = presetManagement.applyPreset;
 window.saveModelConfig = modelManagement.saveModelConfig;
 window.saveSystemSettings = systemSettingsManagement.saveSystemSettings;
+window.saveImageGenerationConfig = imageGenerationManagement.saveImageGenerationConfig;
+window.toggleKeepLoadedSection = imageGenerationManagement.toggleKeepLoadedSection;
 
 /**
  * Tab Management
@@ -74,7 +78,8 @@ function switchTab(tabName) {
             (tabName === 'websearch' && btnText.includes('web')) ||
             (tabName === 'presets' && btnText.includes('preset')) ||
             (tabName === 'model' && btnText.includes('model')) ||
-            (tabName === 'system-settings' && btnText.includes('system'))) {
+            (tabName === 'system-settings' && btnText.includes('system')) ||
+            (tabName === 'image-generation' && btnText.includes('image'))) {
             btn.classList.add('active');
         }
     });
@@ -102,6 +107,10 @@ function switchTab(tabName) {
     
     if (tabName === 'system-settings') {
         systemSettingsManagement.displaySystemSettings();
+    }
+
+    if (tabName === 'image-generation') {
+        imageGenerationManagement.displayImageGenerationConfig();
     }
 }
 
@@ -141,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     webSearchManagement.loadWebSearchConfig();
     modelManagement.loadModelConfig();
     systemSettingsManagement.loadSystemSettings();
+    imageGenerationManagement.loadImageGenerationConfig();
     
     // Check if coming from restart action
     const urlParams = new URLSearchParams(window.location.search);

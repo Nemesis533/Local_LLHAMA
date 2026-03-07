@@ -645,3 +645,93 @@ def get_available_audio_devices():
             ),
             500,
         )
+
+
+# ── Image Generation Settings ──────────────────────────────────────────────────
+
+_OBJECT_SETTINGS_PATH = Path(__file__).parent.parent / "settings" / "object_settings.json"
+
+_IMG_KEYS = {
+    "enabled", "model_id", "cache_dir", "num_steps", "guidance_scale",
+    "max_sequence_length", "cuda_device", "output_format",
+    "keep_pipeline_loaded", "keep_pipeline_loaded_min_vram_gb",
+}
+
+_IMG_TYPES = {
+    "enabled": bool,
+    "model_id": str,
+    "cache_dir": str,
+    "num_steps": int,
+    "guidance_scale": float,
+    "max_sequence_length": int,
+    "cuda_device": str,
+    "output_format": str,
+    "keep_pipeline_loaded": bool,
+    "keep_pipeline_loaded_min_vram_gb": float,
+}
+
+
+@settings_bp.route("/settings/image-generation", methods=["GET"])
+@login_required
+@FlaskErrorHandler.handle_route()
+def get_image_generation_config():
+    """
+    Return the current ImageGenerationManager settings from object_settings.json
+    as a flat dict of {key: value} pairs.
+    """
+    if not _OBJECT_SETTINGS_PATH.exists():
+        return jsonify({"status": "error", "message": "object_settings.json not found"}), 404
+
+    with open(_OBJECT_SETTINGS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    section = data.get("ImageGenerationManager", {})
+    config = {k: section[k]["value"] for k in _IMG_KEYS if k in section and "value" in section[k]}
+
+    return {"status": "ok", "config": config}
+
+
+@settings_bp.route("/settings/image-generation", methods=["POST"])
+@login_required
+@FlaskErrorHandler.handle_route()
+def update_image_generation_config():
+    """
+    Persist image generation settings to the ImageGenerationManager block of
+    object_settings.json.
+
+    Expects JSON: {"config": {"enabled": true, "num_steps": 4, ...}}
+    """
+    payload = request.get_json()
+    if not payload or "config" not in payload:
+        return jsonify({"status": "error", "message": "Missing 'config' in request"}), 400
+
+    incoming = payload["config"]
+    if not isinstance(incoming, dict):
+        return jsonify({"status": "error", "message": "'config' must be a dict"}), 400
+
+    if not _OBJECT_SETTINGS_PATH.exists():
+        return jsonify({"status": "error", "message": "object_settings.json not found"}), 404
+
+    with open(_OBJECT_SETTINGS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    section = data.setdefault("ImageGenerationManager", {})
+
+    for key, cast in _IMG_TYPES.items():
+        if key not in incoming:
+            continue
+        raw = incoming[key]
+        # Coerce to declared type so the file stays type-safe
+        try:
+            value = cast(raw)
+        except (TypeError, ValueError):
+            value = raw
+        if key in section and isinstance(section[key], dict):
+            section[key]["value"] = value
+        else:
+            section[key] = {"value": value, "type": cast.__name__}
+
+    with open(_OBJECT_SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    return {"status": "ok", "message": "Image generation settings saved."}

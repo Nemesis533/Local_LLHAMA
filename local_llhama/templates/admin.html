@@ -31,6 +31,7 @@
             <button class="tab-button" onclick="switchTab('prompts')">◧ Prompts</button>
             <button class="tab-button" onclick="switchTab('websearch')">◎ Web Search</button>
             <button class="tab-button" onclick="switchTab('system-settings')">⚙ System</button>
+            <button class="tab-button" onclick="switchTab('image-generation')">◈ Image Gen</button>
         </div>
 
         <!-- Tab Content Panels -->
@@ -41,6 +42,7 @@
         {% include 'admin/prompts-tab.html' %}
         {% include 'admin/websearch-tab.html' %}
         {% include 'admin/system-settings-tab.html' %}
+        {% include 'admin/image-generation-tab.html' %}
     </div>
 
     <!-- Modals -->
