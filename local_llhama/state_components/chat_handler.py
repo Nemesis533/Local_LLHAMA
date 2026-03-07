@@ -375,13 +375,18 @@ class ChatHandler:
             # Handle Wikipedia image requests
             if wiki_image_requests:
                 pg_client = getattr(self.command_llm, "pg_client", None)
+                original_user_query = self.pending_user_queries.get(client_id, "")
                 for wiki_req in wiki_image_requests:
                     wiki_data = wiki_req["response"]
+                    chosen_url = self._select_wikipedia_image(
+                        wiki_data, original_user_query
+                    )
+                    chosen_title = wiki_data.get("page_title", wiki_data.get("topic", ""))
                     self.message_handler.send_wikipedia_image_ready(
                         {
-                            "url": wiki_data["url"],
-                            "title": wiki_data["title"],
-                            "topic": wiki_data["topic"],
+                            "url": chosen_url,
+                            "title": chosen_title,
+                            "topic": wiki_data.get("topic", ""),
                         },
                         client_id=client_id,
                     )
@@ -391,7 +396,7 @@ class ChatHandler:
                             pg_client.insert_message(
                                 conversation_id,
                                 "assistant",
-                                f"[wikipedia_image:{wiki_data['url']}]",
+                                f"[wikipedia_image:{chosen_url}]",
                             )
                         except Exception as db_err:
                             print(
@@ -403,8 +408,23 @@ class ChatHandler:
             if not regular_results and not image_gen_requests and not wiki_image_requests:
                 return
             if not regular_results:
-                # Image gen or wiki image was the only request; clean up and hand off
-                self.pending_user_queries.pop(client_id, None)
+                if wiki_image_requests and conversation_id and isinstance(self.command_llm, OllamaClient):
+                    # Generate a brief LLM comment about the displayed image(s)
+                    original_user_query = self.pending_user_queries.get(client_id, "")
+                    wiki_topics = ", ".join(
+                        w["response"].get("page_title") or w["response"].get("topic", "")
+                        for w in wiki_image_requests
+                    )
+                    llm_input = (
+                        f"The user asked: \"{original_user_query}\"\n"
+                        f"You just displayed a Wikipedia image for: {wiki_topics}.\n"
+                        f"Write a short, informative comment relevant to what the user asked."
+                    )
+                    self._handle_simple_function_streaming(
+                        llm_input, original_user_query, client_id, conversation_id
+                    )
+                else:
+                    self.pending_user_queries.pop(client_id, None)
                 return
 
             # --- Process remaining regular results normally ---
@@ -786,6 +806,86 @@ class ChatHandler:
             keep_pipeline_loaded_min_vram_gb=settings["keep_pipeline_loaded_min_vram_gb"],
         )
         return self._image_manager
+
+    def _select_wikipedia_image(self, wiki_data: dict, user_query: str) -> str:
+        """
+        Ask the LLM to pick the most contextually relevant image from the
+        candidate list returned by get_wikipedia_image().
+
+        Falls back to the article's cover image (fallback_url) on any error,
+        and ultimately to the first candidate if that is also absent.
+
+        @param wiki_data   The wikipedia_image_request sentinel dict.
+        @param user_query  The original user message (used for context).
+        @return URL of the chosen image.
+        """
+        candidates = wiki_data.get("candidates", [])
+        fallback_url = wiki_data.get("fallback_url") or (candidates[0]["url"] if candidates else "")
+
+        if not candidates:
+            return fallback_url
+
+        # No need to call the LLM if there's only one option
+        if len(candidates) == 1:
+            return candidates[0]["url"]
+
+        try:
+            # Build a numbered menu for the LLM — keep captions short
+            MAX_CANDIDATES = 10
+            capped = candidates[:MAX_CANDIDATES]
+            lines = []
+            for i, c in enumerate(capped, 1):
+                section = f"[{c['section']}] " if c.get("section") else ""
+                caption = c.get("caption", "").strip() or "(no caption)"
+                # Truncate very long captions
+                if len(caption) > 120:
+                    caption = caption[:117] + "..."
+                lines.append(f"{i}. {section}{caption}")
+
+            menu = "\n".join(lines)
+            page_title = wiki_data.get("page_title", wiki_data.get("topic", ""))
+            prompt = (
+                f"The user asked: \"{user_query}\"\n\n"
+                f"The available images come from the Wikipedia article \"{page_title}\", "
+                f"but choose the image that best matches what the user is actually curious about, "
+                f"not necessarily the article's main subject.\n"
+                f"Reply with ONLY the number of the best image, nothing else.\n\n"
+                f"{menu}"
+            )
+
+            result = self.command_llm.send_message(
+                prompt,
+                max_tokens=4,
+                message_type="response",
+                from_chat=True,
+            )
+
+            # Extract the number from the LLM reply
+            raw = ""
+            if isinstance(result, dict):
+                raw = result.get("nl_response") or result.get("response") or ""
+            elif isinstance(result, str):
+                raw = result
+
+            import re
+            match = re.search(r"\d+", raw.strip())
+            if match:
+                idx = int(match.group()) - 1
+                if 0 <= idx < len(capped):
+                    chosen = capped[idx]["url"]
+                    print(
+                        f"{self.log_prefix} [INFO] Wikipedia image selected by LLM: "
+                        f"#{idx + 1} — {chosen}"
+                    )
+                    return chosen
+
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [WARNING] Wikipedia image selection failed, "
+                f"using fallback: {type(e).__name__}: {e}"
+            )
+
+        return fallback_url
 
     def _generate_image_intro(
         self, prompt: str, title_hint: str, ollama_host: str, model: str

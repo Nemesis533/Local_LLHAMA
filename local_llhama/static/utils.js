@@ -76,7 +76,8 @@ function hideLoadingIndicator() {
 // Show status message (what assistant is doing)
 function showStatusMessage(status) {
   // Route image-generation statuses to the dedicated shimmer placeholder
-  if (/image|GPU memory|model weights/i.test(status)) {
+  // Exclude Wikipedia image fetches — they use their own event, not the shimmer
+  if (/GPU memory|model weights|Freeing GPU|Generating image:|Saving image|Loading image model/i.test(status)) {
     showImagePreviewStatus(status);
     return;
   }

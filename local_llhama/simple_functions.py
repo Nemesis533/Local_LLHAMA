@@ -184,80 +184,36 @@ class SimpleFunctions:
 
         # Normalize topic for initial request
         topic_formatted = "_".join(topic.strip().split())
+        timeout = self.web_search_config.get("timeout", 10)
 
-        try:
-            # Step 1: Get canonical page title
-            summary_url = f"{wiki_base_url}/page/summary/{topic_formatted}"
-            timeout = self.web_search_config.get("timeout", 10)
-            summary_data = helpers.make_http_request(
-                summary_url, self.headers, timeout=timeout
+        # Step 1: Try direct lookup
+        text = self._fetch_wikipedia_article_text(
+            topic_formatted, wiki_base_url, wikimedia_base_url, timeout
+        )
+        if text:
+            return text
+
+        # Step 2: Not found directly — search Wikipedia for the best matching article title
+        alt_titles = self._search_wikipedia_title(topic, wiki_base_url, timeout)
+        for alt in alt_titles[:3]:
+            alt_formatted = "_".join(alt.strip().split())
+            text = self._fetch_wikipedia_article_text(
+                alt_formatted, wiki_base_url, wikimedia_base_url, timeout
             )
+            if text:
+                return f"(Wikipedia article: {alt})\n{text}"
 
-            if not summary_data or not summary_data.get("title"):
-                # Try splitting into multiple topics if original query failed
-                return self._handle_compound_wikipedia_query(
-                    topic, user_id, wiki_base_url, wikimedia_base_url, timeout
-                )
+        # Step 3: Try compound query (e.g. "honey and gastritis")
+        compound = self._handle_compound_wikipedia_query(
+            topic, user_id, wiki_base_url, wikimedia_base_url, timeout
+        )
+        if compound:
+            return compound
 
-            canonical_title = summary_data.get("title").replace(" ", "_")
-
-            # Step 2: Fetch HTML content
-            html_url = f"{wikimedia_base_url}/{canonical_title}/html"
-            timeout = self.web_search_config.get("timeout", 10)
-            html_resp = requests.get(html_url, headers=self.headers, timeout=timeout)
-            html_resp.raise_for_status()
-
-            # Parse and extract text
-            soup = BeautifulSoup(html_resp.text, "html.parser")
-
-            # Remove unwanted elements
-            for element in soup(
-                ["script", "style", "nav", "footer", "header", "table", "figure"]
-            ):
-                element.decompose()
-
-            # Get the first few paragraphs
-            paragraphs = soup.find_all("p", limit=3)
-            text_parts = [
-                p.get_text(separator=" ", strip=True)
-                for p in paragraphs
-                if len(p.get_text(strip=True)) > 20
-            ]
-
-            if text_parts:
-                summary_text = " ".join(text_parts)
-                # Limit to reasonable length
-                if len(summary_text) > 500:
-                    summary_text = summary_text[:497] + "..."
-                return summary_text
-            else:
-                return f"No summary found for: {topic}"
-
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                # Try splitting into multiple topics
-                compound_result = self._handle_compound_wikipedia_query(
-                    topic, user_id, wiki_base_url, wikimedia_base_url, timeout
-                )
-                if compound_result and "not available" not in compound_result.lower():
-                    return compound_result
-                # Fall back to memory search
-                return helpers.wikipedia_fallback_to_memory(
-                    topic, user_id, self.pg_client, self.find_in_memory
-                )
-            ErrorHandler.log_error(
-                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia HTTP error"
-            )
-            return (
-                "Wikipedia information not available at the moment, please try later."
-            )
-        except Exception as e:
-            ErrorHandler.log_error(
-                CLASS_PREFIX_MESSAGE, e, LogLevel.CRITICAL, "Wikipedia fetch error"
-            )
-            return (
-                "Wikipedia information not available at the moment, please try later."
-            )
+        # Step 4: Fall back to memory search
+        return helpers.wikipedia_fallback_to_memory(
+            topic, user_id, self.pg_client, self.find_in_memory
+        )
 
     def _handle_compound_wikipedia_query(
         self, topic, user_id, wiki_base_url, wikimedia_base_url, timeout
@@ -357,6 +313,112 @@ class SimpleFunctions:
             return combined
 
         return None
+
+    def _search_wikipedia_title(self, query: str, wiki_base_url: str, timeout: int) -> list:
+        """
+        @brief Use Wikipedia's OpenSearch API to find matching article titles for a query.
+
+        Called when a direct page lookup returns 404, to discover the canonical
+        article name for the user's intent (e.g. "How airplanes fly" → "Fixed-wing aircraft").
+
+        @param query        The user-supplied search string.
+        @param wiki_base_url Wikipedia REST base URL (used to derive the domain).
+        @param timeout      Request timeout in seconds.
+        @return List of matching article title strings (may be empty).
+        """
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(wiki_base_url)
+            api_url = f"{parsed.scheme}://{parsed.netloc}/w/api.php"
+            resp = requests.get(
+                api_url,
+                params={
+                    "action": "opensearch",
+                    "search": query,
+                    "limit": "5",
+                    "namespace": "0",
+                    "format": "json",
+                    "redirects": "resolve",
+                },
+                headers=self.headers,
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            # opensearch returns [query_str, [titles], [descriptions], [urls]]
+            titles = data[1] if len(data) > 1 else []
+            print(
+                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] "
+                f"Wikipedia OpenSearch for {query!r} → {titles}"
+            )
+            return titles
+        except Exception as e:
+            ErrorHandler.log_error(
+                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia OpenSearch"
+            )
+            return []
+
+    def _fetch_wikipedia_article_text(
+        self,
+        topic_formatted: str,
+        wiki_base_url: str,
+        wikimedia_base_url: str,
+        timeout: int,
+        limit_paragraphs: int = 3,
+        max_chars: int = 500,
+    ):
+        """
+        @brief Fetch and parse article text from Wikipedia for a given topic slug.
+
+        Resolves the canonical title via the summary endpoint, then fetches the
+        full HTML to extract clean paragraph text.
+
+        @param topic_formatted  URL-safe topic string (spaces replaced with underscores).
+        @param wiki_base_url    Wikipedia REST base URL.
+        @param wikimedia_base_url Wikimedia REST base URL (for HTML endpoint).
+        @param timeout          Request timeout in seconds.
+        @param limit_paragraphs Max number of paragraphs to return.
+        @param max_chars        Hard character limit on returned text.
+        @return Extracted text string, or None if the article was not found / empty.
+        """
+        try:
+            summary_data = helpers.make_http_request(
+                f"{wiki_base_url}/page/summary/{topic_formatted}",
+                self.headers,
+                timeout=timeout,
+            )
+            if not summary_data or not summary_data.get("title"):
+                return None
+
+            canonical_title = summary_data["title"].replace(" ", "_")
+            html_resp = requests.get(
+                f"{wikimedia_base_url}/{canonical_title}/html",
+                headers=self.headers,
+                timeout=timeout,
+            )
+            html_resp.raise_for_status()
+
+            soup = BeautifulSoup(html_resp.text, "html.parser")
+            for element in soup(
+                ["script", "style", "nav", "footer", "header", "table", "figure"]
+            ):
+                element.decompose()
+
+            paragraphs = soup.find_all("p", limit=limit_paragraphs)
+            text_parts = [
+                p.get_text(separator=" ", strip=True)
+                for p in paragraphs
+                if len(p.get_text(strip=True)) > 20
+            ]
+            if not text_parts:
+                return None
+
+            text = " ".join(text_parts)
+            if len(text) > max_chars:
+                text = text[:max_chars - 3] + "..."
+            return text
+        except Exception:
+            return None
 
     def get_news_summary(self, query=None):
         """
@@ -1067,11 +1129,13 @@ class SimpleFunctions:
 
     def get_wikipedia_image(self, topic: str = None, user_id: int = None) -> dict:
         """
-        @brief Fetch the main cover image for a topic from Wikipedia.
+        @brief Fetch a list of image candidates for a topic from Wikipedia.
 
-        Uses the Wikipedia REST summary API which returns originalimage metadata.
-        Returns a sentinel dict detected by ChatHandler, which emits the image
-        URL to the frontend to display inline above the LLM response.
+        Hits the Wikimedia media-list endpoint first to gather all article images
+        with captions and section context, then falls back to the summary endpoint
+        for the cover image.  The candidates list is returned as a sentinel dict so
+        that ChatHandler can ask the LLM to pick the most contextually relevant one
+        before emitting the result to the frontend.
 
         @param topic   Topic or subject to look up on Wikipedia.
         @param user_id Optional user ID (unused, kept for consistency).
@@ -1091,39 +1155,107 @@ class SimpleFunctions:
         topic_formatted = "_".join(topic.strip().split())
         timeout = self.web_search_config.get("timeout", 10)
 
+        # Build list of titles to try: direct first, then OpenSearch alternatives
+        titles_to_try = [topic_formatted]
+        alt_titles = self._search_wikipedia_title(topic, wiki_base_url, timeout)
+        titles_to_try += ["_".join(t.strip().split()) for t in alt_titles if t]
+
+        for title_slug in titles_to_try[:5]:
+            result = self._fetch_wikipedia_image_candidates(
+                title_slug, wiki_base_url, timeout
+            )
+            if result:
+                result["topic"] = topic
+                return result
+
+        return f"No image available on Wikipedia for: {topic}"
+
+    def _fetch_wikipedia_image_candidates(
+        self, title_slug: str, wiki_base_url: str, timeout: int
+    ):
+        """
+        @brief Fetch image candidates for a single Wikipedia article slug.
+
+        Resolves the canonical title via the summary endpoint, then hits the
+        media-list endpoint to collect all usable images with captions and section
+        context.  Falls back to the summary cover image if media-list is empty.
+
+        @param title_slug    URL-safe article title (spaces → underscores).
+        @param wiki_base_url Wikipedia REST base URL.
+        @param timeout       Request timeout in seconds.
+        @return Sentinel dict with keys (type, page_title, candidates, fallback_url,
+                topic) if at least one image was found, otherwise None.
+        """
         try:
-            summary_url = f"{wiki_base_url}/page/summary/{topic_formatted}"
             summary_data = helpers.make_http_request(
-                summary_url, self.headers, timeout=timeout
+                f"{wiki_base_url}/page/summary/{title_slug}",
+                self.headers,
+                timeout=timeout,
             )
+        except Exception:
+            return None
 
-            if not summary_data:
-                return f"No Wikipedia page found for: {topic}"
+        if not summary_data:
+            return None
 
-            # Prefer full-resolution original image; fall back to thumbnail
-            img_data = summary_data.get("originalimage") or summary_data.get("thumbnail")
-            if not img_data or not img_data.get("source"):
-                return f"No image available on Wikipedia for: {topic}"
+        page_title = summary_data.get("title", title_slug.replace("_", " "))
+        canonical = page_title.replace(" ", "_")
+        fallback_img = summary_data.get("originalimage") or summary_data.get("thumbnail")
+        fallback_url = fallback_img.get("source") if fallback_img else None
 
-            page_title = summary_data.get("title", topic)
-            image_url = img_data["source"]
-
-            print(
-                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Wikipedia image found for "
-                f"{page_title!r}: {image_url}"
+        candidates = []
+        try:
+            media_data = helpers.make_http_request(
+                f"{wiki_base_url}/page/media-list/{canonical}",
+                self.headers,
+                timeout=timeout,
             )
-            return {
-                "type": "wikipedia_image_request",
-                "url": image_url,
-                "title": page_title,
-                "topic": topic,
-            }
-
+            if media_data and media_data.get("items"):
+                SKIP_EXTENSIONS = (".svg", ".gif", ".ogg", ".ogv", ".webm", ".mp3", ".mp4", ".wav")
+                MIN_DIM = 100
+                for item in media_data["items"]:
+                    if item.get("type") != "image":
+                        continue
+                    src = (
+                        (item.get("srcset") or [{}])[0].get("src")
+                        or item.get("original", {}).get("source", "")
+                    )
+                    if not src:
+                        continue
+                    if any(src.lower().endswith(ext) for ext in SKIP_EXTENSIONS):
+                        continue
+                    w = item.get("original", {}).get("width", 9999)
+                    h = item.get("original", {}).get("height", 9999)
+                    if w < MIN_DIM or h < MIN_DIM:
+                        continue
+                    original_src = item.get("original", {}).get("source") or src
+                    raw_caption = item.get("caption", {}).get("text", "") or item.get("title", "")
+                    candidates.append({
+                        "url": original_src,
+                        "caption": raw_caption.strip(),
+                        "section": item.get("section_title", "").strip(),
+                    })
+                print(
+                    f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] "
+                    f"media-list: {len(candidates)} candidate(s) for {page_title!r}"
+                )
         except Exception as e:
             ErrorHandler.log_error(
-                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia image fetch error"
+                CLASS_PREFIX_MESSAGE, e, LogLevel.WARNING, "Wikipedia media-list fetch"
             )
-            return f"Could not fetch Wikipedia image for: {topic}"
+
+        if not candidates:
+            if not fallback_url:
+                return None  # article exists but truly has no images
+            candidates = [{"url": fallback_url, "caption": page_title, "section": ""}]
+
+        return {
+            "type": "wikipedia_image_request",
+            "topic": title_slug.replace("_", " "),
+            "page_title": page_title,
+            "candidates": candidates,
+            "fallback_url": fallback_url,
+        }
 
     def generate_image(self, prompt: str, title: str = None, user_id: int = None) -> dict:
         """
