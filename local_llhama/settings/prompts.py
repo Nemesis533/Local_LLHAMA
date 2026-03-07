@@ -403,6 +403,15 @@ If you encounter a request that violates these guidelines, respond with:
 where <language_code> matches the user's language (en, fr, de, it, es, ru)."""
 
 
+IMAGE_INTRO_USER_PROMPT = (
+    'An image is being generated with this description:\n"{description}"\n\n'
+    "{title_instruction}\n"
+    "Also write a single friendly sentence introducing the image to the user.\n"
+    "Respond with exactly this JSON format:\n"
+    '{{"title": "...", "comment": "..."}}'
+)
+
+
 CUSTOM_FUNCTION_CREATION_PROMPT = """
 You are creating a new function for the SimpleFunctions class that follows established patterns. Below are the specifications and conventions you MUST follow:
 

@@ -44,6 +44,9 @@ class ImageGenerationManager:
         num_steps: int = 4,
         guidance_scale: float = 0.0,
         max_sequence_length: int = 512,
+        output_format: str = "png",
+        keep_pipeline_loaded: bool = False,
+        keep_pipeline_loaded_min_vram_gb: float = 10.0,
     ):
         """
         @brief Initialise manager with config. Does NOT load the pipeline.
@@ -69,9 +72,14 @@ class ImageGenerationManager:
         self.num_steps = num_steps
         self.guidance_scale = guidance_scale
         self.max_sequence_length = max_sequence_length
+        self.output_format = output_format.lower()
+        self.keep_pipeline_loaded = keep_pipeline_loaded
+        self.keep_pipeline_loaded_min_vram_gb = keep_pipeline_loaded_min_vram_gb
 
-        # Pipeline is loaded lazily
+        # Pipeline is loaded lazily; _pipeline_kept_alive tracks whether it is
+        # intentionally staying resident across requests.
         self._pipeline = None
+        self._pipeline_kept_alive = False
 
         print(
             f"{CLASS_PREFIX} [{LogLevel.INFO.name}] ImageGenerationManager initialised. "
@@ -110,6 +118,19 @@ class ImageGenerationManager:
 
         return ""
 
+    @staticmethod
+    def _normalize_ollama_host(host: str) -> str:
+        """
+        @brief Strip trailing slash and ensure an http:// scheme is present.
+
+        @param host Raw host string (e.g. "192.168.1.10:11434" or "http://...").
+        @return Normalised URL string.
+        """
+        host = host.rstrip("/")
+        if not host.startswith("http"):
+            host = f"http://{host}"
+        return host
+
     # === Storage ===
 
     def ensure_storage_dir(self, user_id: int) -> Path:
@@ -142,9 +163,7 @@ class ImageGenerationManager:
             )
             return False
         try:
-            host = ollama_host.rstrip("/")
-            if not host.startswith("http"):
-                host = f"http://{host}"
+            host = self._normalize_ollama_host(ollama_host)
             url = f"{host}/api/generate"
             payload = {"model": model_name, "keep_alive": 0}
             resp = requests.post(url, json=payload, timeout=10)
@@ -157,6 +176,37 @@ class ImageGenerationManager:
                 f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Ollama offload failed (non-critical): {e}"
             )
             return False
+
+    def _find_device_with_enough_vram(self, min_vram_gb: float):
+        """
+        @brief Scan all CUDA devices and return the index of the first one with
+               at least min_vram_gb of free memory.
+
+        @param min_vram_gb Minimum free VRAM required, in gigabytes.
+        @return Device index (int), or None if no qualifying device is found.
+        """
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                return None
+            for i in range(torch.cuda.device_count()):
+                free_bytes, _ = torch.cuda.mem_get_info(i)
+                free_gb = free_bytes / (1024 ** 3)
+                if free_gb >= min_vram_gb:
+                    print(
+                        f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                        f"cuda:{i} has {free_gb:.1f} GB free — selected for persistent pipeline."
+                    )
+                    return i
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
+                f"No device found with \u2265{min_vram_gb:.1f} GB free VRAM; "
+                f"pipeline will unload normally after each generation."
+            )
+        except Exception as e:
+            print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] VRAM scan failed: {e}")
+        return None
 
     # === Pipeline lifecycle ===
 
@@ -212,10 +262,18 @@ class ImageGenerationManager:
                     )
                     device_index = 0
                     cuda_device = "cuda:0"
-                else:
-                    device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
         else:
             device_index = None  # CPU path
+
+        # Persistent-pipeline mode: prefer the device with the most headroom so the
+        # model stays resident between requests instead of reloading every time.
+        _will_keep_alive = False
+        if self.keep_pipeline_loaded and device_index is not None:
+            best = self._find_device_with_enough_vram(self.keep_pipeline_loaded_min_vram_gb)
+            if best is not None:
+                device_index = best
+                cuda_device = f"cuda:{best}"
+                _will_keep_alive = True
 
         print(
             f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
@@ -266,15 +324,33 @@ class ImageGenerationManager:
             pipeline.to("cpu")
 
         self._pipeline = pipeline
-        print(
-            f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
-            f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
-        )
+        self._pipeline_kept_alive = _will_keep_alive
+        if _will_keep_alive:
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                f"Pipeline loaded on {cuda_device} and will remain resident between requests."
+            )
+        else:
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
+            )
 
-    def unload_pipeline(self):
+    def unload_pipeline(self, force: bool = False):
         """
         @brief Unload the pipeline and release GPU/CPU memory.
+
+        When keep_pipeline_loaded is active, this is a no-op unless force=True.
+
+        @param force Bypass the keep-alive flag and unload unconditionally
+                     (intended for clean shutdown).
         """
+        if self._pipeline_kept_alive and not force:
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                f"Pipeline kept alive — skipping unload (pass force=True to override)."
+            )
+            return
         if self._pipeline is None:
             return
         try:
@@ -282,11 +358,16 @@ class ImageGenerationManager:
 
             del self._pipeline
             self._pipeline = None
+            self._pipeline_kept_alive = False
+            # TODO: worth adding gc.collect() here before empty_cache() if we ever
+            # see VRAM not draining cleanly between generations — haven't hit it yet
+            # but keeping it in mind for smaller cards. — (llhama)
             torch.cuda.empty_cache()
             print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.", flush=True)
         except Exception as e:
             print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Error during pipeline unload: {e}")
             self._pipeline = None
+            self._pipeline_kept_alive = False
 
     # === Generation ===
 
@@ -339,12 +420,15 @@ class ImageGenerationManager:
         @return Dict with id, filename, title, url_path, etc.
         """
         image_uuid = str(uuid.uuid4())
-        filename = f"{image_uuid}.png"
+        ext = "jpg" if self.output_format == "jpeg" else self.output_format
+        filename = f"{image_uuid}.{ext}"
         user_dir = self.ensure_storage_dir(user_id)
         file_path = user_dir / filename
 
-        # Save image to disk
-        image.save(str(file_path))
+        # Save image to disk (format negotiation: PIL wants 'JPEG' not 'JPG')
+        pil_format = {"jpg": "JPEG"}.get(self.output_format, self.output_format.upper())
+        save_kwargs = {"quality": 92} if pil_format in ("JPEG", "WEBP") else {}
+        image.save(str(file_path), format=pil_format, **save_kwargs)
         print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image saved to {file_path}", flush=True)
 
         image_id = image_uuid  # re-use the same uuid for both filename and DB id
@@ -382,66 +466,4 @@ class ImageGenerationManager:
             "download_url": f"/api/images/{image_uuid}/download",
         }
 
-    # === High-level orchestration ===
 
-    def generate_and_save(
-        self,
-        prompt: str,
-        title: str,
-        user_id: int,
-        conversation_id: str = None,
-        pg_client=None,
-        ollama_host: str = None,
-        ollama_model: str = None,
-    ) -> dict:
-        """
-        @brief Full pipeline: offload LLM → load → generate → save → unload.
-
-        This is the main entry point for the background generation thread.
-
-        @param prompt          Image generation prompt.
-        @param title           Image title (already determined by LLM).
-        @param user_id         Owning user ID.
-        @param conversation_id Related conversation UUID.
-        @param pg_client       PostgreSQLClient instance.
-        @param ollama_host     Ollama server URL (for model offloading).
-        @param ollama_model    Ollama model name (for model offloading).
-        @return Dict returned by save_image(), or dict with 'error' key on failure.
-        """
-        try:
-            # Step 1: free VRAM by unloading Ollama model
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Offloading Ollama model before generation…", flush=True)
-            self.offload_ollama_model(ollama_host, ollama_model)
-
-            # Step 2: load diffusion pipeline
-            self.load_pipeline()
-
-            # Step 3: generate
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Running inference…", flush=True)
-            image = self.generate(prompt)
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Inference complete, decoding image…", flush=True)
-
-            # Step 4: save to disk + DB
-            result = self.save_image(
-                image,
-                user_id=user_id,
-                title=title,
-                prompt=prompt,
-                conversation_id=conversation_id,
-                pg_client=pg_client,
-            )
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] generate_and_save complete: {result.get('image_id')}", flush=True)
-            return result
-
-        except BaseException as e:
-            import traceback
-            print(
-                f"{CLASS_PREFIX} [{LogLevel.CRITICAL.name}] Generation failed: {type(e).__name__}: {e}\n"
-                + traceback.format_exc(),
-                flush=True,
-            )
-            return {"error": str(e)}
-
-        finally:
-            # Always unload to free memory, even on failure
-            self.unload_pipeline()

@@ -48,6 +48,7 @@ try:
         CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION,
     )
     from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
+    from local_llhama.settings.prompts import IMAGE_INTRO_USER_PROMPT
     from local_llhama.settings.prompts import (
         RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
     )
@@ -77,7 +78,7 @@ try:
     )
     SAFETY_INSTRUCTION_PROMPT = _inject_assistant_name(_RAW_SAFETY, _assistant_name)
 
-    print(f"[LLM_Prompts] Loaded 8 prompts (assistant: {_assistant_name})")
+    print(f"[LLM_Prompts] Loaded 9 prompts (assistant: {_assistant_name})")
 
 except Exception as e:
     print(f"[LLM_Prompts] Error importing prompts: {e}, using defaults")
@@ -93,6 +94,13 @@ except Exception as e:
     SMART_HOME_DECISION_MAKING_EXTENSION = ""
     SAFETY_INSTRUCTION_PROMPT = ""
     CONTEXT_SUMMARY_PROMPT = "Summarize the following context: {context_text}"
+    IMAGE_INTRO_USER_PROMPT = (
+        'An image is being generated with this description:\n"{description}"\n\n'
+        "{title_instruction}\n"
+        "Also write a single friendly sentence introducing the image to the user.\n"
+        "Respond with exactly this JSON format:\n"
+        '{{"title": "...", "comment": "..."}}'
+    )
 
 
 def is_safety_enabled():

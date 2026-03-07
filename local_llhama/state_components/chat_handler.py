@@ -687,12 +687,11 @@ class ChatHandler:
 
     def _get_image_settings(self) -> dict:
         """
-        @brief Load image generation settings from system_settings.json.
+        @brief Load image generation settings from object_settings.json.
 
         Uses the package-relative path, same pattern as llm_prompts.py.
 
-        @return Dict with keys: enabled, model_id, cache_dir, num_steps,
-                guidance_scale, max_sequence_length.
+        @return Dict with all ImageGenerationManager config keys.
         """
         defaults = {
             "enabled": True,
@@ -702,15 +701,18 @@ class ChatHandler:
             "guidance_scale": 0.0,
             "max_sequence_length": 512,
             "cuda_device": "cuda:0",
+            "output_format": "png",
+            "keep_pipeline_loaded": False,
+            "keep_pipeline_loaded_min_vram_gb": 10.0,
         }
         try:
             settings_path = (
-                Path(__file__).parent.parent / "settings" / "system_settings.json"
+                Path(__file__).parent.parent / "settings" / "object_settings.json"
             )
             if settings_path.exists():
                 with open(settings_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                section = data.get("image_generation", {})
+                section = data.get("ImageGenerationManager", {})
                 for key in defaults:
                     entry = section.get(key, {})
                     if isinstance(entry, dict) and "value" in entry:
@@ -725,7 +727,7 @@ class ChatHandler:
         """
         @brief Return a (lazily-created) ImageGenerationManager instance.
 
-        @return ImageGenerationManager configured from system_settings.json.
+        @return ImageGenerationManager configured from object_settings.json.
         """
         if self._image_manager is not None:
             return self._image_manager
@@ -745,6 +747,9 @@ class ChatHandler:
             num_steps=settings["num_steps"],
             guidance_scale=settings["guidance_scale"],
             max_sequence_length=settings["max_sequence_length"],
+            output_format=settings["output_format"],
+            keep_pipeline_loaded=settings["keep_pipeline_loaded"],
+            keep_pipeline_loaded_min_vram_gb=settings["keep_pipeline_loaded_min_vram_gb"],
         )
         return self._image_manager
 
@@ -769,9 +774,10 @@ class ChatHandler:
             return default_title, default_comment
 
         try:
-            host = ollama_host.rstrip("/")
-            if not host.startswith("http"):
-                host = f"http://{host}"
+            from ..image_generation import ImageGenerationManager as _IM
+            from ..llm_prompts import IMAGE_INTRO_USER_PROMPT
+
+            host = _IM._normalize_ollama_host(ollama_host)
 
             title_instruction = (
                 f'The user has given this title: "{title_hint}". Keep it exactly.'
@@ -783,12 +789,9 @@ class ChatHandler:
                 "You are a helpful assistant. Respond ONLY with valid JSON — "
                 "no markdown, no code fences, no extra text."
             )
-            user_msg = (
-                f"An image is being generated with this description:\n\"{prompt}\"\n\n"
-                f"{title_instruction}\n"
-                "Also write a single friendly sentence introducing the image to the user.\n"
-                'Respond with exactly this JSON format:\n'
-                '{"title": "...", "comment": "..."}'
+            user_msg = IMAGE_INTRO_USER_PROMPT.format(
+                description=prompt,
+                title_instruction=title_instruction,
             )
 
             resp = requests.post(

@@ -102,6 +102,48 @@
       "type": "float"
     }
   },
+  "ImageGenerationManager": {
+    "enabled": {
+      "value": true,
+      "type": "bool"
+    },
+    "model_id": {
+      "value": "stabilityai/stable-diffusion-3.5-large-turbo",
+      "type": "str"
+    },
+    "cache_dir": {
+      "value": "/mnt/fast_storage/diffusers",
+      "type": "str"
+    },
+    "num_steps": {
+      "value": 4,
+      "type": "int"
+    },
+    "guidance_scale": {
+      "value": 0.0,
+      "type": "float"
+    },
+    "max_sequence_length": {
+      "value": 512,
+      "type": "int"
+    },
+    "cuda_device": {
+      "value": "cuda:0",
+      "type": "str"
+    },
+    "output_format": {
+      "value": "png",
+      "type": "str"
+    },
+    "keep_pipeline_loaded": {
+      "value": false,
+      "type": "bool"
+    },
+    "keep_pipeline_loaded_min_vram_gb": {
+      "value": 10.0,
+      "type": "float"
+    }
+  },
   "_system": {
     "active_preset": {
       "value": "multi_lingual_large",
