@@ -17,6 +17,18 @@ from openwakeword.model import Model
 from .shared_logger import LogLevel
 
 
+def _load_audio_settings() -> dict:
+    """Read system_settings.json once and return the full data dict (empty dict on failure)."""
+    try:
+        settings_file = Path(__file__).parent / "settings" / "system_settings.json"
+        if settings_file.exists():
+            with open(settings_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
 class AudioTranscriptionClass:
     """
     @class AudioTranscriptionClass
@@ -28,45 +40,28 @@ class AudioTranscriptionClass:
         self.model_name = model_name  # Name of the Whisper model to use
         self.model = None  # Will hold the loaded Whisper model
         self.device = None  # Will be set during init_model
+        self._load_settings()
+
+    def _load_settings(self):
+        """Read cuda_device setting once at construction time."""
+        data = _load_audio_settings()
+        self._cuda_device_setting = (
+            data.get("hardware", {}).get("cuda_device", {}).get("value", "auto")
+        )
 
     def init_model(self, device=None):
         """
         @brief Loads the Whisper model onto the specified device.
 
-        @param device: The device to load the model on ('cpu', 'cuda', etc.). If None, reads from system_settings.json or auto-detects.
+        @param device: The device to load the model on ('cpu', 'cuda', etc.). If None, uses setting from system_settings.json (read at __init__).
         """
-        # Auto-detect device if not specified
         if device is None:
-
-            # Try to load from system_settings.json
-            try:
-                settings_file = (
-                    Path(__file__).parent / "settings" / "system_settings.json"
-                )
-                if settings_file.exists():
-                    with open(settings_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-
-                    cuda_device = (
-                        data.get("hardware", {})
-                        .get("cuda_device", {})
-                        .get("value", "auto")
-                    )
-
-                    if cuda_device == "auto":
-                        device = "cuda" if torch.cuda.is_available() else "cpu"
-                    elif cuda_device == "cpu":
-                        device = "cpu"
-                    else:
-                        # cuda_device could be "cuda:0", "cuda:1", etc.
-                        device = cuda_device if torch.cuda.is_available() else "cpu"
-                else:
-                    device = "cuda" if torch.cuda.is_available() else "cpu"
-            except Exception as e:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load CUDA settings: {e}, using auto-detect"
-                )
-                device = "cuda" if torch.cuda.is_available() else "cpu"
+            cuda_device = self._cuda_device_setting
+            if cuda_device == "auto" or cuda_device == "cpu":
+                device = "cuda" if (cuda_device == "auto" and torch.cuda.is_available()) else "cpu"
+            else:
+                # cuda_device could be "cuda:0", "cuda:1", etc.
+                device = cuda_device if torch.cuda.is_available() else "cpu"
 
         self.device = device
         self.model = whisper.load_model(self.model_name, device=device)
@@ -134,32 +129,23 @@ class AudioRecorderClass:
         """Load audio settings from system_settings.json"""
 
         try:
-            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
-            if settings_file.exists():
-                with open(settings_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+            data = _load_audio_settings()
+            audio_settings = data.get("audio", {})
+            self.silence_window_seconds = audio_settings.get(
+                "silence_window_seconds", {}
+            ).get("value", 2)
+            self.noise_floor_multiplier = audio_settings.get(
+                "noise_floor_multiplier", {}
+            ).get("value", 0.50)
+            self.input_device_index = audio_settings.get(
+                "input_device_index", {}
+            ).get("value", None)
 
-                audio_settings = data.get("audio", {})
-                self.silence_window_seconds = audio_settings.get(
-                    "silence_window_seconds", {}
-                ).get("value", 2)
-                self.noise_floor_multiplier = audio_settings.get(
-                    "noise_floor_multiplier", {}
-                ).get("value", 0.50)
-                self.input_device_index = audio_settings.get(
-                    "input_device_index", {}
-                ).get("value", None)
-
-                # Load sample rate from settings
-                configured_sample_rate = audio_settings.get("sample_rate", {}).get(
-                    "value", 16000
-                )
-                self.sample_rate = configured_sample_rate
-            else:
-                # Fallback to defaults
-                self.silence_window_seconds = 2
-                self.noise_floor_multiplier = 0.50
-                self.input_device_index = None
+            # Load sample rate from settings
+            configured_sample_rate = audio_settings.get("sample_rate", {}).get(
+                "value", 16000
+            )
+            self.sample_rate = configured_sample_rate
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using defaults"
@@ -382,21 +368,12 @@ class NoiseFloorMonitor:
 
     def _load_window_seconds(self):
         """Load window_seconds from system_settings.json"""
-        import json
-        from pathlib import Path
-
         try:
-            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
-            if settings_file.exists():
-                with open(settings_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                audio_settings = data.get("audio", {})
-                return audio_settings.get("noise_monitor_window_seconds", {}).get(
-                    "value", 5
-                )
-            else:
-                return 5
+            data = _load_audio_settings()
+            audio_settings = data.get("audio", {})
+            return audio_settings.get("noise_monitor_window_seconds", {}).get(
+                "value", 5
+            )
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"
@@ -471,21 +448,14 @@ class WakeWordListener:
         """Load audio settings from system_settings.json"""
 
         try:
-            settings_file = Path(__file__).parent / "settings" / "system_settings.json"
-            if settings_file.exists():
-                with open(settings_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                audio_settings = data.get("audio", {})
-                self.input_device_index = audio_settings.get(
-                    "input_device_index", {}
-                ).get("value", None)
-                self.sample_rate = audio_settings.get("sample_rate", {}).get(
-                    "value", 16000
-                )
-            else:
-                self.input_device_index = None
-                self.sample_rate = 16000
+            data = _load_audio_settings()
+            audio_settings = data.get("audio", {})
+            self.input_device_index = audio_settings.get(
+                "input_device_index", {}
+            ).get("value", None)
+            self.sample_rate = audio_settings.get("sample_rate", {}).get(
+                "value", 16000
+            )
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"

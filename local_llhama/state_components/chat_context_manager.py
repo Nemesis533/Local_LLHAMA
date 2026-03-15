@@ -57,6 +57,10 @@ class ChatContextManager:
         self.client_conversations = {}
 
         self.first_message_after_load = {}
+        
+        # Track shown Wikipedia images per conversation to prevent duplicates
+        # Format: {conversation_id: set((url, title, size))}
+        self.shown_wikipedia_images = {}
 
         # Adaptive context window management
         self.context_word_limits = {}
@@ -152,7 +156,13 @@ class ChatContextManager:
                 self.client_conversations[client_id] = None
                 return None
 
-        return self.client_conversations.get(client_id)
+        conversation_id = self.client_conversations.get(client_id)
+        
+        # Load Wikipedia images from history if not already loaded
+        if conversation_id and conversation_id not in self.shown_wikipedia_images:
+            self.load_wikipedia_images_from_history(conversation_id)
+        
+        return conversation_id
 
     def get_context_for_prompt(self, client_id, text):
         """
@@ -539,6 +549,10 @@ class ChatContextManager:
         if client_id in self.conversation_history:
             del self.conversation_history[client_id]
         if client_id in self.client_conversations:
+            conversation_id = self.client_conversations[client_id]
+            # Clear shown Wikipedia images for this conversation
+            if conversation_id and conversation_id in self.shown_wikipedia_images:
+                del self.shown_wikipedia_images[conversation_id]
             del self.client_conversations[client_id]
         if client_id in self.first_message_after_load:
             del self.first_message_after_load[client_id]
@@ -555,3 +569,72 @@ class ChatContextManager:
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Cleared data for client {client_id}"
         )
+
+    def track_wikipedia_image(self, conversation_id, url, title, size=None):
+        """
+        Track a Wikipedia image that has been shown in the conversation.
+
+        @param conversation_id Conversation UUID
+        @param url Image URL
+        @param title Image title/caption
+        @param size Optional image size in bytes
+        """
+        if not conversation_id:
+            return
+
+        if conversation_id not in self.shown_wikipedia_images:
+            self.shown_wikipedia_images[conversation_id] = set()
+
+        # Store tuple of (url, title, size) for comparison
+        self.shown_wikipedia_images[conversation_id].add((url, title or "", size or 0))
+
+        print(
+            f"{self.log_prefix} [{LogLevel.DEBUG.name}] Tracked Wikipedia image in conversation {conversation_id}: {title}"
+        )
+
+    def get_shown_wikipedia_images(self, conversation_id):
+        """
+        Get the set of Wikipedia images already shown in this conversation.
+
+        @param conversation_id Conversation UUID
+        @return Set of tuples (url, title, size)
+        """
+        if not conversation_id:
+            return set()
+
+        return self.shown_wikipedia_images.get(conversation_id, set())
+
+    def load_wikipedia_images_from_history(self, conversation_id):
+        """
+        Load Wikipedia images from conversation history when loading a conversation.
+        Parses messages looking for [wikipedia_image:url] tags.
+
+        @param conversation_id Conversation UUID
+        """
+        if not conversation_id or not self.conversation_loader:
+            return
+
+        try:
+            import re
+            conversation = self.conversation_loader.load_conversation(conversation_id)
+            if not conversation:
+                return
+
+            # Parse messages for Wikipedia image tags
+            for msg in conversation.messages:
+                if msg.role == "assistant" and msg.content:
+                    match = re.match(r'^\[wikipedia_image:(.+?)\]$', msg.content)
+                    if match:
+                        url = match.group(1)
+                        # Extract title from URL or use URL as title
+                        title = url.split('/')[-1] if '/' in url else url
+                        self.track_wikipedia_image(conversation_id, url, title)
+
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Loaded {len(self.get_shown_wikipedia_images(conversation_id))} Wikipedia images from history for conversation {conversation_id}"
+            )
+
+        except Exception as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Error loading Wikipedia images from history: {e}"
+            )

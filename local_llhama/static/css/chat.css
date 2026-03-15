@@ -180,6 +180,30 @@
   word-wrap: break-word;
 }
 
+/* Links in Messages */
+.message-content a,
+.message-content .wiki-link {
+  color: var(--color-blue-400);
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.message-content a:hover,
+.message-content .wiki-link:hover {
+  color: var(--color-blue-300);
+  text-decoration: none;
+}
+
+.user-message .message-content a,
+.user-message .message-content .wiki-link {
+  color: var(--color-blue-200);
+}
+
+.user-message .message-content a:hover,
+.user-message .message-content .wiki-link:hover {
+  color: var(--color-blue-100);
+}
+
 /* Code Blocks in Messages */
 .message-content code {
   background: var(--bg-secondary);

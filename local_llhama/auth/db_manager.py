@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from ..postgresql_client import PostgreSQLClient
 from ..shared_logger import LogLevel
+from .base import BaseManager
 
 
 class User:
@@ -52,7 +53,7 @@ class User:
         return str(self.id)
 
 
-class DatabaseManager:
+class DatabaseManager(BaseManager):
     """
     Manages PostgreSQL database for user authentication and user related operations.
     Provides methods for user CRUD operations.
@@ -64,11 +65,8 @@ class DatabaseManager:
 
         @param pg_client: PostgreSQL_Client instance. If None, creates new one.
         """
+        super().__init__(pg_client)
         self.class_prefix_message = "[DB_Manager]"
-        if pg_client is None:
-            self.pg_client = PostgreSQLClient()
-        else:
-            self.pg_client = pg_client
 
     def get_user_by_username(self, username):
         """

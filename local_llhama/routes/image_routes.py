@@ -9,10 +9,11 @@ so users can only access their own images.
 import uuid
 from pathlib import Path
 
-from flask import Blueprint, abort, current_app, jsonify, request, send_file
+from flask import Blueprint, abort, jsonify, request, send_file
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
+from . import get_service
 from ..error_handler import FlaskErrorHandler
 from ..shared_logger import LogLevel
 
@@ -24,8 +25,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 def _get_pg_client():
     """Retrieve PostgreSQLClient from the app's SERVICE_INSTANCE."""
-    service = current_app.config.get("SERVICE_INSTANCE")
-    return getattr(service, "pg_client", None) if service else None
+    return getattr(get_service(), "pg_client", None)
 
 
 def _resolve_image(image_id: str) -> dict:
@@ -68,22 +68,18 @@ def _resolve_image(image_id: str) -> dict:
 
 def _image_storage_base() -> Path:
     """Return the base path for generated image storage."""
-    service = current_app.config.get("SERVICE_INSTANCE")
-    if service:
-        base = getattr(service, "base_path", None)
-        if base:
-            return Path(base) / "data" / "generated_images"
+    base = getattr(get_service(), "base_path", None)
+    if base:
+        return Path(base) / "data" / "generated_images"
     # Fallback: derive from this file's location
     return Path(__file__).parent.parent / "data" / "generated_images"
 
 
 def _uploaded_image_storage_base() -> Path:
     """Return the base path for uploaded image storage."""
-    service = current_app.config.get("SERVICE_INSTANCE")
-    if service:
-        base = getattr(service, "base_path", None)
-        if base:
-            return Path(base) / "data" / "uploaded_images"
+    base = getattr(get_service(), "base_path", None)
+    if base:
+        return Path(base) / "data" / "uploaded_images"
     # Fallback: derive from this file's location
     return Path(__file__).parent.parent / "data" / "uploaded_images"
 

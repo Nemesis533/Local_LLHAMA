@@ -175,17 +175,18 @@ class TextToSpeech:
     Text-to-Speech using Piper with real-time streaming playback and LLM language mapping.
     """
 
-    def __init__(self, voice_dir: str, language_models: dict = None):
+    def __init__(self, voice_dir: str, language_models: dict = None, system_settings: dict = None):
         """
         @brief Initialize TextToSpeech with configurable language-to-model mappings.
         @param voice_dir Directory containing .onnx voice model files.
         @param language_models Dictionary mapping language codes to model filenames (e.g., {'en': 'en_US-amy-medium.onnx'}).
+        @param system_settings Pre-loaded system settings dict (from SettingLoaderClass). If None, reads from file.
         """
         self.voice_dir = Path(voice_dir)
         self.class_prefix_message = "[TextToSpeech]"
 
-        # Load audio device settings from system_settings.json
-        self._load_settings()
+        # Load audio device settings
+        self._load_settings(system_settings)
 
         # Set language models - use provided or fall back to defaults
         if language_models:
@@ -392,24 +393,25 @@ class TextToSpeech:
         self.voice_cache = {}  # Cache loaded voices by language
         self.current_lang = None
 
-    def _load_settings(self):
-        """Load audio device settings from system_settings.json"""
-        import json
-
+    def _load_settings(self, system_settings: dict = None):
+        """Load audio device settings. Uses system_settings dict if provided, otherwise reads from file."""
         try:
-            settings_file = (
-                self.voice_dir.parent.parent / "settings" / "system_settings.json"
-            )
-            if settings_file.exists():
-                with open(settings_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                audio_settings = data.get("audio", {})
-                self.configured_output_device_index = audio_settings.get(
-                    "output_device_index", {}
-                ).get("value", None)
+            if system_settings is not None:
+                audio_settings = system_settings.get("audio", {})
             else:
-                self.configured_output_device_index = None
+                import json
+                settings_file = (
+                    self.voice_dir.parent.parent / "settings" / "system_settings.json"
+                )
+                if settings_file.exists():
+                    with open(settings_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    audio_settings = data.get("audio", {})
+                else:
+                    audio_settings = {}
+            self.configured_output_device_index = audio_settings.get(
+                "output_device_index", {}
+            ).get("value", None)
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"

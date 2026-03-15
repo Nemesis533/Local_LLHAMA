@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from ..postgresql_client import PostgreSQLClient
 from ..shared_logger import LogLevel
+from ..auth.base import BaseManager
 
 
 class ConversationMessage:
@@ -148,7 +149,7 @@ class Conversation:
         return data
 
 
-class ConversationLoader:
+class ConversationLoader(BaseManager):
     """
     Loads and manages conversations from PostgreSQL.
 
@@ -165,14 +166,9 @@ class ConversationLoader:
 
         @param pg_client PostgreSQL client instance. If None, creates new one.
         """
+        super().__init__(pg_client)
         self.log_prefix = "[ConversationLoader]"
         self.last_log_message = None  # Track last log message to avoid duplicates
-
-        if pg_client is None:
-            self.pg_client = PostgreSQLClient()
-        else:
-            self.pg_client = pg_client
-
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Conversation loader initialized"
         )

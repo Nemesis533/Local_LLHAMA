@@ -1,3 +1,5 @@
+from flask import current_app
+
 from .admin_routes import admin_bp
 from .auth_routes import auth_bp
 from .calendar_routes import calendar_bp
@@ -10,7 +12,14 @@ from .settings_routes import settings_bp
 from .system_routes import system_bp
 from .user_routes import user_bp
 
+
+def get_service():
+    """Return the SERVICE_INSTANCE from the current Flask app config."""
+    return current_app.config["SERVICE_INSTANCE"]
+
+
 __all__ = [
+    "get_service",
     "main_bp",
     "settings_bp",
     "preset_bp",

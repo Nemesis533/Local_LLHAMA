@@ -11,6 +11,18 @@ function formatMarkdown(text) {
     return `<pre><code${lang}>${code.trim()}</code></pre>`;
   });
   
+  // Linkify URLs (especially for Wikipedia links)
+  // Match URLs that are not already inside HTML tags
+  formatted = formatted.replace(
+    /(?<!["'>])(https?:\/\/[^\s<>"']+?)(?=[<\s]|$)/gi,
+    function(url) {
+      // Clean up trailing punctuation that shouldn't be part of the URL
+      let cleanUrl = url.replace(/[.,;:!?)\]]+$/, '');
+      const trailing = url.substring(cleanUrl.length);
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="wiki-link">${cleanUrl}</a>${trailing}`;
+    }
+  );
+  
   // Apply Markdown formatting
   // Bold: **text**
   formatted = formatted.replace(/\*\*([^\*]+?)\*\*/g, '<strong>$1</strong>');

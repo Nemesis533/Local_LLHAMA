@@ -1,7 +1,8 @@
 # system_routes.py
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
+from . import get_service
 from ..error_handler import FlaskErrorHandler
 from ..system_metrics import SystemMetrics
 
@@ -16,7 +17,7 @@ def restart_system():
     Enqueues a restart command to the LLM system.
     """
     data = request.get_json()
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
 
     if data and data.get("action") == "restart":
         message = {"type": "restart_system", "data": None}

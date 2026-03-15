@@ -2,48 +2,22 @@
 Helper functions for memory search functionality using vector similarity and keyword matching.
 
 Contains all the components needed for hybrid memory search including:
-- Embedding generation
 - Keyword extraction and SQL building
 - Query construction and parameter assembly
 - Result processing and formatting
 """
 
 import re
-import requests
 
+from .ollama.ollama_embeddings import get_embedding_sync
 from .shared_logger import LogLevel
 
 CLASS_PREFIX_MESSAGE = "[MemorySearchHelpers]"
 
 
 def generate_query_embedding(query: str, ollama_host: str, ollama_embedding_model: str):
-    """
-    Generate embedding vector for a query using Ollama.
-
-    @param query: Text query to embed
-    @param ollama_host: Ollama server host URL
-    @param ollama_embedding_model: Model name for embeddings
-    @return: Embedding vector or None if generation fails
-    """
-    try:
-        ollama_url = (
-            ollama_host
-            if ollama_host.startswith("http")
-            else f"http://{ollama_host}"
-        )
-        response = requests.post(
-            f"{ollama_url}/api/embeddings",
-            json={"model": ollama_embedding_model, "prompt": query},
-            timeout=30,
-        )
-        response.raise_for_status()
-        embedding = response.json().get("embedding")
-        return embedding
-    except Exception as e:
-        print(
-            f"{CLASS_PREFIX_MESSAGE} [{LogLevel.CRITICAL.name}] Error generating embedding: {e}"
-        )
-        return None
+    """Delegate to get_embedding_sync; kept for backward compatibility."""
+    return get_embedding_sync(ollama_host, ollama_embedding_model, query)
 
 
 def extract_keywords(query: str):

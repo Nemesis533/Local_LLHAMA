@@ -3,9 +3,10 @@ import time
 
 import psutil
 import requests
-from flask import Blueprint, abort, current_app, jsonify, request
+from flask import Blueprint, abort, jsonify, request
 from flask_login import login_required
 
+from . import get_service
 from ..error_handler import FlaskErrorHandler
 
 llm_bp = Blueprint("llm", __name__)
@@ -17,7 +18,7 @@ def check_local_llm():
     """
     Checks if a process named 'local_llm' is currently running.
     """
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
 
     if not service._is_ip_allowed(request.remote_addr):
         abort(403, description="Access denied")
@@ -71,25 +72,10 @@ def ollama_status():
     Reads host from system settings and checks API availability.
     No authentication required for monitoring purposes.
     """
-    # Get Ollama host from system settings
     try:
-        import json
-        from pathlib import Path
-
-        settings_file = (
-            Path(__file__).parent.parent / "settings" / "system_settings.json"
+        ollama_host = get_service().settings_loader.get_system_setting(
+            "ollama", "host", "localhost:11434"
         )
-        if settings_file.exists():
-            with open(settings_file, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-
-            ollama_host = (
-                settings.get("ollama", {})
-                .get("host", {})
-                .get("value", "localhost:11434")
-            )
-        else:
-            ollama_host = "localhost:11434"
     except Exception as e:
         return {"status": "error", "error": f"Failed to read settings: {str(e)}"}
 
@@ -144,23 +130,9 @@ def system_status():
 
     # Check Ollama status
     try:
-        import json
-        from pathlib import Path
-
-        settings_file = (
-            Path(__file__).parent.parent / "settings" / "system_settings.json"
+        ollama_host = get_service().settings_loader.get_system_setting(
+            "ollama", "host", "localhost:11434"
         )
-        if settings_file.exists():
-            with open(settings_file, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-
-            ollama_host = (
-                settings.get("ollama", {})
-                .get("host", {})
-                .get("value", "localhost:11434")
-            )
-        else:
-            ollama_host = "localhost:11434"
 
         if not ollama_host.startswith("http://") and not ollama_host.startswith(
             "https://"

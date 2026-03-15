@@ -3,9 +3,10 @@ import json
 import subprocess
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
+from . import get_service
 from ..error_handler import FlaskErrorHandler
 
 settings_bp = Blueprint("settings", __name__)
@@ -17,7 +18,7 @@ def get_settings():
     """
     Returns the current settings JSON.
     """
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
     return service.settings_data
 
 
@@ -29,7 +30,7 @@ def save_settings():
     Preserves TextToSpeech settings that may not be included in the web UI.
     """
     data = request.get_json()
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
 
     # Load existing settings to preserve TextToSpeech section
     try:
@@ -55,7 +56,7 @@ def get_language_models():
     """
     Get current language-to-TTS-model mappings.
     """
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
     loader = service.loader
 
     language_models = loader.get_language_models()
@@ -98,7 +99,7 @@ def update_language_models():
             400,
         )
 
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
     loader = service.loader
 
     success = loader.update_language_models(language_models)
@@ -285,7 +286,7 @@ def get_web_search_config():
     """
     Get current web search configuration.
     """
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
 
     if service.loader and hasattr(service.loader, "web_search_config"):
         config_data = service.loader.web_search_config
@@ -334,7 +335,7 @@ def update_web_search_config():
             400,
         )
 
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
 
     config_file = Path(
         "/home/llhama-usr/Local_LLHAMA/local_llhama/settings/web_search_config.json"
@@ -361,7 +362,7 @@ def get_model_config():
     """
     Get current model configuration including assistant name and model settings.
     """
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
     loader = service.loader
 
     assistant_name = (
@@ -435,7 +436,7 @@ def update_model_config():
             400,
         )
 
-    service = current_app.config["SERVICE_INSTANCE"]
+    service = get_service()
     loader = service.loader
 
     # Update assistant name

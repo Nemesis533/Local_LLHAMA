@@ -9,8 +9,10 @@ import time
 import uuid
 from queue import Empty
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_login import login_required
+
+from . import get_service
 
 preset_bp = Blueprint("preset", __name__)
 
@@ -64,7 +66,7 @@ def list_presets():
     Get list of all available configuration presets.
     """
     try:
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
 
         if not service.action_message_queue:
             return (
@@ -106,7 +108,7 @@ def get_preset_info(preset_id):
     Get detailed information about a specific preset.
     """
     try:
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
         response = _send_preset_request(
             service.action_message_queue,
             service.preset_response_queue,
@@ -133,7 +135,7 @@ def apply_preset(preset_id):
     Note: Requires system restart for changes to take effect.
     """
     try:
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
         response = _send_preset_request(
             service.action_message_queue,
             service.preset_response_queue,
@@ -159,7 +161,7 @@ def validate_preset(preset_id):
     Validate a preset's structure and configuration.
     """
     try:
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
         response = _send_preset_request(
             service.action_message_queue,
             service.preset_response_queue,
@@ -179,7 +181,7 @@ def get_current_config():
     Get the current configuration summary.
     """
     try:
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
         response = _send_preset_request(
             service.action_message_queue,
             service.preset_response_queue,
@@ -202,7 +204,7 @@ def create_preset():
         if not data:
             return jsonify({"status": "error", "message": "No data provided"}), 400
 
-        service = current_app.config["SERVICE_INSTANCE"]
+        service = get_service()
         response = _send_preset_request(
             service.action_message_queue,
             service.preset_response_queue,

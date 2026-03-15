@@ -8,9 +8,10 @@ from typing import Dict, List, Optional, Tuple
 
 from ..postgresql_client import PostgreSQLClient
 from ..shared_logger import LogLevel
+from .base import BaseManager
 
 
-class CalendarManager:
+class CalendarManager(BaseManager):
     """
     Manages calendar events, reminders, and alarms using PostgreSQL.
     """
@@ -21,11 +22,8 @@ class CalendarManager:
 
         @param pg_client: PostgreSQL_Client instance. If None, creates new one.
         """
+        super().__init__(pg_client)
         self.class_prefix_message = "[CalendarManager]"
-        if pg_client is None:
-            self.pg_client = PostgreSQLClient()
-        else:
-            self.pg_client = pg_client
 
     # === CREATE Operations ===
 

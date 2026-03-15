@@ -149,7 +149,7 @@
   "get_wikipedia_image": {
     "entity_id": "get_wikipedia_image",
     "actions": ["get_wikipedia_image"],
-    "description": "Fetch the main cover image for a topic from Wikipedia and display it inline in the chat. Use when the user asks to show, display, or see a picture/image of a real-world subject, person, place, animal, or concept that is likely to have a Wikipedia article.",
+    "description": "Fetch and display a relevant image for a topic from Wikipedia. Use when the user wants to see what something looks like, or asks to show/display/visualize a picture of a real-world subject, person, place, animal, or concept. Can be combined with get_wikipedia_summary when they also want information.",
     "display_name": "Fetching Wikipedia Image...",
     "example": {"action": "get_wikipedia_image", "target": "get_wikipedia_image", "data": {"topic": "Eiffel Tower"}},
     "parameters": {

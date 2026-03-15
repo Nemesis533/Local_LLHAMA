@@ -150,8 +150,12 @@
       "type": "bool"
     },
     "llava_model": {
-      "value": "llava:13b-v1.6-vicuna-q8_0",
+      "value": "ministral-3:14b-instruct-2512-q4_K_M",
       "type": "str"
+    },
+    "wikipedia_image_verification_enabled": {
+      "value": false,
+      "type": "bool"
     }
   },
   "_system": {

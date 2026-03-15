@@ -16,6 +16,44 @@ import requests
 # === Custom Imports ===
 from ..shared_logger import LogLevel
 
+_LOG_PREFIX = "[EmbeddingClient]"
+
+
+def get_embedding_sync(
+    host: str, model: str, text: str, timeout: int = 30
+) -> Optional[List[float]]:
+    """
+    Synchronous, one-shot embedding request to Ollama.
+
+    @param host  Ollama server URL (with or without http:// prefix)
+    @param model Embedding model name
+    @param text  Text to embed
+    @param timeout Request timeout in seconds
+    @return Embedding vector, or None if the request fails
+    """
+    if not host.startswith("http://") and not host.startswith("https://"):
+        host = f"http://{host}"
+    host = host.rstrip("/")
+    try:
+        response = requests.post(
+            f"{host}/api/embeddings",
+            json={"model": model, "prompt": text},
+            timeout=timeout,
+        )
+        if response.status_code == 200:
+            embedding = response.json().get("embedding")
+            if embedding:
+                return embedding
+        else:
+            print(
+                f"{_LOG_PREFIX} [{LogLevel.WARNING.name}] Ollama returned status {response.status_code}"
+            )
+    except requests.exceptions.RequestException as e:
+        print(f"{_LOG_PREFIX} [{LogLevel.CRITICAL.name}] Request failed: {str(e)}")
+    except Exception as e:
+        print(f"{_LOG_PREFIX} [{LogLevel.CRITICAL.name}] Embedding error: {str(e)}")
+    return None
+
 
 class EmbeddingClient:
     """
@@ -141,39 +179,8 @@ class EmbeddingClient:
                 )
 
     def _get_embedding_from_ollama(self, text: str) -> Optional[List[float]]:
-        """
-        Get embedding vector from Ollama server.
-
-        @param text Text to embed
-        @return List of floats representing embedding, or None if failed
-        """
-        try:
-            response = requests.post(
-                f"{self.host}/api/embeddings",
-                json={"model": self.model, "prompt": text},
-                timeout=30,
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                embedding = data.get("embedding")
-                if embedding:
-                    return embedding
-            else:
-                print(
-                    f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Ollama returned status {response.status_code}"
-                )
-
-        except requests.exceptions.RequestException as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Request failed: {str(e)}"
-            )
-        except Exception as e:
-            print(
-                f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Embedding error: {str(e)}"
-            )
-
-        return None
+        """Get embedding vector from Ollama server."""
+        return get_embedding_sync(self.host, self.model, text)
 
     def queue_embedding(self, text: str) -> None:
         """
