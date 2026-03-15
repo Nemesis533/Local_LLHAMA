@@ -76,9 +76,19 @@ function hideLoadingIndicator() {
 // Show status message (what assistant is doing)
 function showStatusMessage(status) {
   // Route image-generation statuses to the dedicated shimmer placeholder
-  // Exclude Wikipedia image fetches — they use their own event, not the shimmer
-  if (/GPU memory|model weights|Freeing GPU|Generating image:|Saving image|Loading image model/i.test(status)) {
+  // Exclude:
+  //   - Wikipedia image fetches (they use their own event, not the shimmer)
+  //   - Image analysis messages (containing "vision" or "Preparing image")
+  const isImageAnalysis = /vision|Preparing image|Analyzing/i.test(status);
+  const isImageGeneration = /Freeing GPU.*image generation|Loading image model|Generating image:|Saving image/i.test(status);
+  
+  if (isImageGeneration && !isImageAnalysis) {
     showImagePreviewStatus(status);
+    return;
+  }
+  
+  // Skip showing status messages for image analysis - we use the loading indicator with image instead
+  if (isImageAnalysis) {
     return;
   }
 
@@ -241,5 +251,72 @@ function addWikipediaImageMessage(imageUrl, title, timeStr) {
   `;
 
   chatMessages.appendChild(messageDiv);
+  scrollToBottom();
+}
+
+// Display an uploaded image from the user
+function addUploadedImageMessage(imageUrl, filename, query) {
+  const chatMessages = document.getElementById('chat-messages');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message user-message uploaded-image-message';
+
+  const timestamp = new Date().toLocaleTimeString();
+  const safeUrl = escapeHtml(imageUrl);
+  const safeFilename = escapeHtml(filename || 'Uploaded Image');
+  const safeQuery = escapeHtml(query || '');
+
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-type">You</span>
+      <span class="message-time">${timestamp}</span>
+    </div>
+    <div class="message-content">
+      ${safeQuery ? `<p>${safeQuery}</p>` : ''}
+      <div class="uploaded-image-wrapper" style="margin-top: 8px;">
+        <p class="image-filename" style="font-size: 12px; color: #666; margin-bottom: 4px;">📎 ${safeFilename}</p>
+        <img
+          class="uploaded-image"
+          src="${safeUrl}"
+          alt="${safeFilename}"
+          style="max-width: 300px; max-height: 300px; border-radius: 8px; border: 1px solid #e0e0e0;"
+          loading="lazy"
+          onerror="this.closest('.uploaded-image-wrapper').innerHTML='<p class=\\'image-error\\'>Image could not be loaded.</p>'"
+        />
+      </div>
+    </div>
+  `;
+
+  chatMessages.appendChild(messageDiv);
+  scrollToBottom();
+}
+
+// Show loading indicator with an image (for image analysis)
+function showLoadingIndicatorWithImage(imageUrl) {
+  const chatMessages = document.getElementById('chat-messages');
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'chat-message assistant-message loading-message';
+  loadingDiv.id = 'loading-indicator';
+  
+  const safeUrl = escapeHtml(imageUrl);
+  
+  loadingDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-type">${window.currentAssistantName || 'Assistant'}</span>
+    </div>
+    <div class="message-content">
+      <div class="analyzing-image-wrapper" style="margin-bottom: 12px;">
+        <img
+          src="${safeUrl}"
+          alt="Analyzing image"
+          style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 1px solid #e0e0e0; opacity: 0.7;"
+        />
+      </div>
+      <div class="loading-dots">
+        <span class="loading-text">Analyzing image</span><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+      </div>
+    </div>
+  `;
+  
+  chatMessages.appendChild(loadingDiv);
   scrollToBottom();
 }

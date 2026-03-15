@@ -247,6 +247,7 @@ def upload_image():
         "success": True,
         "image_id": image_id,
         "filename": filename,
+        "original_filename": original_filename,
         "url": f"/api/images/{image_id}",
         "thumbnail_url": f"/api/images/{image_id}",  # Use unified endpoint
     })

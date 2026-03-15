@@ -1036,8 +1036,7 @@ class ChatHandler:
             )
         return defaults
 
-    @staticmethod
-    def _prepare_image_for_llava(image_source: str) -> str:
+    def _prepare_image_for_llava(self, image_source: str) -> str:
         """
         @brief Fetch/decode an image, resize to the best-matching LLaVA 1.6 resolution,
                and return it as a base64-encoded PNG string.
@@ -1068,7 +1067,53 @@ class ChatHandler:
         ]
 
         # --- Load image bytes ---
-        if image_source.startswith("data:"):
+        if image_source.startswith("/api/images/"):
+            # Handle relative URLs from uploaded images route
+            # Extract image_id and load file directly from disk
+            image_id = image_source.split("/")[-1]
+            
+            # Get database client to look up image location
+            pg_client = getattr(self, "command_llm", None)
+            if pg_client:
+                pg_client = getattr(pg_client, "pg_client", None)
+            
+            if not pg_client:
+                raise ValueError(f"Cannot load uploaded image without database connection: {image_source}")
+            
+            try:
+                # Look up image in database
+                row = pg_client.execute_one(
+                    "SELECT user_id, filename, model_id FROM generated_images WHERE id = %s",
+                    (image_id,),
+                )
+                
+                if not row:
+                    raise ValueError(f"Image not found in database: {image_id}")
+                
+                user_id, filename, model_id = row
+                is_uploaded = (model_id == "uploaded")
+                
+                # Build file path based on image type
+                from pathlib import Path
+                if is_uploaded:
+                    # Path for uploaded images
+                    base_path = Path(__file__).parent.parent / "data" / "uploaded_images"
+                else:
+                    # Path for generated images
+                    base_path = Path(__file__).parent.parent / "data" / "generated_images"
+                
+                image_path = base_path / str(user_id) / filename
+                
+                if not image_path.exists():
+                    raise ValueError(f"Image file not found on disk: {image_path}")
+                
+                with open(image_path, "rb") as fh:
+                    image_bytes = fh.read()
+                    
+            except Exception as e:
+                raise ValueError(f"Failed to load uploaded image {image_id}: {e}")
+                
+        elif image_source.startswith("data:"):
             # data:image/png;base64,<data>
             _, encoded = image_source.split(",", 1)
             image_bytes = base64.b64decode(encoded)
@@ -1085,7 +1130,29 @@ class ChatHandler:
                 with open(image_source, "rb") as fh:
                     image_bytes = fh.read()
 
-        image = Image.open(io.BytesIO(image_bytes))
+        # Validate image_bytes before attempting to open
+        if not image_bytes:
+            raise ValueError(f"Image source yielded empty data: {image_source[:100]}")
+        
+        if len(image_bytes) < 10:
+            raise ValueError(
+                f"Image data too small ({len(image_bytes)} bytes), likely corrupted. "
+                f"Source: {image_source[:100]}"
+            )
+
+        # Create BytesIO and ensure pointer is at the beginning
+        image_buffer = io.BytesIO(image_bytes)
+        image_buffer.seek(0)
+        
+        try:
+            image = Image.open(image_buffer)
+        except Exception as e:
+            raise ValueError(
+                f"Cannot identify image file. Received {len(image_bytes)} bytes from source. "
+                f"Source type: {type(image_source).__name__}, "
+                f"Source preview: {image_source[:100] if isinstance(image_source, str) else 'N/A'}. "
+                f"Original error: {e}"
+            )
         if image.mode != "RGB":
             image = image.convert("RGB")
 

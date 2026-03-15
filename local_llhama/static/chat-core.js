@@ -9,9 +9,10 @@ let pendingUpdates = 0;
 // Track current streaming message element
 let currentStreamingMessage = null;
 
-// Track uploaded image
+// Global state for uploaded image
 let uploadedImageId = null;
 let uploadedImageUrl = null;
+let uploadedImageFilename = null;
 
 // DOM elements
 const chatMessages = document.getElementById('chat-messages');
@@ -148,6 +149,7 @@ async function handleImageUpload(file) {
     if (data.success) {
       uploadedImageId = data.image_id;
       uploadedImageUrl = data.url;
+      uploadedImageFilename = data.original_filename || data.filename;
       console.log('Image uploaded:', uploadedImageId);
     } else {
       throw new Error(data.error || 'Upload failed');
@@ -163,6 +165,7 @@ async function handleImageUpload(file) {
 function clearUploadedImage() {
   uploadedImageId = null;
   uploadedImageUrl = null;
+  uploadedImageFilename = null;
   imagePreview.src = '';
   imagePreviewContainer.style.display = 'none';
   imageUploadInput.value = '';
@@ -199,16 +202,20 @@ async function sendMessage() {
   
   requestBody.text = messageText;
   
-  // Add user message to chat (show original message if typed, and show uploaded image)
-  if (message) {
+  // Add user message to chat
+  if (uploadedImageId) {
+    // Show uploaded image with query
+    addUploadedImageMessage(uploadedImageUrl, uploadedImageFilename, message);
+  } else if (message) {
+    // Regular text message
     addMessage(message, 'user');
   }
-  if (uploadedImageId) {
-    addMessage(`<img src="${uploadedImageUrl}" style="max-width: 200px; max-height: 200px; border-radius: 4px; margin-top: 5px;">`, 'user');
-  }
+  
+  // Store for later if we need to show image during analysis
+  const hadUploadedImage = Boolean(uploadedImageId);
+  const analysingImageUrl = hadUploadedImage ? uploadedImageUrl : null;
   
   // Clear uploaded image state after sending
-  const hadUploadedImage = Boolean(uploadedImageId);
   if (hadUploadedImage) {
     clearUploadedImage();
   }
@@ -217,8 +224,12 @@ async function sendMessage() {
   chatInput.value = '';
   chatInput.style.height = 'auto';
   
-  // Show loading indicator
-  showLoadingIndicator();
+  // Show loading indicator (with image if analyzing)
+  if (analysingImageUrl) {
+    showLoadingIndicatorWithImage(analysingImageUrl);
+  } else {
+    showLoadingIndicator();
+  }
   
   // Disable send button
   sendBtn.disabled = true;
