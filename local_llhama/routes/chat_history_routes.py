@@ -100,7 +100,7 @@ def get_conversation(conversation_id):
         try:
             pg_client = conversation_loader.pg_client
             rows = pg_client.execute_query(
-                "SELECT id, title, filename FROM generated_images WHERE conversation_id = %s ORDER BY created_at ASC",
+                "SELECT id, title, filename, model_id, prompt FROM generated_images WHERE conversation_id = %s ORDER BY created_at ASC",
                 (conversation_id,),
             )
             # Key by image_id (as plain string) for O(1) frontend lookup
@@ -108,6 +108,10 @@ def get_conversation(conversation_id):
                 str(row[0]): {
                     "image_id": str(row[0]),
                     "title": row[1] or "",
+                    "filename": row[2] or "",
+                    "model_id": row[3] or "",
+                    "is_uploaded": row[3] == "uploaded",
+                    "prompt": row[4] or "",
                     "url": f"/api/images/{row[0]}",
                     "download_url": f"/api/images/{row[0]}/download",
                 }

@@ -162,6 +162,22 @@ async function loadConversation(conversationId) {
             }
           }
 
+          // Detect uploaded image tag
+          if (!imgData && msg.role === 'assistant' && msg.content) {
+            const uploadedMatch = msg.content.match(/^\[uploaded_image:([a-f0-9-]{36})\]$/i);
+            if (uploadedMatch) {
+              const uploadedImg = imagesById[uploadedMatch[1]];
+              if (uploadedImg && uploadedImg.is_uploaded) {
+                // Extract original filename from prompt (format: "User uploaded file: filename.jpg")
+                const filenameMatch = uploadedImg.prompt.match(/User uploaded file:\s*(.+)$/);
+                const filename = filenameMatch ? filenameMatch[1] : uploadedImg.filename;
+                // Show uploaded image in user message style (no query text since it's from history)
+                addUploadedImageMessage(uploadedImg.url, filename, '', timeStr);
+                return;
+              }
+            }
+          }
+
           // Detect Wikipedia image tag
           if (!imgData && msg.role === 'assistant' && msg.content) {
             const wikiMatch = msg.content.match(/^\[wikipedia_image:(.+?)\]$/i);
@@ -172,7 +188,7 @@ async function loadConversation(conversationId) {
           }
 
           if (imgData) {
-              // Render as a proper image message
+              // Render as a proper image message (generated images)
               addImageMessage(
                 imgData.image_id,
                 imgData.title,

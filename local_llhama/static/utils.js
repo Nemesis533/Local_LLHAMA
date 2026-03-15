@@ -255,12 +255,12 @@ function addWikipediaImageMessage(imageUrl, title, timeStr) {
 }
 
 // Display an uploaded image from the user
-function addUploadedImageMessage(imageUrl, filename, query) {
+function addUploadedImageMessage(imageUrl, filename, query, timeStr) {
   const chatMessages = document.getElementById('chat-messages');
   const messageDiv = document.createElement('div');
   messageDiv.className = 'chat-message user-message uploaded-image-message';
 
-  const timestamp = new Date().toLocaleTimeString();
+  const timestamp = timeStr || new Date().toLocaleTimeString();
   const safeUrl = escapeHtml(imageUrl);
   const safeFilename = escapeHtml(filename || 'Uploaded Image');
   const safeQuery = escapeHtml(query || '');
