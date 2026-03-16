@@ -589,7 +589,7 @@ class ChatContextManager:
         self.shown_wikipedia_images[conversation_id].add((url, title or "", size or 0))
 
         print(
-            f"{self.log_prefix} [{LogLevel.DEBUG.name}] Tracked Wikipedia image in conversation {conversation_id}: {title}"
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Tracked Wikipedia image in conversation {conversation_id}: {title}"
         )
 
     def get_shown_wikipedia_images(self, conversation_id):
