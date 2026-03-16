@@ -6,7 +6,7 @@ import requests
 from flask import Blueprint, abort, jsonify, request
 from flask_login import login_required
 
-from . import get_service
+from ._service import get_service
 from ..error_handler import FlaskErrorHandler
 
 llm_bp = Blueprint("llm", __name__)

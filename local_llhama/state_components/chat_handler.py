@@ -444,7 +444,7 @@ class ChatHandler:
                     # fall back to image generation
                     if not chosen_url:
                         print(
-                            f"{self.log_prefix} [INFO] No appropriate Wikipedia images available for '{topic}', "
+                            f"{self.log_prefix} [{LogLevel.INFO.name}] No appropriate Wikipedia images available for '{topic}', "
                             "falling back to image generation"
                         )
                         # Send status to user about fallback
@@ -490,7 +490,7 @@ class ChatHandler:
                             )
                         except Exception as db_err:
                             print(
-                                f"{self.log_prefix} [WARNING] Could not persist "
+                                f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not persist "
                                 f"wikipedia image tag to DB: {db_err}"
                             )
 
@@ -939,14 +939,14 @@ class ChatHandler:
             
             if original_count > len(candidates):
                 print(
-                    f"{self.log_prefix} [INFO] Filtered out {original_count - len(candidates)} "
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] Filtered out {original_count - len(candidates)} "
                     f"already-shown Wikipedia images, {len(candidates)} remaining"
                 )
         
         # If all images have been shown, return None to trigger image generation
         if not candidates:
             print(
-                f"{self.log_prefix} [INFO] All Wikipedia images for this topic have been shown, "
+                f"{self.log_prefix} [{LogLevel.INFO.name}] All Wikipedia images for this topic have been shown, "
                 "will need to generate image instead"
             )
             return None
@@ -959,7 +959,7 @@ class ChatHandler:
             # Verify with vision model if enabled
             settings = self._get_image_analysis_settings()
             if settings.get("wikipedia_image_verification_enabled", True):
-                print(f"{self.log_prefix} [INFO] Verifying image appropriateness with vision model…")
+                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying image appropriateness with vision model…")
                 # Send status to user
                 if client_id:
                     status_msg = f"{self.log_prefix} [Status]: Loading vision model to verify image (this may take a moment)…"
@@ -970,12 +970,12 @@ class ChatHandler:
                     )
                     if not is_appropriate:
                         print(
-                            f"{self.log_prefix} [INFO] Single Wikipedia image failed verification: {explanation[:100]}"
+                            f"{self.log_prefix} [{LogLevel.INFO.name}] Single Wikipedia image failed verification: {explanation[:100]}"
                         )
                         return None  # Trigger image generation
                 except Exception as verify_err:
                     print(
-                        f"{self.log_prefix} [WARNING] Verification error for single candidate: {verify_err}, will generate instead"
+                        f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification error for single candidate: {verify_err}, will generate instead"
                     )
                     return None  # Trigger image generation on error
             
@@ -1028,14 +1028,14 @@ class ChatHandler:
                     chosen_caption = capped[idx].get("caption", "")
                     
                     print(
-                        f"{self.log_prefix} [INFO] Wikipedia image selected by LLM: "
+                        f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image selected by LLM: "
                         f"#{idx + 1} — {chosen_url}"
                     )
                     
                     # Verify with vision model if enabled
                     settings = self._get_image_analysis_settings()
                     if settings.get("wikipedia_image_verification_enabled", True):
-                        print(f"{self.log_prefix} [INFO] Verifying selected image with vision model…")
+                        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying selected image with vision model…")
                         # Send status to user
                         if client_id:
                             status_msg = f"{self.log_prefix} [Status]: Loading vision model to verify image (this may take a moment)…"
@@ -1046,14 +1046,14 @@ class ChatHandler:
                             )
                         except Exception as verify_err:
                             print(
-                                f"{self.log_prefix} [WARNING] Verification failed for selected image: {verify_err}"
+                                f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification failed for selected image: {verify_err}"
                             )
                             is_appropriate = False
                             explanation = f"Verification error: {verify_err}"
                         
                         if not is_appropriate:
                             print(
-                                f"{self.log_prefix} [INFO] Selected image failed verification, trying next candidate"
+                                f"{self.log_prefix} [{LogLevel.INFO.name}] Selected image failed verification, trying next candidate"
                             )
                             # Try next candidates in order
                             for next_idx in range(len(capped)):
@@ -1063,27 +1063,27 @@ class ChatHandler:
                                 next_url = capped[next_idx]["url"]
                                 next_caption = capped[next_idx].get("caption", "")
                                 
-                                print(f"{self.log_prefix} [INFO] Verifying candidate #{next_idx + 1}…")
+                                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying candidate #{next_idx + 1}…")
                                 try:
                                     is_appropriate, explanation = self._verify_wikipedia_image_appropriateness(
                                         next_url, user_query, next_caption
                                     )
                                 except Exception as verify_err:
                                     print(
-                                        f"{self.log_prefix} [WARNING] Verification failed for candidate #{next_idx + 1}: {verify_err}"
+                                        f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification failed for candidate #{next_idx + 1}: {verify_err}"
                                     )
                                     is_appropriate = False
                                     continue
                                     
                                 if is_appropriate:
                                     print(
-                                        f"{self.log_prefix} [INFO] Found appropriate image at position #{next_idx + 1}"
+                                        f"{self.log_prefix} [{LogLevel.INFO.name}] Found appropriate image at position #{next_idx + 1}"
                                     )
                                     return next_url
                             
                             # No candidates passed verification
                             print(
-                                f"{self.log_prefix} [INFO] No Wikipedia images passed verification, will generate instead"
+                                f"{self.log_prefix} [{LogLevel.INFO.name}] No Wikipedia images passed verification, will generate instead"
                             )
                             return None
                     
@@ -1091,7 +1091,7 @@ class ChatHandler:
 
         except Exception as e:
             print(
-                f"{self.log_prefix} [WARNING] Wikipedia image selection failed, "
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Wikipedia image selection failed, "
                 f"using fallback: {type(e).__name__}: {e}"
             )
 
@@ -1104,12 +1104,12 @@ class ChatHandler:
                 )
                 if not is_appropriate:
                     print(
-                        f"{self.log_prefix} [INFO] Fallback image also failed verification, will generate instead"
+                        f"{self.log_prefix} [{LogLevel.INFO.name}] Fallback image also failed verification, will generate instead"
                     )
                     return None
             except Exception as verify_err:
                 print(
-                    f"{self.log_prefix} [WARNING] Fallback verification error: {verify_err}, will generate instead"
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Fallback verification error: {verify_err}, will generate instead"
                 )
                 return None
 
@@ -1348,7 +1348,7 @@ class ChatHandler:
         )
 
         print(
-            f"[Chat Handler] [INFO] Scaling image {orig_w}×{orig_h} "
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Scaling image {orig_w}×{orig_h} "
             f"(ratio {orig_ratio:.2f}) → {target_w}×{target_h} for LLaVA"
         )
 
@@ -1385,7 +1385,7 @@ class ChatHandler:
         
         if not ollama_host:
             print(
-                f"{self.log_prefix} [WARNING] Cannot verify Wikipedia image: no Ollama host configured"
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Cannot verify Wikipedia image: no Ollama host configured"
             )
             return True, "No vision model available"
 
@@ -1400,13 +1400,13 @@ class ChatHandler:
                 image_b64 = self._prepare_image_for_llava(image_url)
             except Exception as img_err:
                 print(
-                    f"{self.log_prefix} [WARNING] Could not prepare Wikipedia image for verification: {img_err}"
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not prepare Wikipedia image for verification: {img_err}"
                 )
                 return False, f"Image load failed: {img_err}"
 
             # Offload main LLM to free VRAM for vision model
             print(
-                f"{self.log_prefix} [DEBUG] Offloading main model for Wikipedia image verification"
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Offloading main model for Wikipedia image verification"
             )
             try:
                 requests.post(
@@ -1441,7 +1441,7 @@ class ChatHandler:
 
             if resp.status_code != 200:
                 print(
-                    f"{self.log_prefix} [WARNING] Vision model verification failed with status {resp.status_code}"
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Vision model verification failed with status {resp.status_code}"
                 )
                 return False, "Vision model request failed"
 
@@ -1449,7 +1449,7 @@ class ChatHandler:
 
             # Unload LLaVA and warm up main model again
             print(
-                f"{self.log_prefix} [DEBUG] Unloading vision model, warming up main model"
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Unloading vision model, warming up main model"
             )
             try:
                 # Unload LLaVA
@@ -1475,7 +1475,7 @@ class ChatHandler:
             is_appropriate = response_text.upper().startswith("YES")
             
             print(
-                f"{self.log_prefix} [INFO] Wikipedia image verification: "
+                f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image verification: "
                 f"{'✓ APPROPRIATE' if is_appropriate else '✗ NOT APPROPRIATE'} - {response_text[:100]}"
             )
 
@@ -1483,7 +1483,7 @@ class ChatHandler:
 
         except Exception as e:
             print(
-                f"{self.log_prefix} [WARNING] Wikipedia image verification failed: {e}"
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] Wikipedia image verification failed: {e}"
             )
             # Try to reload main model even on error
             try:
@@ -1642,7 +1642,7 @@ class ChatHandler:
                         )
                     except Exception as db_err:
                         print(
-                            f"{log_prefix} [WARNING] Could not persist image analysis to DB: {db_err}"
+                            f"{log_prefix} [{LogLevel.WARNING.name}] Could not persist image analysis to DB: {db_err}"
                         )
 
                 print(
@@ -1809,7 +1809,7 @@ class ChatHandler:
                         )
                     except Exception as db_err:
                         print(
-                            f"{log_prefix} [WARNING] Could not persist image messages to DB: {db_err}"
+                            f"{log_prefix} [{LogLevel.WARNING.name}] Could not persist image messages to DB: {db_err}"
                         )
 
                 print(

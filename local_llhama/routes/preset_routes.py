@@ -12,7 +12,7 @@ from queue import Empty
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
-from . import get_service
+from ._service import get_service
 
 preset_bp = Blueprint("preset", __name__)
 

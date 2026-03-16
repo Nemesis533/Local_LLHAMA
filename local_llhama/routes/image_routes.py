@@ -13,7 +13,7 @@ from flask import Blueprint, abort, jsonify, request, send_file
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
-from . import get_service
+from ._service import get_service
 from ..error_handler import FlaskErrorHandler
 from ..shared_logger import LogLevel
 
