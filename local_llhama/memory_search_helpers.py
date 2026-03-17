@@ -28,9 +28,7 @@ def extract_keywords(query: str):
     @return: List of lowercase keywords
     """
     keywords = re.findall(r"\w+", query.lower())
-    print(
-        f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}"
-    )
+    print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] Parsed keywords: {keywords}")
     return keywords
 
 
@@ -46,9 +44,7 @@ def build_keyword_conditions(keywords: list):
     for keyword in keywords:
         keyword_conditions.append("LOWER(m.content) ILIKE %s")
         keyword_params.append(f"%{keyword}%")
-    keyword_where = (
-        " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
-    )
+    keyword_where = " OR ".join(keyword_conditions) if keyword_conditions else "1=1"
     return keyword_where, keyword_params
 
 
@@ -203,9 +199,7 @@ def process_memory_results(results: list) -> list:
                 "user_message": row[0],
                 "created_at": row[1],
                 "similarity": float(row[2]),
-                "assistant_response": (
-                    row[3] if len(row) > 3 and row[3] else None
-                ),
+                "assistant_response": (row[3] if len(row) > 3 and row[3] else None),
                 "message_role": (
                     row[4] if len(row) > 4 else "user"
                 ),  # Track what role the message was
@@ -255,9 +249,7 @@ def format_memory_response(memories: list, similarity_threshold: float) -> str:
                 f"   I said: \"{result['user_message'][:300]}{'...' if len(result['user_message']) > 300 else ''}\""
             )
         else:
-            response_parts.append(
-                f"   You asked: \"{result['user_message']}\""
-            )
+            response_parts.append(f"   You asked: \"{result['user_message']}\"")
             if result.get("assistant_response"):
                 response_parts.append(
                     f"   I responded: \"{result['assistant_response'][:300]}{'...' if len(result.get('assistant_response', '')) > 300 else ''}\""

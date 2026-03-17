@@ -7,8 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from . import simple_functions_helpers as helpers
 from . import memory_search_helpers as mem_helpers
+from . import simple_functions_helpers as helpers
 from .auth.automation_manager import AutomationManager
 from .auth.calendar_manager import CalendarManager
 
@@ -314,7 +314,9 @@ class SimpleFunctions:
 
         return None
 
-    def _search_wikipedia_title(self, query: str, wiki_base_url: str, timeout: int) -> list:
+    def _search_wikipedia_title(
+        self, query: str, wiki_base_url: str, timeout: int
+    ) -> list:
         """
         @brief Use Wikipedia's OpenSearch API to find matching article titles for a query.
 
@@ -328,6 +330,7 @@ class SimpleFunctions:
         """
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(wiki_base_url)
             api_url = f"{parsed.scheme}://{parsed.netloc}/w/api.php"
             resp = requests.get(
@@ -415,7 +418,7 @@ class SimpleFunctions:
 
             text = " ".join(text_parts)
             if len(text) > max_chars:
-                text = text[:max_chars - 3] + "..."
+                text = text[: max_chars - 3] + "..."
             return text
         except Exception:
             return None
@@ -902,7 +905,9 @@ class SimpleFunctions:
         try:
             # Extract keywords for hybrid search
             keywords = mem_helpers.extract_keywords(query)
-            keyword_where, keyword_params = mem_helpers.build_keyword_conditions(keywords)
+            keyword_where, keyword_params = mem_helpers.build_keyword_conditions(
+                keywords
+            )
 
             # Build filter conditions
             role_condition, role_params, date_condition, date_params = (
@@ -916,8 +921,13 @@ class SimpleFunctions:
 
             # Build parameters
             params_tuple = mem_helpers.build_query_params(
-                embedding, user_id, role_params, date_params, 
-                keyword_params, self.similarity_threshold, limit
+                embedding,
+                user_id,
+                role_params,
+                date_params,
+                keyword_params,
+                self.similarity_threshold,
+                limit,
             )
 
             # Debug output
@@ -930,7 +940,9 @@ class SimpleFunctions:
 
             # Process and format results
             memories = mem_helpers.process_memory_results(results)
-            return mem_helpers.format_memory_response(memories, self.similarity_threshold)
+            return mem_helpers.format_memory_response(
+                memories, self.similarity_threshold
+            )
 
         except Exception as e:
             import traceback
@@ -1200,11 +1212,11 @@ class SimpleFunctions:
 
         page_title = summary_data.get("title", title_slug.replace("_", " "))
         canonical = page_title.replace(" ", "_")
-        
+
         # Only use originalimage - thumbnails are unreliable and often 404
         fallback_img = summary_data.get("originalimage")
         fallback_url = fallback_img.get("source") if fallback_img else None
-        
+
         # Convert thumbnail URLs to original format if needed
         # Thumb: .../commons/thumb/4/4d/File.jpg/500px-File.jpg
         # Original: .../commons/4/4d/File.jpg
@@ -1220,7 +1232,16 @@ class SimpleFunctions:
                 timeout=timeout,
             )
             if media_data and media_data.get("items"):
-                SKIP_EXTENSIONS = (".svg", ".gif", ".ogg", ".ogv", ".webm", ".mp3", ".mp4", ".wav")
+                SKIP_EXTENSIONS = (
+                    ".svg",
+                    ".gif",
+                    ".ogg",
+                    ".ogv",
+                    ".webm",
+                    ".mp3",
+                    ".mp4",
+                    ".wav",
+                )
                 MIN_DIM = 400  # Minimum 400px to filter out icons, thumbnails, and low-res images
                 seen_filenames = set()
                 for item in media_data["items"]:
@@ -1231,9 +1252,14 @@ class SimpleFunctions:
                     if not original_src:
                         continue
                     # Skip math equation renders and other non-photo content
-                    if "/math/render/" in original_src or "wikimedia.org/api/" in original_src:
+                    if (
+                        "/math/render/" in original_src
+                        or "wikimedia.org/api/" in original_src
+                    ):
                         continue
-                    if any(original_src.lower().endswith(ext) for ext in SKIP_EXTENSIONS):
+                    if any(
+                        original_src.lower().endswith(ext) for ext in SKIP_EXTENSIONS
+                    ):
                         continue
                     w = item.get("original", {}).get("width", 9999)
                     h = item.get("original", {}).get("height", 9999)
@@ -1244,12 +1270,16 @@ class SimpleFunctions:
                     if fname in seen_filenames:
                         continue
                     seen_filenames.add(fname)
-                    raw_caption = item.get("caption", {}).get("text", "") or item.get("title", "")
-                    candidates.append({
-                        "url": original_src,
-                        "caption": raw_caption.strip(),
-                        "section": item.get("section_title", "").strip(),
-                    })
+                    raw_caption = item.get("caption", {}).get("text", "") or item.get(
+                        "title", ""
+                    )
+                    candidates.append(
+                        {
+                            "url": original_src,
+                            "caption": raw_caption.strip(),
+                            "section": item.get("section_title", "").strip(),
+                        }
+                    )
                 print(
                     f"{CLASS_PREFIX_MESSAGE} [{LogLevel.INFO.name}] "
                     f"media-list: {len(candidates)} candidate(s) for {page_title!r}"
@@ -1272,7 +1302,9 @@ class SimpleFunctions:
             "fallback_url": fallback_url,
         }
 
-    def generate_image(self, prompt: str, title: str = None, user_id: int = None) -> dict:
+    def generate_image(
+        self, prompt: str, title: str = None, user_id: int = None
+    ) -> dict:
         """
         @brief Signal that an image generation request has been received.
 

@@ -1,5 +1,4 @@
 from ._service import get_service
-
 from .admin_routes import admin_bp
 from .auth_routes import auth_bp
 from .calendar_routes import calendar_bp
@@ -11,7 +10,6 @@ from .preset_routes import preset_bp
 from .settings_routes import settings_bp
 from .system_routes import system_bp
 from .user_routes import user_bp
-
 
 __all__ = [
     "get_service",

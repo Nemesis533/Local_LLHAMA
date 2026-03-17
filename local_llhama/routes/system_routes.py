@@ -2,9 +2,9 @@
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
-from ._service import get_service
 from ..error_handler import FlaskErrorHandler
 from ..system_metrics import SystemMetrics
+from ._service import get_service
 
 system_bp = Blueprint("system", __name__)
 

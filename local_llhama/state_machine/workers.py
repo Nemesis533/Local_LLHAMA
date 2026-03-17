@@ -11,11 +11,12 @@ import time
 from datetime import datetime, timedelta
 from queue import Empty
 
+from ..audio_output import SoundActions
+
 # === Custom Imports ===
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
 from .core_state import State
-from ..audio_output import SoundActions
 
 
 class WorkerThreads:

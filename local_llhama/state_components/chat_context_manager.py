@@ -57,7 +57,7 @@ class ChatContextManager:
         self.client_conversations = {}
 
         self.first_message_after_load = {}
-        
+
         # Track shown Wikipedia images per conversation to prevent duplicates
         # Format: {conversation_id: set((url, title, size))}
         self.shown_wikipedia_images = {}
@@ -157,11 +157,11 @@ class ChatContextManager:
                 return None
 
         conversation_id = self.client_conversations.get(client_id)
-        
+
         # Load Wikipedia images from history if not already loaded
         if conversation_id and conversation_id not in self.shown_wikipedia_images:
             self.load_wikipedia_images_from_history(conversation_id)
-        
+
         return conversation_id
 
     def get_context_for_prompt(self, client_id, text):
@@ -262,9 +262,7 @@ class ChatContextManager:
         # Add recent in-memory history if available
         if self._has_memory_history(client_id):
             history = self.conversation_history[client_id]
-            prompt += (
-                "\n\n---\n\nMost recent interactions (after the above history):\n"
-            )
+            prompt += "\n\n---\n\nMost recent interactions (after the above history):\n"
             prompt += self._format_history_text(history)
 
             print(
@@ -616,6 +614,7 @@ class ChatContextManager:
 
         try:
             import re
+
             conversation = self.conversation_loader.load_conversation(conversation_id)
             if not conversation:
                 return
@@ -623,11 +622,11 @@ class ChatContextManager:
             # Parse messages for Wikipedia image tags
             for msg in conversation.messages:
                 if msg.role == "assistant" and msg.content:
-                    match = re.match(r'^\[wikipedia_image:(.+?)\]$', msg.content)
+                    match = re.match(r"^\[wikipedia_image:(.+?)\]$", msg.content)
                     if match:
                         url = match.group(1)
                         # Extract title from URL or use URL as title
-                        title = url.split('/')[-1] if '/' in url else url
+                        title = url.split("/")[-1] if "/" in url else url
                         self.track_wikipedia_image(conversation_id, url, title)
 
             print(

@@ -382,7 +382,9 @@ class LocalLLHAMA_WebService:
                 target_sid = self.client_sessions[client_id]
                 if target_sid in self.connected_clients:
                     try:
-                        self.socketio.emit("wikipedia_image_ready", image_data, room=target_sid)
+                        self.socketio.emit(
+                            "wikipedia_image_ready", image_data, room=target_sid
+                        )
                     except Exception as e:
                         print(
                             f"{self.class_prefix_message} [{LogLevel.WARNING.name}] "
@@ -481,15 +483,19 @@ class LocalLLHAMA_WebService:
             raise RuntimeError(f"Failed to queue command: {repr(e)}")
 
     def send_chat_message(
-        self, text: str, client_id: str = None, conversation_id: str = None,
-        uploaded_image_url: str = None, uploaded_image_id: str = None
+        self,
+        text: str,
+        client_id: str = None,
+        conversation_id: str = None,
+        uploaded_image_url: str = None,
+        uploaded_image_id: str = None,
     ):
         """
         Send chat message to dedicated chat handler (bypasses state machine).
 
         Returns the conversation_id so frontend can track it for subsequent messages.
         If new conversation is created, this will return the newly created ID.
-        
+
         @param uploaded_image_url Optional URL of uploaded image for analysis
         @param uploaded_image_id Optional UUID of uploaded image in database
         """
@@ -507,7 +513,7 @@ class LocalLLHAMA_WebService:
             "client_id": client_id,
             "conversation_id": conversation_id,
         }
-        
+
         # Include uploaded image data if provided
         if uploaded_image_url:
             message["uploaded_image_url"] = uploaded_image_url
@@ -592,7 +598,9 @@ class LocalLLHAMA_WebService:
                         image_data = message.get("data", {})
                         client_id = message.get("client_id")
                         try:
-                            self.emit_wikipedia_image_ready(image_data, client_id=client_id)
+                            self.emit_wikipedia_image_ready(
+                                image_data, client_id=client_id
+                            )
                         except Exception as e:
                             print(
                                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Failed to emit wikipedia_image_ready: {repr(e)}"

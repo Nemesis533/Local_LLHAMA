@@ -49,20 +49,34 @@ def _load_and_inject(assistant_name: str) -> dict:
     return a dict of prompt-name → final string.  Raises on import failure.
     """
     import importlib
+
     from local_llhama.settings import prompts as prompts_module
+
     importlib.reload(prompts_module)
 
     from local_llhama.settings.prompts import CALENDAR_EVENT_PROMPT as _RAW_CALENDAR
     from local_llhama.settings.prompts import CONTEXT_SUMMARY_PROMPT
-    from local_llhama.settings.prompts import CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION
-    from local_llhama.settings.prompts import IMAGE_ANALYSIS_PROMPT as _RAW_IMAGE_ANALYSIS
-    from local_llhama.settings.prompts import IMAGE_ANALYSIS_SAFETY_PROMPT as _RAW_IMAGE_ANALYSIS_SAFETY
+    from local_llhama.settings.prompts import (
+        CONVERSATION_PROCESSOR_PROMPT as _RAW_CONVERSATION,
+    )
+    from local_llhama.settings.prompts import (
+        IMAGE_ANALYSIS_PROMPT as _RAW_IMAGE_ANALYSIS,
+    )
+    from local_llhama.settings.prompts import (
+        IMAGE_ANALYSIS_SAFETY_PROMPT as _RAW_IMAGE_ANALYSIS_SAFETY,
+    )
     from local_llhama.settings.prompts import IMAGE_INTRO_USER_PROMPT
-    from local_llhama.settings.prompts import RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR
+    from local_llhama.settings.prompts import (
+        RESPONSE_PROCESSOR_PROMPT as _RAW_RESPONSE_PROCESSOR,
+    )
     from local_llhama.settings.prompts import RESUME_CONVERSATION_PROMPT as _RAW_RESUME
     from local_llhama.settings.prompts import SAFETY_INSTRUCTION_PROMPT as _RAW_SAFETY
-    from local_llhama.settings.prompts import SMART_HOME_DECISION_MAKING_EXTENSION as _RAW_DECISION
-    from local_llhama.settings.prompts import SMART_HOME_PROMPT_TEMPLATE as _RAW_SMART_HOME
+    from local_llhama.settings.prompts import (
+        SMART_HOME_DECISION_MAKING_EXTENSION as _RAW_DECISION,
+    )
+    from local_llhama.settings.prompts import (
+        SMART_HOME_PROMPT_TEMPLATE as _RAW_SMART_HOME,
+    )
 
     inject = lambda t: _inject_assistant_name(t, assistant_name)
     return {
@@ -171,4 +185,3 @@ def reload_prompts(settings_loader=None, system_settings=None):
     except Exception as e:
         print(f"[LLM_Prompts] Error reloading prompts: {e}")
         return False
-

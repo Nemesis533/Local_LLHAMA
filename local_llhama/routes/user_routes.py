@@ -57,7 +57,7 @@ def from_user_text():
     # Extract optional uploaded image data
     uploaded_image_url = data.get("uploaded_image_url")
     uploaded_image_id = data.get("uploaded_image_id")
-    
+
     # Use authenticated user's ID as client_id for per-user conversation tracking
     client_id = str(current_user.id)
 
@@ -66,11 +66,11 @@ def from_user_text():
         # Route to dedicated chat handler instead of state machine
         # send_chat_message now returns the conversation_id
         returned_conversation_id = service.send_chat_message(
-            text=user_text, 
-            client_id=client_id, 
+            text=user_text,
+            client_id=client_id,
             conversation_id=conversation_id,
             uploaded_image_url=uploaded_image_url,
-            uploaded_image_id=uploaded_image_id
+            uploaded_image_id=uploaded_image_id,
         )
 
     # Return success + conversation_id for frontend to store

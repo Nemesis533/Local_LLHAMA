@@ -84,7 +84,12 @@ class StateMachineInstance:
 
         # Initialize component managers
         self._initialize_component_managers(
-            base_path, language_models, whisper_model, action_message_queue, web_server_message_queue, command_llm
+            base_path,
+            language_models,
+            whisper_model,
+            action_message_queue,
+            web_server_message_queue,
+            command_llm,
         )
 
         # Initialize state handlers and workers

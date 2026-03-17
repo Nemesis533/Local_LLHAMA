@@ -139,7 +139,9 @@ class SettingLoaderClass:
             file_size = os.path.getsize(self.settings_file)
             if file_size == 0:
                 raise ValueError(f"Settings file is empty: {self.settings_file}")
-            elif file_size > 10 * 1024 * 1024:  # 10MB limit, given whats inside, not expected to be large
+            elif (
+                file_size > 10 * 1024 * 1024
+            ):  # 10MB limit, given whats inside, not expected to be large
                 print(
                     f"{self.class_prefix_message} {LogLevel.WARNING} Settings file is very large ({file_size} bytes)"
                 )
@@ -222,7 +224,9 @@ class SettingLoaderClass:
             )
             return False
 
-    def _load_json_file(self, file_path: str, file_description: str = "file", default_data=None):
+    def _load_json_file(
+        self, file_path: str, file_description: str = "file", default_data=None
+    ):
         """
         @brief Load a JSON file with consistent error handling.
         @param file_path Path to the JSON file
@@ -236,7 +240,9 @@ class SettingLoaderClass:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] {file_description.capitalize()} file not found: {file_path}"
                     )
-                    raise FileNotFoundError(f"{file_description.capitalize()} file not found: {file_path}")
+                    raise FileNotFoundError(
+                        f"{file_description.capitalize()} file not found: {file_path}"
+                    )
                 else:
                     print(
                         f"{self.class_prefix_message} [{LogLevel.WARNING.name}] {file_description.capitalize()} file not found: {file_path}, using defaults"
@@ -267,7 +273,9 @@ class SettingLoaderClass:
                 return default_data
             raise
 
-    def _get_setting_with_default(self, section: str, key: str, default_value, log_default: bool = True):
+    def _get_setting_with_default(
+        self, section: str, key: str, default_value, log_default: bool = True
+    ):
         """
         @brief Get a setting value with default fallback and logging.
         @param section Section/class name in settings
@@ -295,7 +303,14 @@ class SettingLoaderClass:
 
         return setting.get("value", default_value)
 
-    def update_setting(self, section: str, key: str, value, value_type: str = "str", log_message: str = None):
+    def update_setting(
+        self,
+        section: str,
+        key: str,
+        value,
+        value_type: str = "str",
+        log_message: str = None,
+    ):
         """
         @brief Generic method to update a setting and save to file.
         @param section Section/class name in settings
@@ -322,7 +337,9 @@ class SettingLoaderClass:
 
             # Log success
             if log_message:
-                print(f"{self.class_prefix_message} [{LogLevel.INFO.name}] {log_message}")
+                print(
+                    f"{self.class_prefix_message} [{LogLevel.INFO.name}] {log_message}"
+                )
             else:
                 print(
                     f"{self.class_prefix_message} [{LogLevel.INFO.name}] Updated {section}.{key} to '{value}'"
@@ -353,7 +370,7 @@ class SettingLoaderClass:
         lang_models = self._get_setting_with_default(
             "TextToSpeech", "language_models", default_models, log_default=True
         )
-        
+
         if lang_models != default_models:
             print(
                 f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loaded {len(lang_models)} language model mappings"
@@ -372,7 +389,7 @@ class SettingLoaderClass:
             "language_models",
             language_models,
             value_type="dict",
-            log_message=f"Updated and saved {len(language_models)} language model mappings"
+            log_message=f"Updated and saved {len(language_models)} language model mappings",
         )
 
     def update_assistant_name(self, assistant_name):
@@ -387,7 +404,7 @@ class SettingLoaderClass:
             "assistant_name",
             assistant_name.strip(),
             value_type="str",
-            log_message=f"Updated assistant name to '{assistant_name}'"
+            log_message=f"Updated assistant name to '{assistant_name}'",
         )
 
     def _load_system_settings(self):
@@ -404,7 +421,9 @@ class SettingLoaderClass:
             "timeout": 10,
             "api_tokens": {},
         }
-        return self._load_json_file(config_file, "web search config", default_data=default_config)
+        return self._load_json_file(
+            config_file, "web search config", default_data=default_config
+        )
 
     def get_system_settings(self):
         """Get the loaded system settings."""
@@ -845,7 +864,7 @@ class SettingLoaderClass:
             "whisper_model",
             model_name,
             value_type="str",
-            log_message=f"Updated Whisper model to '{model_name}' and saved to file"
+            log_message=f"Updated Whisper model to '{model_name}' and saved to file",
         )
 
     def get_chat_handler_config(self):

@@ -74,7 +74,7 @@ class ContextSummarizer:
             # Use the selected model to generate summary (non-streaming for complete response)
             response = llm_client.send_message(
                 user_message=summary_prompt,
-                temperature=0.3, 
+                temperature=0.3,
                 max_tokens=int(target_words * self.summary_buffer),
             )
 

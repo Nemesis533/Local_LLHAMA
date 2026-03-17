@@ -16,9 +16,10 @@ from pathlib import Path
 
 import requests
 
+from ..model_registry import ModelState, ModelType, get_model_registry
+
 # === Custom Imports ===
 from ..shared_logger import LogLevel
-from ..model_registry import get_model_registry, ModelType, ModelState
 
 CLASS_PREFIX = "[ImageManager]"
 
@@ -81,7 +82,7 @@ class ImageGenerationManager:
         # intentionally staying resident across requests.
         self._pipeline = None
         self._pipeline_kept_alive = False
-        
+
         # Register with model registry
         self.registry = get_model_registry()
         self.model_registry_name = f"sd3.5-{cuda_device}"
@@ -89,7 +90,7 @@ class ImageGenerationManager:
             name=self.model_registry_name,
             model_type=ModelType.DIFFUSION,
             description=f"Stable Diffusion 3.5 on {cuda_device}",
-            initial_state=ModelState.UNLOADED
+            initial_state=ModelState.UNLOADED,
         )
 
         print(
@@ -111,6 +112,7 @@ class ImageGenerationManager:
         """
         try:
             from huggingface_hub import get_token
+
             token = get_token()
             if token:
                 return token
@@ -173,10 +175,10 @@ class ImageGenerationManager:
                 f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Cannot offload — ollama_host or model_name not set"
             )
             return False
-        
+
         # Update registry: mark LLM as unloading
         self.registry.set_model_state(model_name, ModelState.UNLOADING)
-        
+
         try:
             host = self._normalize_ollama_host(ollama_host)
             url = f"{host}/api/generate"
@@ -185,13 +187,17 @@ class ImageGenerationManager:
             print(
                 f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Ollama unload request → status {resp.status_code}"
             )
-            
+
             success = resp.status_code < 400
             if success:
                 self.registry.set_model_state(model_name, ModelState.UNLOADED)
             else:
-                self.registry.set_model_state(model_name, ModelState.ERROR, f"Unload failed: HTTP {resp.status_code}")
-                
+                self.registry.set_model_state(
+                    model_name,
+                    ModelState.ERROR,
+                    f"Unload failed: HTTP {resp.status_code}",
+                )
+
             return success
         except Exception as e:
             print(
@@ -215,7 +221,7 @@ class ImageGenerationManager:
                 return None
             for i in range(torch.cuda.device_count()):
                 free_bytes, _ = torch.cuda.mem_get_info(i)
-                free_gb = free_bytes / (1024 ** 3)
+                free_gb = free_bytes / (1024**3)
                 if free_gb >= min_vram_gb:
                     print(
                         f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
@@ -240,21 +246,31 @@ class ImageGenerationManager:
         @raises RuntimeError If diffusers/torch are unavailable or HF token is missing.
         """
         if self._pipeline is not None:
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline already loaded, reusing.")
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline already loaded, reusing."
+            )
             self.registry.set_model_state(self.model_registry_name, ModelState.LOADED)
             return
-        
+
         # Acquire loading lock in registry
-        if not self.registry.acquire_loading_lock(self.model_registry_name, timeout=300):
-            print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Could not acquire loading lock, waiting...")
+        if not self.registry.acquire_loading_lock(
+            self.model_registry_name, timeout=300
+        ):
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Could not acquire loading lock, waiting..."
+            )
             # Wait for model to become ready if another thread is loading it
-            if self.registry.wait_for_model_ready(self.model_registry_name, timeout=300):
+            if self.registry.wait_for_model_ready(
+                self.model_registry_name, timeout=300
+            ):
                 return
             else:
                 raise RuntimeError("Failed to load pipeline - timeout or error")
 
         if not self.hf_token:
-            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, "No HuggingFace token")
+            self.registry.set_model_state(
+                self.model_registry_name, ModelState.ERROR, "No HuggingFace token"
+            )
             raise RuntimeError(
                 "No HuggingFace token found. Set HF_TOKEN env var, add it to .env, "
                 "or run `huggingface-cli login` and restart the service."
@@ -270,7 +286,9 @@ class ImageGenerationManager:
             from transformers import T5EncoderModel
 
         except ImportError as e:
-            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
+            self.registry.set_model_state(
+                self.model_registry_name, ModelState.ERROR, str(e)
+            )
             raise RuntimeError(
                 f"Image generation dependencies not installed. "
                 f"Run: pip install diffusers transformers accelerate bitsandbytes. "
@@ -289,7 +307,9 @@ class ImageGenerationManager:
                     cuda_device = "cpu"
                 else:
                     # Validate the requested device index is actually available
-                    device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
+                    device_index = (
+                        int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
+                    )
                     if device_index >= torch.cuda.device_count():
                         print(
                             f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
@@ -305,7 +325,9 @@ class ImageGenerationManager:
             # model stays resident between requests instead of reloading every time.
             _will_keep_alive = False
             if self.keep_pipeline_loaded and device_index is not None:
-                best = self._find_device_with_enough_vram(self.keep_pipeline_loaded_min_vram_gb)
+                best = self._find_device_with_enough_vram(
+                    self.keep_pipeline_loaded_min_vram_gb
+                )
                 if best is not None:
                     device_index = best
                     cuda_device = f"cuda:{best}"
@@ -361,10 +383,10 @@ class ImageGenerationManager:
 
             self._pipeline = pipeline
             self._pipeline_kept_alive = _will_keep_alive
-            
+
             # Mark as loaded in registry
             self.registry.set_model_state(self.model_registry_name, ModelState.LOADED)
-            
+
             if _will_keep_alive:
                 print(
                     f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
@@ -376,7 +398,9 @@ class ImageGenerationManager:
                     f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
                 )
         except Exception as e:
-            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
+            self.registry.set_model_state(
+                self.model_registry_name, ModelState.ERROR, str(e)
+            )
             raise
 
     def unload_pipeline(self, force: bool = False):
@@ -397,12 +421,14 @@ class ImageGenerationManager:
         if self._pipeline is None:
             self.registry.set_model_state(self.model_registry_name, ModelState.UNLOADED)
             return
-        
+
         # Acquire unloading lock
         if not self.registry.acquire_unloading_lock(self.model_registry_name):
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Model already being unloaded or not loaded")
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Model already being unloaded or not loaded"
+            )
             return
-            
+
         try:
             import torch
 
@@ -413,14 +439,21 @@ class ImageGenerationManager:
             # see VRAM not draining cleanly between generations — haven't hit it yet
             # but keeping it in mind for smaller cards. — (llhama)
             torch.cuda.empty_cache()
-            
+
             self.registry.set_model_state(self.model_registry_name, ModelState.UNLOADED)
-            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.", flush=True)
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.",
+                flush=True,
+            )
         except Exception as e:
-            print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Error during pipeline unload: {e}")
+            print(
+                f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Error during pipeline unload: {e}"
+            )
             self._pipeline = None
             self._pipeline_kept_alive = False
-            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
+            self.registry.set_model_state(
+                self.model_registry_name, ModelState.ERROR, str(e)
+            )
 
     # === Generation ===
 
@@ -482,7 +515,10 @@ class ImageGenerationManager:
         pil_format = {"jpg": "JPEG"}.get(self.output_format, self.output_format.upper())
         save_kwargs = {"quality": 92} if pil_format in ("JPEG", "WEBP") else {}
         image.save(str(file_path), format=pil_format, **save_kwargs)
-        print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image saved to {file_path}", flush=True)
+        print(
+            f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image saved to {file_path}",
+            flush=True,
+        )
 
         image_id = image_uuid  # re-use the same uuid for both filename and DB id
 
@@ -505,7 +541,10 @@ class ImageGenerationManager:
                         self.model_id,
                     ),
                 )
-                print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image record saved to DB, id={image_uuid}", flush=True)
+                print(
+                    f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Image record saved to DB, id={image_uuid}",
+                    flush=True,
+                )
             except Exception as e:
                 print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] DB insert failed: {e}")
 
@@ -518,5 +557,3 @@ class ImageGenerationManager:
             "url": f"/api/images/{image_uuid}",
             "download_url": f"/api/images/{image_uuid}/download",
         }
-
-

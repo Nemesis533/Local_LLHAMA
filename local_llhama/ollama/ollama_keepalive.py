@@ -9,14 +9,14 @@ import time
 
 import requests
 
+from ..model_registry import ModelState, get_model_registry
 from ..shared_logger import LogLevel
-from ..model_registry import get_model_registry, ModelState
 
 
 class ModelKeepaliveManager:
     """
     Manages keepalive pings to Ollama models to prevent them from being unloaded.
-    
+
     Runs a background thread that periodically sends minimal requests to registered
     models (both text generation and embedding models) to keep them in memory.
     """
@@ -40,15 +40,17 @@ class ModelKeepaliveManager:
         self.interval = interval
         self.enabled = enabled
         self.log_prefix = log_prefix
-        
+
         self.models = []
         self.running = False
         self.thread = None
-        
+
         # Get model registry instance
         self.registry = get_model_registry()
 
-    def register_model(self, model_name: str, model_type: str = "text", description: str = ""):
+    def register_model(
+        self, model_name: str, model_type: str = "text", description: str = ""
+    ):
         """
         Register a model for keepalive monitoring.
 
@@ -64,11 +66,9 @@ class ModelKeepaliveManager:
                 )
                 return
 
-        self.models.append({
-            "name": model_name,
-            "type": model_type,
-            "description": description
-        })
+        self.models.append(
+            {"name": model_name, "type": model_type, "description": description}
+        )
         print(
             f"{self.log_prefix} [{LogLevel.INFO.name}] Registered model for keepalive: {model_name} ({model_type})"
         )
@@ -82,10 +82,14 @@ class ModelKeepaliveManager:
         """
         original_count = len(self.models)
         self.models = [
-            m for m in self.models
-            if not (m["name"] == model_name and (model_type is None or m["type"] == model_type))
+            m
+            for m in self.models
+            if not (
+                m["name"] == model_name
+                and (model_type is None or m["type"] == model_type)
+            )
         ]
-        
+
         if len(self.models) < original_count:
             print(
                 f"{self.log_prefix} [{LogLevel.INFO.name}] Unregistered model: {model_name}"
@@ -132,9 +136,7 @@ class ModelKeepaliveManager:
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        print(
-            f"{self.log_prefix} [{LogLevel.INFO.name}] Model keepalive stopped"
-        )
+        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Model keepalive stopped")
 
     def _warm_up_worker(self):
         """Send immediate warm-up pings at startup with a longer timeout for model loading."""
@@ -166,12 +168,12 @@ class ModelKeepaliveManager:
                 for model_info in self.models:
                     if not self.running:
                         return
-                    
+
                     is_embedding = model_info["type"] == "embedding"
                     self._send_keepalive(
                         model_info["name"],
                         is_embedding=is_embedding,
-                        description=model_info["description"]
+                        description=model_info["description"],
                     )
 
             except Exception as e:
@@ -179,7 +181,13 @@ class ModelKeepaliveManager:
                     f"{self.log_prefix} [{LogLevel.WARNING.name}] Keepalive error: {type(e).__name__}: {e}"
                 )
 
-    def _send_keepalive(self, model_name: str, is_embedding: bool = False, description: str = "", timeout: int = 10):
+    def _send_keepalive(
+        self,
+        model_name: str,
+        is_embedding: bool = False,
+        description: str = "",
+        timeout: int = 10,
+    ):
         """
         Send a minimal request to keep a model loaded.
 
@@ -203,7 +211,20 @@ class ModelKeepaliveManager:
                     f"Skipping keepalive for {model_name} - model is unloaded"
                 )
                 return
-        
+
+        # Don't send keepalive if other non-LLM/embedding models are loaded
+        # (e.g., diffusion pipeline, VLM) to avoid VRAM conflicts
+        from ..model_registry import ModelType
+
+        loaded_models = self.registry.get_loaded_models()
+        for model in loaded_models:
+            if model.model_type not in (ModelType.LLM, ModelType.EMBEDDING):
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] "
+                    f"Skipping keepalive for {model_name} - {model.name} ({model.model_type.value}) is loaded"
+                )
+                return
+
         try:
             url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
 

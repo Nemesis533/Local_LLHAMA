@@ -6,8 +6,8 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
-from ._service import get_service
 from ..error_handler import FlaskErrorHandler
+from ._service import get_service
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -155,39 +155,39 @@ def get_prompts():
         prompts_data = {
             "response_processor_prompt": {
                 "value": prompts.RESPONSE_PROCESSOR_PROMPT,
-                "description": "Converts function results into natural language responses for the user"
+                "description": "Converts function results into natural language responses for the user",
             },
             "smart_home_prompt_template": {
                 "value": prompts.SMART_HOME_PROMPT_TEMPLATE,
-                "description": "Main system prompt for smart home command processing and decision-making"
+                "description": "Main system prompt for smart home command processing and decision-making",
             },
             "conversation_processor_prompt": {
                 "value": prompts.CONVERSATION_PROCESSOR_PROMPT,
-                "description": "Processes conversational responses with full context from chat interactions"
+                "description": "Processes conversational responses with full context from chat interactions",
             },
             "calendar_event_prompt": {
                 "value": prompts.CALENDAR_EVENT_PROMPT,
-                "description": "Extracts structured calendar event information from natural language"
+                "description": "Extracts structured calendar event information from natural language",
             },
             "resume_conversation_prompt": {
                 "value": prompts.RESUME_CONVERSATION_PROMPT,
-                "description": "Provides context when resuming a previous conversation"
+                "description": "Provides context when resuming a previous conversation",
             },
             "smart_home_decision_making_extension": {
                 "value": prompts.SMART_HOME_DECISION_MAKING_EXTENSION,
-                "description": "Extension prompt for enhanced smart home decision-making capabilities"
+                "description": "Extension prompt for enhanced smart home decision-making capabilities",
             },
             "safety_instruction_prompt": {
                 "value": prompts.SAFETY_INSTRUCTION_PROMPT,
-                "description": "Safety guidelines and content filtering instructions"
+                "description": "Safety guidelines and content filtering instructions",
             },
             "image_analysis_prompt": {
                 "value": prompts.IMAGE_ANALYSIS_PROMPT,
-                "description": "System prompt for LLaVA image analysis — instructs the vision model how to answer user questions about images"
+                "description": "System prompt for LLaVA image analysis — instructs the vision model how to answer user questions about images",
             },
             "image_analysis_safety_prompt": {
                 "value": prompts.IMAGE_ANALYSIS_SAFETY_PROMPT,
-                "description": "Safety guardrails prepended to the image analysis prompt when safety mode is enabled"
+                "description": "Safety guardrails prepended to the image analysis prompt when safety mode is enabled",
             },
         }
 
@@ -252,7 +252,7 @@ Use {assistant_name} placeholder which will be replaced at runtime.
     for prompt_name in prompt_names:
         key = prompt_name.lower()
         prompt_data = prompts.get(key, {})
-        
+
         # Handle both formats: direct string or {value, description} object
         if isinstance(prompt_data, dict):
             value = prompt_data.get("value", "")
@@ -660,12 +660,21 @@ def get_available_audio_devices():
 
 # ── Image Generation Settings ──────────────────────────────────────────────────
 
-_OBJECT_SETTINGS_PATH = Path(__file__).parent.parent / "settings" / "object_settings.json"
+_OBJECT_SETTINGS_PATH = (
+    Path(__file__).parent.parent / "settings" / "object_settings.json"
+)
 
 _IMG_KEYS = {
-    "enabled", "model_id", "cache_dir", "num_steps", "guidance_scale",
-    "max_sequence_length", "cuda_device", "output_format",
-    "keep_pipeline_loaded", "keep_pipeline_loaded_min_vram_gb",
+    "enabled",
+    "model_id",
+    "cache_dir",
+    "num_steps",
+    "guidance_scale",
+    "max_sequence_length",
+    "cuda_device",
+    "output_format",
+    "keep_pipeline_loaded",
+    "keep_pipeline_loaded_min_vram_gb",
 }
 
 _IMG_TYPES = {
@@ -691,13 +700,20 @@ def get_image_generation_config():
     as a flat dict of {key: value} pairs.
     """
     if not _OBJECT_SETTINGS_PATH.exists():
-        return jsonify({"status": "error", "message": "object_settings.json not found"}), 404
+        return (
+            jsonify({"status": "error", "message": "object_settings.json not found"}),
+            404,
+        )
 
     with open(_OBJECT_SETTINGS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     section = data.get("ImageGenerationManager", {})
-    config = {k: section[k]["value"] for k in _IMG_KEYS if k in section and "value" in section[k]}
+    config = {
+        k: section[k]["value"]
+        for k in _IMG_KEYS
+        if k in section and "value" in section[k]
+    }
 
     return {"status": "ok", "config": config}
 
@@ -714,14 +730,20 @@ def update_image_generation_config():
     """
     payload = request.get_json()
     if not payload or "config" not in payload:
-        return jsonify({"status": "error", "message": "Missing 'config' in request"}), 400
+        return (
+            jsonify({"status": "error", "message": "Missing 'config' in request"}),
+            400,
+        )
 
     incoming = payload["config"]
     if not isinstance(incoming, dict):
         return jsonify({"status": "error", "message": "'config' must be a dict"}), 400
 
     if not _OBJECT_SETTINGS_PATH.exists():
-        return jsonify({"status": "error", "message": "object_settings.json not found"}), 404
+        return (
+            jsonify({"status": "error", "message": "object_settings.json not found"}),
+            404,
+        )
 
     with open(_OBJECT_SETTINGS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)

@@ -393,10 +393,11 @@ class LocalLLHamaSystemController:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Model warm-up failed: {repr(e)}"
             )
-        
+
         # 9. Print model registry status
         try:
             from .model_registry import get_model_registry
+
             registry = get_model_registry()
             registry.print_status()
         except Exception as e:

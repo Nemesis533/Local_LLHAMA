@@ -5,6 +5,7 @@ Provides login, logout, and password change endpoints.
 
 from flask import Blueprint, current_app, jsonify, redirect, request
 from flask_login import current_user, login_required, login_user, logout_user
+
 from ..shared_logger import LogLevel
 
 auth_bp = Blueprint("auth", __name__)
@@ -104,7 +105,9 @@ def change_password():
 
     if success:
         auth_manager.db_manager.clear_password_change_flag(current_user.username)
-        print(f"[Auth] [{LogLevel.INFO.name}] Password changed for user: {current_user.username}")
+        print(
+            f"[Auth] [{LogLevel.INFO.name}] Password changed for user: {current_user.username}"
+        )
         return jsonify({"success": True, "message": message}), 200
     else:
         return jsonify({"error": message}), 400

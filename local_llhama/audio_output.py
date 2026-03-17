@@ -121,7 +121,7 @@ class SoundPlayer:
             return  # Silently skip if mixer initialization failed
 
         try:
-            
+
             self.volume = max(0.0, min(volume, 1.0))
 
             # Load the sound object by name
@@ -175,7 +175,9 @@ class TextToSpeech:
     Text-to-Speech using Piper with real-time streaming playback and LLM language mapping.
     """
 
-    def __init__(self, voice_dir: str, language_models: dict = None, system_settings: dict = None):
+    def __init__(
+        self, voice_dir: str, language_models: dict = None, system_settings: dict = None
+    ):
         """
         @brief Initialize TextToSpeech with configurable language-to-model mappings.
         @param voice_dir Directory containing .onnx voice model files.
@@ -400,6 +402,7 @@ class TextToSpeech:
                 audio_settings = system_settings.get("audio", {})
             else:
                 import json
+
                 settings_file = (
                     self.voice_dir.parent.parent / "settings" / "system_settings.json"
                 )
@@ -597,7 +600,7 @@ class TextToSpeech:
         # Synthesis configuration for natural voice
         syn_config = SynthesisConfig(
             volume=0.5,
-            length_scale=1,  
+            length_scale=1,
             noise_scale=0.667,  # Less noise/breathiness
             noise_w_scale=0.8,  # Smoother prosody
             normalize_audio=True,  # Consistent volume

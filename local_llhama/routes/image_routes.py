@@ -13,9 +13,9 @@ from flask import Blueprint, abort, jsonify, request, send_file
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
-from ._service import get_service
 from ..error_handler import FlaskErrorHandler
 from ..shared_logger import LogLevel
+from ._service import get_service
 
 image_bp = Blueprint("images", __name__)
 
@@ -99,10 +99,12 @@ def serve_image(image_id: str):
     @param image_id UUID of the image.
     """
     record = _resolve_image(image_id)
-    
+
     # Choose storage location based on whether it's uploaded or generated
     if record["is_uploaded"]:
-        image_path = _uploaded_image_storage_base() / str(record["user_id"]) / record["filename"]
+        image_path = (
+            _uploaded_image_storage_base() / str(record["user_id"]) / record["filename"]
+        )
     else:
         image_path = _image_storage_base() / str(record["user_id"]) / record["filename"]
 
@@ -110,7 +112,11 @@ def serve_image(image_id: str):
         abort(404, description="Image file not found on disk")
 
     # Determine mimetype from extension
-    ext = record["filename"].rsplit(".", 1)[1].lower() if "." in record["filename"] else "png"
+    ext = (
+        record["filename"].rsplit(".", 1)[1].lower()
+        if "." in record["filename"]
+        else "png"
+    )
     mimetype_map = {
         "png": "image/png",
         "jpg": "image/jpeg",
@@ -133,10 +139,12 @@ def download_image(image_id: str):
     @param image_id UUID of the image (generated or uploaded).
     """
     record = _resolve_image(image_id)
-    
+
     # Choose storage location based on whether it's uploaded or generated
     if record["is_uploaded"]:
-        image_path = _uploaded_image_storage_base() / str(record["user_id"]) / record["filename"]
+        image_path = (
+            _uploaded_image_storage_base() / str(record["user_id"]) / record["filename"]
+        )
     else:
         image_path = _image_storage_base() / str(record["user_id"]) / record["filename"]
 
@@ -187,14 +195,24 @@ def upload_image():
         return jsonify({"error": "No file selected"}), 400
 
     if not _allowed_file(file.filename):
-        return jsonify({"error": "File type not allowed. Use PNG, JPG, GIF, or WebP"}), 400
+        return (
+            jsonify({"error": "File type not allowed. Use PNG, JPG, GIF, or WebP"}),
+            400,
+        )
 
     # Check file size
     file.seek(0, 2)  # Seek to end
     file_size = file.tell()
     file.seek(0)  # Reset to beginning
     if file_size > MAX_FILE_SIZE:
-        return jsonify({"error": f"File too large. Max size is {MAX_FILE_SIZE // 1024 // 1024} MB"}), 400
+        return (
+            jsonify(
+                {
+                    "error": f"File too large. Max size is {MAX_FILE_SIZE // 1024 // 1024} MB"
+                }
+            ),
+            400,
+        )
 
     # Generate UUID and save file
     image_id = str(uuid.uuid4())
@@ -234,19 +252,23 @@ def upload_image():
                     "uploaded",  # Special marker to distinguish from generated images
                 ),
             )
-            print(f"[ImageRoutes] [{LogLevel.INFO.name}] Uploaded image record saved to DB: {image_id}")
+            print(
+                f"[ImageRoutes] [{LogLevel.INFO.name}] Uploaded image record saved to DB: {image_id}"
+            )
         except Exception as e:
             print(f"[ImageRoutes] [{LogLevel.WARNING.name}] DB insert failed: {e}")
             # Continue even if DB insert fails - file is saved
 
-    return jsonify({
-        "success": True,
-        "image_id": image_id,
-        "filename": filename,
-        "original_filename": original_filename,
-        "url": f"/api/images/{image_id}",
-        "thumbnail_url": f"/api/images/{image_id}",  # Use unified endpoint
-    })
+    return jsonify(
+        {
+            "success": True,
+            "image_id": image_id,
+            "filename": filename,
+            "original_filename": original_filename,
+            "url": f"/api/images/{image_id}",
+            "thumbnail_url": f"/api/images/{image_id}",  # Use unified endpoint
+        }
+    )
 
 
 # Removed separate serve_uploaded_image route - now handled by unified serve_image route

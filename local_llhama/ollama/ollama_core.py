@@ -20,8 +20,8 @@ from ..llm_prompts import (
     SMART_HOME_PROMPT_TEMPLATE,
     is_safety_enabled,
 )
+from ..model_registry import ModelState, ModelType, get_model_registry
 from ..shared_logger import LogLevel
-from ..model_registry import get_model_registry, ModelType, ModelState
 from .ollama_context_builders import ContextBuilder
 from .ollama_embeddings import EmbeddingClient
 from .ollama_keepalive import ModelKeepaliveManager
@@ -41,7 +41,7 @@ class OllamaClient:
     def __init__(
         self,
         ha_client,
-        host: str = "http://your_ip:11434", # leaving placeholder to force user to set
+        host: str = "http://your_ip:11434",  # leaving placeholder to force user to set
         model: str = "qwen3-14b",
         pg_client=None,
         conversation_loader=None,
@@ -144,46 +144,46 @@ class OllamaClient:
         self.keepalive_manager.register_model(
             model_name=self.model,
             model_type="text",
-            description="Main text generation model"
+            description="Main text generation model",
         )
-        
+
         # Register with model registry (assume loaded initially)
         self.registry.register_model(
             name=self.model,
             model_type=ModelType.LLM,
             host=self.host,
             description="Main text generation model",
-            initial_state=ModelState.LOADED  # Assume keepalive will keep it loaded
+            initial_state=ModelState.LOADED,  # Assume keepalive will keep it loaded
         )
-        
+
         # Register decision model if it's different from main model
         if self.use_separate_decision_model and self.decision_model != self.model:
             self.keepalive_manager.register_model(
                 model_name=self.decision_model,
                 model_type="text",
-                description="Decision-making model"
+                description="Decision-making model",
             )
             self.registry.register_model(
                 name=self.decision_model,
                 model_type=ModelType.LLM,
                 host=self.host,
                 description="Decision-making model",
-                initial_state=ModelState.LOADED
+                initial_state=ModelState.LOADED,
             )
-        
+
         # Register embedding model if embedding client exists
         if self.embedding_client:
             self.keepalive_manager.register_model(
                 model_name=self.embedding_client.model,
                 model_type="embedding",
-                description="Embedding generation model"
+                description="Embedding generation model",
             )
             self.registry.register_model(
                 name=self.embedding_client.model,
                 model_type=ModelType.EMBEDDING,
                 host=self.host,
                 description="Embedding generation model",
-                initial_state=ModelState.LOADED
+                initial_state=ModelState.LOADED,
             )
 
     def _build_extended_prompt(self):
@@ -285,7 +285,7 @@ class OllamaClient:
     def _prepare_system_prompt(self, message_type: str, is_streaming: bool = False):
         """
         Prepare system prompt based on message type.
-        
+
         @param message_type Type of message (command/response)
         @param is_streaming Whether this is for streaming (affects log message)
         @return System prompt string
@@ -312,7 +312,7 @@ class OllamaClient:
         else:
             # FIRST PARSE: Decision-making with minimal context
             system_prompt = self.system_prompt
-        
+
         return system_prompt
 
     def _prepare_request_parameters(
@@ -326,7 +326,7 @@ class OllamaClient:
     ):
         """
         Prepare request parameters and update internal state.
-        
+
         @param user_message User's message
         @param temperature Sampling temperature
         @param top_p Nucleus sampling
@@ -350,7 +350,7 @@ class OllamaClient:
 
         # Determine if we should use decision model
         use_decision_model = message_type == "command"
-        
+
         return prompt, temperature, top_p, use_decision_model
 
     def _send_message_impl(
@@ -374,8 +374,10 @@ class OllamaClient:
 
         # Prepare system prompt and request parameters
         system_prompt = self._prepare_system_prompt(message_type, is_streaming=False)
-        prompt, temperature, top_p, use_decision_model = self._prepare_request_parameters(
-            user_message, temperature, top_p, message_type, from_chat, original_text
+        prompt, temperature, top_p, use_decision_model = (
+            self._prepare_request_parameters(
+                user_message, temperature, top_p, message_type, from_chat, original_text
+            )
         )
 
         # Send request to Ollama
@@ -414,14 +416,14 @@ class OllamaClient:
     ):
         """
         Queue streaming response for embedding and storage.
-        
+
         @param conversation_id Conversation UUID
         @param original_text Original user text
         @param full_response Complete accumulated response
         """
         if not (conversation_id and original_text and full_response):
             return
-            
+
         try:
             parsed = json.loads(full_response)
             nl_response = parsed.get("nl_response", full_response)
@@ -467,8 +469,10 @@ class OllamaClient:
 
         # Prepare system prompt and request parameters
         system_prompt = self._prepare_system_prompt(message_type, is_streaming=True)
-        prompt, temperature, top_p, use_decision_model = self._prepare_request_parameters(
-            user_message, temperature, top_p, message_type, from_chat, original_text
+        prompt, temperature, top_p, use_decision_model = (
+            self._prepare_request_parameters(
+                user_message, temperature, top_p, message_type, from_chat, original_text
+            )
         )
 
         # Send streaming request to Ollama

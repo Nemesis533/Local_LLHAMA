@@ -1,15 +1,15 @@
 # === System Imports ===
+import json
 import os
 import threading
 import time
 import wave
 from collections import deque
-
-import json
 from pathlib import Path
-import torch
+
 import numpy as np
 import pyaudio
+import torch
 import whisper
 from openwakeword.model import Model
 
@@ -58,7 +58,11 @@ class AudioTranscriptionClass:
         if device is None:
             cuda_device = self._cuda_device_setting
             if cuda_device == "auto" or cuda_device == "cpu":
-                device = "cuda" if (cuda_device == "auto" and torch.cuda.is_available()) else "cpu"
+                device = (
+                    "cuda"
+                    if (cuda_device == "auto" and torch.cuda.is_available())
+                    else "cpu"
+                )
             else:
                 # cuda_device could be "cuda:0", "cuda:1", etc.
                 device = cuda_device if torch.cuda.is_available() else "cpu"
@@ -88,7 +92,7 @@ class AudioTranscriptionClass:
         result = self.model.transcribe(filename)
         transcription = result["text"]
 
-        os.remove(filename) 
+        os.remove(filename)
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Transcription completed and temporary file removed."
         )
@@ -137,9 +141,9 @@ class AudioRecorderClass:
             self.noise_floor_multiplier = audio_settings.get(
                 "noise_floor_multiplier", {}
             ).get("value", 0.50)
-            self.input_device_index = audio_settings.get(
-                "input_device_index", {}
-            ).get("value", None)
+            self.input_device_index = audio_settings.get("input_device_index", {}).get(
+                "value", None
+            )
 
             # Load sample rate from settings
             configured_sample_rate = audio_settings.get("sample_rate", {}).get(
@@ -169,7 +173,7 @@ class AudioRecorderClass:
         """Record audio using an existing stream if provided, otherwise create a new one."""
         p = existing_pyaudio
         stream = existing_stream
-        owns_resources = existing_stream is None  
+        owns_resources = existing_stream is None
 
         try:
             # Initialize PyAudio only if not provided
@@ -439,7 +443,7 @@ class WakeWordListener:
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Initializing PyAudio..."
         )
         self.audio = pyaudio.PyAudio()
-        
+
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] PyAudio initialized successfully"
         )
@@ -450,12 +454,10 @@ class WakeWordListener:
         try:
             data = _load_audio_settings()
             audio_settings = data.get("audio", {})
-            self.input_device_index = audio_settings.get(
-                "input_device_index", {}
-            ).get("value", None)
-            self.sample_rate = audio_settings.get("sample_rate", {}).get(
-                "value", 16000
+            self.input_device_index = audio_settings.get("input_device_index", {}).get(
+                "value", None
             )
+            self.sample_rate = audio_settings.get("sample_rate", {}).get("value", 16000)
         except Exception as e:
             print(
                 f"{self.class_prefix_message} [{LogLevel.WARNING.name}] Could not load audio settings: {e}, using default"
@@ -509,7 +511,7 @@ class WakeWordListener:
 
     def _open_microphone_stream(self):
         """Open and configure the microphone stream.
-        
+
         Returns:
             tuple: (mic_stream, device_sample_rate) or (None, None) on failure
         """
@@ -569,7 +571,7 @@ class WakeWordListener:
 
     def _flush_audio_buffer(self, mic_stream):
         """Flush initial audio buffer to discard any TTS echoes.
-        
+
         Args:
             mic_stream: The active microphone stream
         """
@@ -589,11 +591,11 @@ class WakeWordListener:
 
     def _process_audio_chunk(self, audio_data, device_sample_rate):
         """Process a single audio chunk and return resampled numpy array.
-        
+
         Args:
             audio_data: Raw audio data bytes
             device_sample_rate: Sample rate of the device
-            
+
         Returns:
             numpy.ndarray: Resampled audio data at 16kHz
         """
@@ -606,20 +608,21 @@ class WakeWordListener:
 
             num_samples = int(len(np_audio) * 16000 / device_sample_rate)
             np_audio = signal.resample(np_audio, num_samples).astype(np.int16)
-        
+
         return np_audio
 
-    def _check_wake_word_detection(self, prediction, current_time, last_detection_time, 
-                                   cooldown_time, result_queue):
+    def _check_wake_word_detection(
+        self, prediction, current_time, last_detection_time, cooldown_time, result_queue
+    ):
         """Check if wake word was detected and handle it.
-        
+
         Args:
             prediction: Prediction dictionary from owwModel
             current_time: Current timestamp
             last_detection_time: Timestamp of last detection
             cooldown_time: Cooldown period between detections
             result_queue: Queue to put detection results
-            
+
         Returns:
             float: Updated last_detection_time, or original if no detection
         """
@@ -628,9 +631,11 @@ class WakeWordListener:
             last_scores = scores[-5:]
             avg_score = sum(last_scores) / len(last_scores) if last_scores else 0
 
-            if (avg_score >= self.wakeword_thr and 
-                (current_time - last_detection_time) > cooldown_time):
-                
+            if (
+                avg_score >= self.wakeword_thr
+                and (current_time - last_detection_time) > cooldown_time
+            ):
+
                 # Clear queue and send noise floor
                 while not result_queue.empty():
                     result_queue.get()
@@ -640,12 +645,12 @@ class WakeWordListener:
                     f"{self.class_prefix_message} [{LogLevel.INFO.name}] Wake word detected, noise floor sent to queue."
                 )
                 return current_time
-        
+
         return last_detection_time
 
     def _run_detection_loop(self, mic_stream, device_sample_rate, result_queue):
         """Run the main wake word detection loop.
-        
+
         Args:
             mic_stream: Active microphone stream
             device_sample_rate: Sample rate of the device
@@ -668,8 +673,11 @@ class WakeWordListener:
 
                 # Check for wake word detection
                 last_detection_time = self._check_wake_word_detection(
-                    prediction, current_time, last_detection_time, 
-                    cooldown_time, result_queue
+                    prediction,
+                    current_time,
+                    last_detection_time,
+                    cooldown_time,
+                    result_queue,
                 )
 
             except OSError as e:
@@ -685,7 +693,7 @@ class WakeWordListener:
 
     def _cleanup_microphone_stream(self, mic_stream):
         """Cleanup microphone stream resources.
-        
+
         Args:
             mic_stream: The microphone stream to cleanup
         """
@@ -741,6 +749,7 @@ class WakeWordListener:
                     f"{self.class_prefix_message} [{LogLevel.CRITICAL.name}] Wake word listener error: {type(e).__name__}: {e}"
                 )
                 import traceback
+
                 traceback.print_exc()
             finally:
                 self._cleanup_microphone_stream(mic_stream)
