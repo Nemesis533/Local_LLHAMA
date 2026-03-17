@@ -18,6 +18,7 @@ import requests
 
 # === Custom Imports ===
 from ..shared_logger import LogLevel
+from ..model_registry import get_model_registry, ModelType, ModelState
 
 CLASS_PREFIX = "[ImageManager]"
 
@@ -80,6 +81,16 @@ class ImageGenerationManager:
         # intentionally staying resident across requests.
         self._pipeline = None
         self._pipeline_kept_alive = False
+        
+        # Register with model registry
+        self.registry = get_model_registry()
+        self.model_registry_name = f"sd3.5-{cuda_device}"
+        self.registry.register_model(
+            name=self.model_registry_name,
+            model_type=ModelType.DIFFUSION,
+            description=f"Stable Diffusion 3.5 on {cuda_device}",
+            initial_state=ModelState.UNLOADED
+        )
 
         print(
             f"{CLASS_PREFIX} [{LogLevel.INFO.name}] ImageGenerationManager initialised. "
@@ -162,6 +173,10 @@ class ImageGenerationManager:
                 f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Cannot offload — ollama_host or model_name not set"
             )
             return False
+        
+        # Update registry: mark LLM as unloading
+        self.registry.set_model_state(model_name, ModelState.UNLOADING)
+        
         try:
             host = self._normalize_ollama_host(ollama_host)
             url = f"{host}/api/generate"
@@ -170,11 +185,19 @@ class ImageGenerationManager:
             print(
                 f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Ollama unload request → status {resp.status_code}"
             )
-            return resp.status_code < 400
+            
+            success = resp.status_code < 400
+            if success:
+                self.registry.set_model_state(model_name, ModelState.UNLOADED)
+            else:
+                self.registry.set_model_state(model_name, ModelState.ERROR, f"Unload failed: HTTP {resp.status_code}")
+                
+            return success
         except Exception as e:
             print(
                 f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Ollama offload failed (non-critical): {e}"
             )
+            self.registry.set_model_state(model_name, ModelState.ERROR, str(e))
             return False
 
     def _find_device_with_enough_vram(self, min_vram_gb: float):
@@ -218,9 +241,20 @@ class ImageGenerationManager:
         """
         if self._pipeline is not None:
             print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline already loaded, reusing.")
+            self.registry.set_model_state(self.model_registry_name, ModelState.LOADED)
             return
+        
+        # Acquire loading lock in registry
+        if not self.registry.acquire_loading_lock(self.model_registry_name, timeout=300):
+            print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Could not acquire loading lock, waiting...")
+            # Wait for model to become ready if another thread is loading it
+            if self.registry.wait_for_model_ready(self.model_registry_name, timeout=300):
+                return
+            else:
+                raise RuntimeError("Failed to load pipeline - timeout or error")
 
         if not self.hf_token:
+            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, "No HuggingFace token")
             raise RuntimeError(
                 "No HuggingFace token found. Set HF_TOKEN env var, add it to .env, "
                 "or run `huggingface-cli login` and restart the service."
@@ -236,105 +270,114 @@ class ImageGenerationManager:
             from transformers import T5EncoderModel
 
         except ImportError as e:
+            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
             raise RuntimeError(
                 f"Image generation dependencies not installed. "
                 f"Run: pip install diffusers transformers accelerate bitsandbytes. "
                 f"Original error: {e}"
             )
 
-        # Resolve target CUDA device — default cuda:0, fall back to cpu gracefully
-        cuda_device = self.cuda_device or "cuda:0"
-        if cuda_device.startswith("cuda"):
-            if not torch.cuda.is_available():
-                print(
-                    f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
-                    f"CUDA not available, falling back to CPU."
-                )
-                cuda_device = "cpu"
-            else:
-                # Validate the requested device index is actually available
-                device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
-                if device_index >= torch.cuda.device_count():
+        try:
+            # Resolve target CUDA device — default cuda:0, fall back to cpu gracefully
+            cuda_device = self.cuda_device or "cuda:0"
+            if cuda_device.startswith("cuda"):
+                if not torch.cuda.is_available():
                     print(
                         f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
-                        f"Device {cuda_device} not found (only {torch.cuda.device_count()} device(s)), "
-                        f"falling back to cuda:0."
+                        f"CUDA not available, falling back to CPU."
                     )
-                    device_index = 0
-                    cuda_device = "cuda:0"
-        else:
-            device_index = None  # CPU path
+                    cuda_device = "cpu"
+                else:
+                    # Validate the requested device index is actually available
+                    device_index = int(cuda_device.split(":")[1]) if ":" in cuda_device else 0
+                    if device_index >= torch.cuda.device_count():
+                        print(
+                            f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] "
+                            f"Device {cuda_device} not found (only {torch.cuda.device_count()} device(s)), "
+                            f"falling back to cuda:0."
+                        )
+                        device_index = 0
+                        cuda_device = "cuda:0"
+            else:
+                device_index = None  # CPU path
 
-        # Persistent-pipeline mode: prefer the device with the most headroom so the
-        # model stays resident between requests instead of reloading every time.
-        _will_keep_alive = False
-        if self.keep_pipeline_loaded and device_index is not None:
-            best = self._find_device_with_enough_vram(self.keep_pipeline_loaded_min_vram_gb)
-            if best is not None:
-                device_index = best
-                cuda_device = f"cuda:{best}"
-                _will_keep_alive = True
+            # Persistent-pipeline mode: prefer the device with the most headroom so the
+            # model stays resident between requests instead of reloading every time.
+            _will_keep_alive = False
+            if self.keep_pipeline_loaded and device_index is not None:
+                best = self._find_device_with_enough_vram(self.keep_pipeline_loaded_min_vram_gb)
+                if best is not None:
+                    device_index = best
+                    cuda_device = f"cuda:{best}"
+                    _will_keep_alive = True
 
-        print(
-            f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
-            f"Loading SD3.5 NF4 pipeline on {cuda_device}…"
-        )
-
-        nf4_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
-
-        transformer = SD3Transformer2DModel.from_pretrained(
-            self.model_id,
-            subfolder="transformer",
-            quantization_config=nf4_config,
-            torch_dtype=torch.bfloat16,
-            cache_dir=self.cache_dir,
-            token=self.hf_token,
-        )
-
-        t5_nf4 = T5EncoderModel.from_pretrained(
-            "diffusers/t5-nf4",
-            torch_dtype=torch.bfloat16,
-            cache_dir=self.cache_dir,
-            token=self.hf_token,
-        )
-
-        pipeline = StableDiffusion3Pipeline.from_pretrained(
-            self.model_id,
-            transformer=transformer,
-            text_encoder_3=t5_nf4,
-            torch_dtype=torch.bfloat16,
-            cache_dir=self.cache_dir,
-            token=self.hf_token,
-        )
-
-        # Ensure all non-quantised components are bfloat16 before offloading
-        pipeline.vae = pipeline.vae.to(torch.bfloat16)
-        pipeline.text_encoder = pipeline.text_encoder.to(torch.bfloat16)
-        pipeline.text_encoder_2 = pipeline.text_encoder_2.to(torch.bfloat16)
-
-        # Pin to the explicit GPU and allow spilling excess tensors to CPU RAM
-        if device_index is not None:
-            pipeline.enable_model_cpu_offload(gpu_id=device_index)
-        else:
-            # Pure CPU — no GPU offloading
-            pipeline.to("cpu")
-
-        self._pipeline = pipeline
-        self._pipeline_kept_alive = _will_keep_alive
-        if _will_keep_alive:
             print(
                 f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
-                f"Pipeline loaded on {cuda_device} and will remain resident between requests."
+                f"Loading SD3.5 NF4 pipeline on {cuda_device}…"
             )
-        else:
-            print(
-                f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
-                f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
+
+            nf4_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
             )
+
+            transformer = SD3Transformer2DModel.from_pretrained(
+                self.model_id,
+                subfolder="transformer",
+                quantization_config=nf4_config,
+                torch_dtype=torch.bfloat16,
+                cache_dir=self.cache_dir,
+                token=self.hf_token,
+            )
+
+            t5_nf4 = T5EncoderModel.from_pretrained(
+                "diffusers/t5-nf4",
+                torch_dtype=torch.bfloat16,
+                cache_dir=self.cache_dir,
+                token=self.hf_token,
+            )
+
+            pipeline = StableDiffusion3Pipeline.from_pretrained(
+                self.model_id,
+                transformer=transformer,
+                text_encoder_3=t5_nf4,
+                torch_dtype=torch.bfloat16,
+                cache_dir=self.cache_dir,
+                token=self.hf_token,
+            )
+
+            # Ensure all non-quantised components are bfloat16 before offloading
+            pipeline.vae = pipeline.vae.to(torch.bfloat16)
+            pipeline.text_encoder = pipeline.text_encoder.to(torch.bfloat16)
+            pipeline.text_encoder_2 = pipeline.text_encoder_2.to(torch.bfloat16)
+
+            # Pin to the explicit GPU and allow spilling excess tensors to CPU RAM
+            if device_index is not None:
+                pipeline.enable_model_cpu_offload(gpu_id=device_index)
+            else:
+                # Pure CPU — no GPU offloading
+                pipeline.to("cpu")
+
+            self._pipeline = pipeline
+            self._pipeline_kept_alive = _will_keep_alive
+            
+            # Mark as loaded in registry
+            self.registry.set_model_state(self.model_registry_name, ModelState.LOADED)
+            
+            if _will_keep_alive:
+                print(
+                    f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                    f"Pipeline loaded on {cuda_device} and will remain resident between requests."
+                )
+            else:
+                print(
+                    f"{CLASS_PREFIX} [{LogLevel.INFO.name}] "
+                    f"Pipeline loaded successfully on {cuda_device} (CPU spillover enabled)."
+                )
+        except Exception as e:
+            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
+            raise
 
     def unload_pipeline(self, force: bool = False):
         """
@@ -352,7 +395,14 @@ class ImageGenerationManager:
             )
             return
         if self._pipeline is None:
+            self.registry.set_model_state(self.model_registry_name, ModelState.UNLOADED)
             return
+        
+        # Acquire unloading lock
+        if not self.registry.acquire_unloading_lock(self.model_registry_name):
+            print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Model already being unloaded or not loaded")
+            return
+            
         try:
             import torch
 
@@ -363,11 +413,14 @@ class ImageGenerationManager:
             # see VRAM not draining cleanly between generations — haven't hit it yet
             # but keeping it in mind for smaller cards. — (llhama)
             torch.cuda.empty_cache()
+            
+            self.registry.set_model_state(self.model_registry_name, ModelState.UNLOADED)
             print(f"{CLASS_PREFIX} [{LogLevel.INFO.name}] Pipeline unloaded, GPU cache cleared.", flush=True)
         except Exception as e:
             print(f"{CLASS_PREFIX} [{LogLevel.WARNING.name}] Error during pipeline unload: {e}")
             self._pipeline = None
             self._pipeline_kept_alive = False
+            self.registry.set_model_state(self.model_registry_name, ModelState.ERROR, str(e))
 
     # === Generation ===
 

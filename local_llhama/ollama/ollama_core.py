@@ -21,6 +21,7 @@ from ..llm_prompts import (
     is_safety_enabled,
 )
 from ..shared_logger import LogLevel
+from ..model_registry import get_model_registry, ModelType, ModelState
 from .ollama_context_builders import ContextBuilder
 from .ollama_embeddings import EmbeddingClient
 from .ollama_keepalive import ModelKeepaliveManager
@@ -101,6 +102,9 @@ class OllamaClient:
             host=self.host, model=embedding_model, pg_client=self.pg_client
         )
 
+        # Initialize model registry
+        self.registry = get_model_registry()
+
         # Initialize keepalive manager
         self.keepalive_manager = ModelKeepaliveManager(
             host=self.host,
@@ -109,7 +113,7 @@ class OllamaClient:
             log_prefix=self.class_prefix_message,
         )
 
-        # Register models for keepalive
+        # Register models for keepalive and registry
         self._register_models_for_keepalive()
 
         # Context management - keep only last request and response
@@ -135,12 +139,21 @@ class OllamaClient:
         self.keepalive_manager.start()
 
     def _register_models_for_keepalive(self):
-        """Register models with the keepalive manager."""
-        # Register main text generation model
+        """Register models with the keepalive manager and model registry."""
+        # Register main text generation model with keepalive
         self.keepalive_manager.register_model(
             model_name=self.model,
             model_type="text",
             description="Main text generation model"
+        )
+        
+        # Register with model registry (assume loaded initially)
+        self.registry.register_model(
+            name=self.model,
+            model_type=ModelType.LLM,
+            host=self.host,
+            description="Main text generation model",
+            initial_state=ModelState.LOADED  # Assume keepalive will keep it loaded
         )
         
         # Register decision model if it's different from main model
@@ -150,6 +163,13 @@ class OllamaClient:
                 model_type="text",
                 description="Decision-making model"
             )
+            self.registry.register_model(
+                name=self.decision_model,
+                model_type=ModelType.LLM,
+                host=self.host,
+                description="Decision-making model",
+                initial_state=ModelState.LOADED
+            )
         
         # Register embedding model if embedding client exists
         if self.embedding_client:
@@ -157,6 +177,13 @@ class OllamaClient:
                 model_name=self.embedding_client.model,
                 model_type="embedding",
                 description="Embedding generation model"
+            )
+            self.registry.register_model(
+                name=self.embedding_client.model,
+                model_type=ModelType.EMBEDDING,
+                host=self.host,
+                description="Embedding generation model",
+                initial_state=ModelState.LOADED
             )
 
     def _build_extended_prompt(self):

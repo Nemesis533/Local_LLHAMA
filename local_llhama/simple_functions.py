@@ -1200,8 +1200,17 @@ class SimpleFunctions:
 
         page_title = summary_data.get("title", title_slug.replace("_", " "))
         canonical = page_title.replace(" ", "_")
-        fallback_img = summary_data.get("originalimage") or summary_data.get("thumbnail")
+        
+        # Only use originalimage - thumbnails are unreliable and often 404
+        fallback_img = summary_data.get("originalimage")
         fallback_url = fallback_img.get("source") if fallback_img else None
+        
+        # Convert thumbnail URLs to original format if needed
+        # Thumb: .../commons/thumb/4/4d/File.jpg/500px-File.jpg
+        # Original: .../commons/4/4d/File.jpg
+        if fallback_url and "/thumb/" in fallback_url:
+            # Remove /thumb/ from path and remove sized filename at end
+            fallback_url = fallback_url.replace("/thumb/", "/").rsplit("/", 1)[0]
 
         candidates = []
         try:
@@ -1212,23 +1221,29 @@ class SimpleFunctions:
             )
             if media_data and media_data.get("items"):
                 SKIP_EXTENSIONS = (".svg", ".gif", ".ogg", ".ogv", ".webm", ".mp3", ".mp4", ".wav")
-                MIN_DIM = 100
+                MIN_DIM = 400  # Minimum 400px to filter out icons, thumbnails, and low-res images
+                seen_filenames = set()
                 for item in media_data["items"]:
                     if item.get("type") != "image":
                         continue
-                    src = (
-                        (item.get("srcset") or [{}])[0].get("src")
-                        or item.get("original", {}).get("source", "")
-                    )
-                    if not src:
+                    # Only use the canonical original URL — never srcset thumbnails (avoids 404s)
+                    original_src = item.get("original", {}).get("source", "")
+                    if not original_src:
                         continue
-                    if any(src.lower().endswith(ext) for ext in SKIP_EXTENSIONS):
+                    # Skip math equation renders and other non-photo content
+                    if "/math/render/" in original_src or "wikimedia.org/api/" in original_src:
+                        continue
+                    if any(original_src.lower().endswith(ext) for ext in SKIP_EXTENSIONS):
                         continue
                     w = item.get("original", {}).get("width", 9999)
                     h = item.get("original", {}).get("height", 9999)
                     if w < MIN_DIM or h < MIN_DIM:
                         continue
-                    original_src = item.get("original", {}).get("source") or src
+                    # Deduplicate by filename within this fetch
+                    fname = original_src.rstrip("/").split("/")[-1].lower()
+                    if fname in seen_filenames:
+                        continue
+                    seen_filenames.add(fname)
                     raw_caption = item.get("caption", {}).get("text", "") or item.get("title", "")
                     candidates.append({
                         "url": original_src,

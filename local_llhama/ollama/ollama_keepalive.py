@@ -10,6 +10,7 @@ import time
 import requests
 
 from ..shared_logger import LogLevel
+from ..model_registry import get_model_registry, ModelState
 
 
 class ModelKeepaliveManager:
@@ -43,6 +44,9 @@ class ModelKeepaliveManager:
         self.models = []
         self.running = False
         self.thread = None
+        
+        # Get model registry instance
+        self.registry = get_model_registry()
 
     def register_model(self, model_name: str, model_type: str = "text", description: str = ""):
         """
@@ -184,6 +188,22 @@ class ModelKeepaliveManager:
         @param description Optional description of the model's purpose
         @param timeout Request timeout in seconds
         """
+        # Check registry state before sending keepalive
+        if not self.registry.can_use_model(model_name):
+            model_info = self.registry.get_model(model_name)
+            if model_info and model_info.state == ModelState.UNLOADING:
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] "
+                    f"Skipping keepalive for {model_name} - model is being unloaded"
+                )
+                return
+            elif model_info and model_info.state == ModelState.UNLOADED:
+                print(
+                    f"{self.log_prefix} [{LogLevel.INFO.name}] "
+                    f"Skipping keepalive for {model_name} - model is unloaded"
+                )
+                return
+        
         try:
             url = f"{self.host}/api/{'embed' if is_embedding else 'generate'}"
 
@@ -206,12 +226,19 @@ class ModelKeepaliveManager:
                 print(
                     f"{self.log_prefix} [{LogLevel.INFO.name}] Keepalive ping successful: {model_name}{desc_suffix}"
                 )
+                # Mark model as used in registry
+                self.registry.mark_model_used(model_name)
+                # Ensure state is LOADED
+                if not self.registry.can_use_model(model_name):
+                    self.registry.set_model_state(model_name, ModelState.LOADED)
             else:
                 print(
                     f"{self.log_prefix} [{LogLevel.WARNING.name}] Keepalive ping failed for {model_name}: HTTP {response.status_code}"
                 )
+                # Don't update state on transient failures - might just be a timeout
 
         except Exception as e:
             print(
                 f"{self.log_prefix} [{LogLevel.WARNING.name}] Keepalive failed for {model_name}: {type(e).__name__}: {e}"
             )
+            # Don't update state on transient failures

@@ -16,6 +16,7 @@ import requests
 
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel
+from ..model_registry import get_model_registry, ModelState
 from .chat_context_manager import ChatContextManager
 
 
@@ -106,6 +107,9 @@ class ChatHandler:
 
         # Image generation manager (created lazily on first request)
         self._image_manager = None
+        
+        # Get model registry
+        self.registry = get_model_registry()
 
         print(f"{self.log_prefix} [{LogLevel.INFO.name}] Chat handler initialized")
 
@@ -466,15 +470,88 @@ class ChatHandler:
                     
                     chosen_title = wiki_data.get("page_title", wiki_data.get("topic", ""))
                     
-                    # Track this image as shown
+                    # Convert to 500px thumbnail for faster loading
+                    display_url = self._get_wikipedia_thumbnail_url(chosen_url, max_width=500)
+                    
+                    # Check if this image was already shown in this conversation
+                    # Normalize filenames by removing size prefixes (e.g., "500px-")
+                    def normalize_filename(url):
+                        fname = url.rstrip("/").split("/")[-1].lower()
+                        # Remove NNNpx- prefix if present (e.g., 500px-File.jpg → File.jpg)
+                        import re
+                        fname = re.sub(r'^\d+px-', '', fname)
+                        return fname
+                    
+                    if conversation_id:
+                        shown_images = self.context_manager.get_shown_wikipedia_images(conversation_id)
+                        display_filename = normalize_filename(display_url)
+                        shown_filenames = {normalize_filename(url) for url, _, _ in shown_images}
+                        
+                        if display_filename in shown_filenames:
+                            print(
+                                f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image already shown, "
+                                "using VLM to analyze and generate better image"
+                            )
+                            
+                            # Use VLM to understand what's wrong with the existing Wikipedia image
+                            # and create a better prompt for generation
+                            vlm_analysis_prompt = (
+                                f"The user previously saw this Wikipedia image but is asking again: \"{original_user_query}\"\n"
+                                f"Looking at this image, what aspect of '{topic}' is the user actually interested in "
+                                f"that this photo doesn't show? Reply with a brief description of what image should be generated instead."
+                            )
+                            
+                            # Send status
+                            status_msg = f"{self.log_prefix} [Status]: Analyzing previous image to understand what you want..."
+                            self.message_handler.send_to_web_server(status_msg, client_id=client_id)
+                            
+                            # Analyze with VLM
+                            try:
+                                is_appropriate, analysis = self._verify_wikipedia_image_appropriateness(
+                                    display_url, vlm_analysis_prompt, chosen_title
+                                )
+                                
+                                # Use the VLM's analysis to build a better generation prompt
+                                generation_prompt = (
+                                    f"Create an image of {topic} showing: {analysis}. "
+                                    f"User's request: {original_user_query}"
+                                )
+                                
+                                print(
+                                    f"{self.log_prefix} [{LogLevel.INFO.name}] VLM analysis complete, "
+                                    f"generating image with prompt: {generation_prompt[:100]}"
+                                )
+                            except Exception as vlm_err:
+                                print(
+                                    f"{self.log_prefix} [{LogLevel.WARNING.name}] VLM analysis failed: {vlm_err}, "
+                                    "using basic prompt"
+                                )
+                                generation_prompt = f"Create an image depicting: {topic}. {original_user_query}"
+                            
+                            # Generate image with improved prompt
+                            fallback_status = f"{self.log_prefix} [Status]: Generating custom image: {topic}"
+                            self.message_handler.send_to_web_server(fallback_status, client_id=client_id)
+                            
+                            image_gen_request = {
+                                "type": "image_generation_request",
+                                "prompt": generation_prompt,
+                                "title": topic,
+                                "user_id": client_id,
+                            }
+                            self._handle_image_generation(
+                                image_gen_request, client_id, conversation_id
+                            )
+                            continue
+                    
+                    # Track this image as shown (use display_url so it matches what we store in DB)
                     if conversation_id:
                         self.context_manager.track_wikipedia_image(
-                            conversation_id, chosen_url, chosen_title
+                            conversation_id, display_url, chosen_title
                         )
                     
                     self.message_handler.send_wikipedia_image_ready(
                         {
-                            "url": chosen_url,
+                            "url": display_url,
                             "title": chosen_title,
                             "topic": wiki_data.get("topic", ""),
                         },
@@ -486,7 +563,7 @@ class ChatHandler:
                             pg_client.insert_message(
                                 conversation_id,
                                 "assistant",
-                                f"[wikipedia_image:{chosen_url}]",
+                                f"[wikipedia_image:{display_url}]",
                             )
                         except Exception as db_err:
                             print(
@@ -897,222 +974,61 @@ class ChatHandler:
         )
         return self._image_manager
 
+    def _get_wikipedia_thumbnail_url(self, url: str, max_width: int = 500) -> str:
+        """
+        Convert a Wikipedia/Wikimedia image URL to a thumbnail with max width.
+        This scales images proportionally and improves load times.
+        
+        @param url The original Wikipedia image URL
+        @param max_width Maximum width in pixels (default 500)
+        @return Thumbnail URL or original if conversion not possible
+        """
+        if not url or "upload.wikimedia.org" not in url:
+            return url
+        
+        # Skip if already a thumbnail
+        if "/thumb/" in url and f"/{max_width}px-" in url:
+            return url
+        
+        # Extract filename from original URL
+        # Pattern: .../commons/4/4d/Filename.jpg or .../commons/thumb/4/4d/Filename.jpg/NNNpx-Filename.jpg
+        try:
+            if "/thumb/" in url:
+                # Already a thumb, just need to adjust size
+                # Remove the sized part at the end
+                url = url.rsplit("/", 1)[0]
+            
+            # Now convert to thumb format
+            # .../commons/4/4d/File.jpg → .../commons/thumb/4/4d/File.jpg/500px-File.jpg
+            parts = url.split("/wikipedia/commons/")
+            if len(parts) == 2:
+                base = parts[0]
+                path_and_file = parts[1]
+                filename = path_and_file.split("/")[-1]
+                return f"{base}/wikipedia/commons/thumb/{path_and_file}/{max_width}px-{filename}"
+        except Exception:
+            pass
+        
+        return url
+
     def _select_wikipedia_image(self, wiki_data: dict, user_query: str, conversation_id: str = None, client_id: str = None) -> str:
         """
-        Ask the LLM to pick the most contextually relevant image from the
-        candidate list returned by get_wikipedia_image().
-
-        Image Selection Strategy:
-        - First request: Show Wikipedia image immediately (no verification for speed)
-        - Vision verification is DISABLED by default (wikipedia_image_verification_enabled: false)
-        - If user asks to improve/refine: Admin can enable verification for better selection
-        - Final fallback: Return None to trigger image generation
-
-        Falls back to the article's cover image (fallback_url) on any error,
-        and ultimately to the first candidate if that is also absent.
+        Return the first Wikipedia image from the candidates list.
+        If user wants a better image, they can ask again and the system will use VLM
+        to understand what was wrong, then generate a more appropriate image.
 
         @param wiki_data        The wikipedia_image_request sentinel dict.
         @param user_query       The original user message (used for context).
-        @param conversation_id  Conversation UUID to track shown images.
+        @param conversation_id  Conversation UUID (unused now - no deduplication).
         @param client_id        Client ID for sending status messages.
-        @return URL of the chosen image, or None if all have been shown.
+        @return URL of the first image, or None if no images available.
         """
         candidates = wiki_data.get("candidates", [])
-        fallback_url = wiki_data.get("fallback_url") or (candidates[0]["url"] if candidates else "")
-
-        if not candidates:
-            return fallback_url
-
-        # Filter out images that have already been shown in this conversation
-        shown_images = set()
-        if conversation_id:
-            shown_images = self.context_manager.get_shown_wikipedia_images(conversation_id)
-            shown_urls = {url for url, _, _ in shown_images}
-            
-            # Filter candidates
-            original_count = len(candidates)
-            candidates = [c for c in candidates if c["url"] not in shown_urls]
-            
-            # Also filter fallback if it's been shown
-            if fallback_url in shown_urls:
-                fallback_url = candidates[0]["url"] if candidates else ""
-            
-            if original_count > len(candidates):
-                print(
-                    f"{self.log_prefix} [{LogLevel.INFO.name}] Filtered out {original_count - len(candidates)} "
-                    f"already-shown Wikipedia images, {len(candidates)} remaining"
-                )
+        fallback_url = wiki_data.get("fallback_url")
         
-        # If all images have been shown, return None to trigger image generation
-        if not candidates:
-            print(
-                f"{self.log_prefix} [{LogLevel.INFO.name}] All Wikipedia images for this topic have been shown, "
-                "will need to generate image instead"
-            )
-            return None
-
-        # No need to call the LLM if there's only one option
-        if len(candidates) == 1:
-            chosen_url = candidates[0]["url"]
-            chosen_caption = candidates[0].get("caption", "")
-            
-            # Verify with vision model if enabled
-            settings = self._get_image_analysis_settings()
-            if settings.get("wikipedia_image_verification_enabled", True):
-                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying image appropriateness with vision model…")
-                # Send status to user
-                if client_id:
-                    status_msg = f"{self.log_prefix} [Status]: Loading vision model to verify image (this may take a moment)…"
-                    self.message_handler.send_to_web_server(status_msg, client_id=client_id)
-                try:
-                    is_appropriate, explanation = self._verify_wikipedia_image_appropriateness(
-                        chosen_url, user_query, chosen_caption
-                    )
-                    if not is_appropriate:
-                        print(
-                            f"{self.log_prefix} [{LogLevel.INFO.name}] Single Wikipedia image failed verification: {explanation[:100]}"
-                        )
-                        return None  # Trigger image generation
-                except Exception as verify_err:
-                    print(
-                        f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification error for single candidate: {verify_err}, will generate instead"
-                    )
-                    return None  # Trigger image generation on error
-            
-            return chosen_url
-
-        try:
-            # Build a numbered menu for the LLM — keep captions short
-            MAX_CANDIDATES = 10
-            capped = candidates[:MAX_CANDIDATES]
-            lines = []
-            for i, c in enumerate(capped, 1):
-                section = f"[{c['section']}] " if c.get("section") else ""
-                caption = c.get("caption", "").strip() or "(no caption)"
-                # Truncate very long captions
-                if len(caption) > 120:
-                    caption = caption[:117] + "..."
-                lines.append(f"{i}. {section}{caption}")
-
-            menu = "\n".join(lines)
-            page_title = wiki_data.get("page_title", wiki_data.get("topic", ""))
-            prompt = (
-                f"The user asked: \"{user_query}\"\n\n"
-                f"The available images come from the Wikipedia article \"{page_title}\", "
-                f"but choose the image that best matches what the user is actually curious about, "
-                f"not necessarily the article's main subject.\n"
-                f"Reply with ONLY the number of the best image, nothing else.\n\n"
-                f"{menu}"
-            )
-
-            result = self.command_llm.send_message(
-                prompt,
-                max_tokens=4,
-                message_type="response",
-                from_chat=True,
-            )
-
-            # Extract the number from the LLM reply
-            raw = ""
-            if isinstance(result, dict):
-                raw = result.get("nl_response") or result.get("response") or ""
-            elif isinstance(result, str):
-                raw = result
-
-            import re
-            match = re.search(r"\d+", raw.strip())
-            if match:
-                idx = int(match.group()) - 1
-                if 0 <= idx < len(capped):
-                    chosen_url = capped[idx]["url"]
-                    chosen_caption = capped[idx].get("caption", "")
-                    
-                    print(
-                        f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image selected by LLM: "
-                        f"#{idx + 1} — {chosen_url}"
-                    )
-                    
-                    # Verify with vision model if enabled
-                    settings = self._get_image_analysis_settings()
-                    if settings.get("wikipedia_image_verification_enabled", True):
-                        print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying selected image with vision model…")
-                        # Send status to user
-                        if client_id:
-                            status_msg = f"{self.log_prefix} [Status]: Loading vision model to verify image (this may take a moment)…"
-                            self.message_handler.send_to_web_server(status_msg, client_id=client_id)
-                        try:
-                            is_appropriate, explanation = self._verify_wikipedia_image_appropriateness(
-                                chosen_url, user_query, chosen_caption
-                            )
-                        except Exception as verify_err:
-                            print(
-                                f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification failed for selected image: {verify_err}"
-                            )
-                            is_appropriate = False
-                            explanation = f"Verification error: {verify_err}"
-                        
-                        if not is_appropriate:
-                            print(
-                                f"{self.log_prefix} [{LogLevel.INFO.name}] Selected image failed verification, trying next candidate"
-                            )
-                            # Try next candidates in order
-                            for next_idx in range(len(capped)):
-                                if next_idx == idx:
-                                    continue  # Skip the already-tried one
-                                
-                                next_url = capped[next_idx]["url"]
-                                next_caption = capped[next_idx].get("caption", "")
-                                
-                                print(f"{self.log_prefix} [{LogLevel.INFO.name}] Verifying candidate #{next_idx + 1}…")
-                                try:
-                                    is_appropriate, explanation = self._verify_wikipedia_image_appropriateness(
-                                        next_url, user_query, next_caption
-                                    )
-                                except Exception as verify_err:
-                                    print(
-                                        f"{self.log_prefix} [{LogLevel.WARNING.name}] Verification failed for candidate #{next_idx + 1}: {verify_err}"
-                                    )
-                                    is_appropriate = False
-                                    continue
-                                    
-                                if is_appropriate:
-                                    print(
-                                        f"{self.log_prefix} [{LogLevel.INFO.name}] Found appropriate image at position #{next_idx + 1}"
-                                    )
-                                    return next_url
-                            
-                            # No candidates passed verification
-                            print(
-                                f"{self.log_prefix} [{LogLevel.INFO.name}] No Wikipedia images passed verification, will generate instead"
-                            )
-                            return None
-                    
-                    return chosen_url
-
-        except Exception as e:
-            print(
-                f"{self.log_prefix} [{LogLevel.WARNING.name}] Wikipedia image selection failed, "
-                f"using fallback: {type(e).__name__}: {e}"
-            )
-
-        # Try to verify fallback before returning it
-        settings = self._get_image_analysis_settings()
-        if fallback_url and settings.get("wikipedia_image_verification_enabled", True):
-            try:
-                is_appropriate, _ = self._verify_wikipedia_image_appropriateness(
-                    fallback_url, user_query, ""
-                )
-                if not is_appropriate:
-                    print(
-                        f"{self.log_prefix} [{LogLevel.INFO.name}] Fallback image also failed verification, will generate instead"
-                    )
-                    return None
-            except Exception as verify_err:
-                print(
-                    f"{self.log_prefix} [{LogLevel.WARNING.name}] Fallback verification error: {verify_err}, will generate instead"
-                )
-                return None
-
+        # Return first candidate, or fallback, or None
+        if candidates:
+            return candidates[0]["url"]
         return fallback_url
 
     def _generate_image_intro(
@@ -1133,6 +1049,14 @@ class ChatHandler:
         default_comment = "Here's the image I generated for you!"
 
         if not ollama_host or not model:
+            return default_title, default_comment
+        
+        # Check if model is loaded and ready
+        if not self.registry.can_use_model(model):
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] "
+                f"Model {model} is not loaded, skipping intro generation"
+            )
             return default_title, default_comment
 
         try:
@@ -1174,11 +1098,29 @@ class ChatHandler:
                 content = resp.json().get("message", {}).get("content", "")
                 # Strip possible markdown fences
                 content = content.strip().strip("```json").strip("```").strip()
+                
+                if not content:
+                    print(
+                        f"{self.log_prefix} [{LogLevel.WARNING.name}] "
+                        f"LLM returned empty content for image intro"
+                    )
+                    return default_title, default_comment
+                
                 parsed = json.loads(content)
                 title = parsed.get("title") or default_title
                 comment = parsed.get("comment") or default_comment
                 return title, comment
+            else:
+                print(
+                    f"{self.log_prefix} [{LogLevel.WARNING.name}] "
+                    f"Image intro request failed with status {resp.status_code}"
+                )
 
+        except json.JSONDecodeError as e:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] "
+                f"Could not parse image intro JSON: {e}. Content was: {content[:100]}"
+            )
         except Exception as e:
             print(
                 f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not get image intro from LLM: {e}"
@@ -1729,14 +1671,22 @@ class ChatHandler:
         ollama_host = getattr(self.command_llm, "host", None)
         ollama_model = getattr(self.command_llm, "model", None)
 
-        print(
-            f"{self.log_prefix} [{LogLevel.INFO.name}] "
-            f"Requesting image intro from LLM (host={ollama_host}, model={ollama_model})"
-        )
-
-        title, comment = self._generate_image_intro(
-            prompt, title_hint, ollama_host, ollama_model
-        )
+        # Check if LLM is available before trying to get intro
+        if self.registry.can_use_model(ollama_model):
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] "
+                f"Requesting image intro from LLM (host={ollama_host}, model={ollama_model})"
+            )
+            title, comment = self._generate_image_intro(
+                prompt, title_hint, ollama_host, ollama_model
+            )
+        else:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] "
+                f"LLM not loaded, using default title/comment for image"
+            )
+            title = title_hint or "Generated Image"
+            comment = "Here's the image I generated for you!"
 
         # Step 2: Send status to client — shows the spinner
         status_msg = f"{self.log_prefix} [Status]: Generating image: {title}"
@@ -1763,9 +1713,33 @@ class ChatHandler:
         def _generation_thread():
             image_manager = self._get_image_manager()
             try:
-                # Step 1: free VRAM
+                # Step 1: free VRAM - offload LLM
                 _send_status("Freeing GPU memory for image generation…")
                 image_manager.offload_ollama_model(ollama_host, ollama_model)
+                
+                # Wait for LLM to be unloaded before loading diffusion pipeline
+                print(
+                    f"{log_prefix} [{LogLevel.INFO.name}] "
+                    f"Waiting for LLM {ollama_model} to unload..."
+                )
+                
+                # Give it a moment to unload
+                max_wait = 30  # seconds
+                wait_start = time.time()
+                while time.time() - wait_start < max_wait:
+                    model_info = image_manager.registry.get_model(ollama_model)
+                    if model_info and model_info.state == ModelState.UNLOADED:
+                        print(
+                            f"{log_prefix} [{LogLevel.INFO.name}] "
+                            f"LLM {ollama_model} successfully unloaded"
+                        )
+                        break
+                    time.sleep(0.5)
+                else:
+                    print(
+                        f"{log_prefix} [{LogLevel.WARNING.name}] "
+                        f"Timeout waiting for LLM to unload, proceeding anyway"
+                    )
 
                 # Step 2: load diffusion pipeline — this is the slow part
                 _send_status("Loading image model weights (this may take ~30 s)…")
