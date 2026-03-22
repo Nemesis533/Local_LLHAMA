@@ -12,7 +12,7 @@ This service handles Wikipedia article retrieval, including:
 import requests
 from bs4 import BeautifulSoup
 
-from local_llhama import simple_functions_helpers as helpers
+from local_llhama.utils import simple_functions_helpers as helpers
 from local_llhama.error_handler import ErrorHandler
 from local_llhama.shared_logger import LogLevel
 

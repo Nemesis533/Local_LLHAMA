@@ -8,7 +8,7 @@ and the configured home location.
 
 import requests
 
-from local_llhama import simple_functions_helpers as helpers
+from local_llhama.utils import simple_functions_helpers as helpers
 
 
 CLASS_PREFIX_MESSAGE = "[WeatherService]"
