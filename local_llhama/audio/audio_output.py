@@ -9,7 +9,7 @@ import pygame
 from piper import PiperVoice, SynthesisConfig
 
 # === Custom Imports ===
-from .shared_logger import LogLevel
+from ..shared_logger import LogLevel
 
 # Use PulseAudio for SDL audio driver
 os.environ["SDL_AUDIODRIVER"] = "pulse"

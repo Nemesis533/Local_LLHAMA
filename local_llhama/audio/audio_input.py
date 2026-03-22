@@ -14,7 +14,7 @@ import whisper
 from openwakeword.model import Model
 
 # === Custom Imports ===
-from .shared_logger import LogLevel
+from ..shared_logger import LogLevel
 
 
 def _load_audio_settings() -> dict:

@@ -6,8 +6,8 @@ Contains utility methods for HTTP requests, input validation, and configuration 
 
 import requests
 
-from .error_handler import ErrorHandler
-from .shared_logger import LogLevel
+from ..error_handler import ErrorHandler
+from ..shared_logger import LogLevel
 
 CLASS_PREFIX_MESSAGE = "[SimpleFunctions]"
 

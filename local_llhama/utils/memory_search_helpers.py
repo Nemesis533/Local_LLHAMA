@@ -9,8 +9,8 @@ Contains all the components needed for hybrid memory search including:
 
 import re
 
-from .ollama.ollama_embeddings import get_embedding_sync
-from .shared_logger import LogLevel
+from ..ollama.ollama_embeddings import get_embedding_sync
+from ..shared_logger import LogLevel
 
 CLASS_PREFIX_MESSAGE = "[MemorySearchHelpers]"
 
