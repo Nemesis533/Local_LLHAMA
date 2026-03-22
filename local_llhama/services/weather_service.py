@@ -34,8 +34,6 @@ class WeatherService:
         @param place Optional location parameter (currently unused).
         @return Weather forecast string or error message.
         """
-        error_message = "Weather data not available at the moment, please try later."
-
         if not self.home_location:
             return "Home location not configured."
 
@@ -45,28 +43,7 @@ class WeatherService:
         if lat is None or lon is None:
             return "Home coordinates not available."
 
-        # Get Open-Meteo weather URL from config
-        weather_url = helpers.get_config_url(
-            self.web_search_config, "open-meteo weather", ""
-        )
-
-        timeout = self.web_search_config.get("timeout", 10)
-        params = {"latitude": lat, "longitude": lon, "current_weather": True}
-
-        try:
-            response = requests.get(weather_url, params=params, timeout=timeout)
-            response.raise_for_status()
-            data = response.json().get("current_weather", {})
-
-            if data:
-                return self._format_weather_response(
-                    location="home",
-                    temperature=data["temperature"],
-                    wind_speed=data.get("windspeed"),
-                )
-            return "Weather data not available."
-        except requests.RequestException:
-            return error_message
+        return self._fetch_weather_data(lat, lon, "home")
 
     def get_weather(self, place=None):
         """
@@ -75,8 +52,6 @@ class WeatherService:
         @param place Place name string.
         @return Weather description string or error message.
         """
-        error_message = "Weather data not available at the moment, please try later."
-
         if not place:
             return "Please specify a location."
 
@@ -85,13 +60,28 @@ class WeatherService:
         if lat is None or lon is None:
             return f"Could not find location: {place}"
 
+        return self._fetch_weather_data(lat, lon, place)
+
+    def _fetch_weather_data(
+        self, latitude: float, longitude: float, location_name: str
+    ) -> str:
+        """
+        @brief Internal method to fetch weather data for specific coordinates.
+
+        @param latitude Latitude coordinate
+        @param longitude Longitude coordinate
+        @param location_name Display name for the location
+        @return Weather description string or error message
+        """
+        error_message = "Weather data not available at the moment, please try later."
+
         # Get Open-Meteo weather URL from config
         weather_url = helpers.get_config_url(
             self.web_search_config, "open-meteo weather", ""
         )
 
         timeout = self.web_search_config.get("timeout", 10)
-        params = {"latitude": lat, "longitude": lon, "current_weather": True}
+        params = {"latitude": latitude, "longitude": longitude, "current_weather": True}
 
         try:
             response = requests.get(weather_url, params=params, timeout=timeout)
@@ -100,11 +90,11 @@ class WeatherService:
 
             if data:
                 return self._format_weather_response(
-                    location=place,
+                    location=location_name,
                     temperature=data["temperature"],
                     wind_speed=data.get("windspeed"),
                 )
-            return f"Weather data not available for {place}."
+            return f"Weather data not available for {location_name}."
         except requests.RequestException:
             return error_message
 

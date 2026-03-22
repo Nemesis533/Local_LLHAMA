@@ -45,6 +45,20 @@ class WikipediaService:
         self.pg_client = pg_client
         self.find_in_memory = find_in_memory_callback
 
+    def _clean_html_soup(self, html_text: str):
+        """
+        @brief Parse HTML and remove unwanted elements (scripts, styles, nav, etc.).
+
+        @param html_text Raw HTML text to parse
+        @return BeautifulSoup object with cleaned content
+        """
+        soup = BeautifulSoup(html_text, "html.parser")
+        for element in soup(
+            ["script", "style", "nav", "footer", "header", "table", "figure"]
+        ):
+            element.decompose()
+        return soup
+
     def get_wikipedia_summary(self, topic=None, user_id=None):
         """
         @brief Fetch a short introductory summary from Wikipedia for a given topic.
@@ -155,21 +169,7 @@ class WikipediaService:
                     )
                     html_resp.raise_for_status()
 
-                    soup = BeautifulSoup(html_resp.text, "html.parser")
-
-                    # Remove unwanted elements
-                    for element in soup(
-                        [
-                            "script",
-                            "style",
-                            "nav",
-                            "footer",
-                            "header",
-                            "table",
-                            "figure",
-                        ]
-                    ):
-                        element.decompose()
+                    soup = self._clean_html_soup(html_resp.text)
 
                     # Get first 2 paragraphs for each sub-topic
                     paragraphs = soup.find_all("p", limit=2)
@@ -288,11 +288,7 @@ class WikipediaService:
             )
             html_resp.raise_for_status()
 
-            soup = BeautifulSoup(html_resp.text, "html.parser")
-            for element in soup(
-                ["script", "style", "nav", "footer", "header", "table", "figure"]
-            ):
-                element.decompose()
+            soup = self._clean_html_soup(html_resp.text)
 
             paragraphs = soup.find_all("p", limit=limit_paragraphs)
             text_parts = [

@@ -17,6 +17,8 @@ from .services.wikipedia_service import WikipediaService
 from .services.weather_service import WeatherService
 from .services.news_service import NewsService
 from .services.memory_service import MemoryService
+from .services.calendar_service import CalendarService
+from .services.automation_service import AutomationService
 
 # === Custom Imports ===
 from .error_handler import ErrorHandler
@@ -85,9 +87,9 @@ class SimpleFunctions:
             )
         self.command_schema = self._load_command_schema(command_schema_path)
 
-        self.calendar = CalendarManager(pg_client)
-
-        self.automation = AutomationManager(pg_client)
+        # Initialize managers
+        calendar_manager = CalendarManager(pg_client)
+        automation_manager = AutomationManager(pg_client)
 
         # Common headers for HTTP requests
         self.headers = {
@@ -121,6 +123,14 @@ class SimpleFunctions:
 
         # Set memory callback for Wikipedia fallback
         self.wikipedia_service.find_in_memory = self.memory_service.find_in_memory
+
+        # Initialize calendar and automation services
+        self.calendar_service = CalendarService(calendar_manager)
+        self.automation_service = AutomationService(automation_manager)
+
+        # Maintain backward compatibility - keep references for existing code
+        self.calendar = calendar_manager
+        self.automation = automation_manager
 
     def _load_web_search_config(self) -> dict:
         """
@@ -266,21 +276,9 @@ class SimpleFunctions:
         @param user_id: Optional user ID for web chat users
         @return: Confirmation message
         """
-        # Normalize repeat pattern - convert common variations to database values
-        repeat_normalized = repeat.lower() if repeat else "none"
-        if repeat_normalized in ["once", "never", "no", "single"]:
-            repeat_normalized = "none"
-        elif repeat_normalized not in ["none", "daily", "weekly", "monthly", "yearly"]:
-            # Invalid repeat pattern, default to none
-            print(
-                f"{CLASS_PREFIX_MESSAGE} [{LogLevel.WARNING.name}] Invalid repeat pattern '{repeat}', using 'none'"
-            )
-            repeat_normalized = "none"
-
-        success, message, _ = self.calendar.add_event(
-            event_type, title, when, description, repeat_normalized, user_id=user_id
+        return self.calendar_service.add_event(
+            event_type, title, when, description, repeat, user_id
         )
-        return message
 
     def get_events(self, days: int = 7, event_type: str = None) -> str:
         """
@@ -290,46 +288,7 @@ class SimpleFunctions:
         @param event_type: Optional filter - "reminder", "appointment", "alarm", or None for all
         @return: Formatted list of upcoming events
         """
-        events = self.calendar.get_upcoming_events(event_type=event_type, days=days)
-
-        if not events:
-            type_label = f"{event_type}s" if event_type else "events"
-            return f"No {type_label} scheduled for the next {days} days."
-
-        # Group by type if showing all
-        if event_type is None:
-            by_type = {"reminder": [], "appointment": [], "alarm": []}
-            for event in events:
-                by_type[event["event_type"]].append(event)
-
-            result = f"Upcoming events (next {days} days):\n"
-            for evt_type in ["reminder", "appointment", "alarm"]:
-                if by_type[evt_type]:
-                    result += f"\n{evt_type.capitalize()}s:\n"
-                    for event in by_type[evt_type]:
-                        dt = datetime.fromisoformat(event["due_datetime"])
-                        formatted = dt.strftime("%B %d at %I:%M %p")
-                        result += f"- {event['title']} - {formatted}"
-                        if event["repeat_pattern"] != "none":
-                            result += f" (repeats {event['repeat_pattern']})"
-                        if event.get("description"):
-                            result += f"\n  Details: {event['description']}"
-                        result += "\n"
-            return result
-
-        # Single type view
-        type_label = f"{event_type}s"
-        result = f"Upcoming {type_label} (next {days} days):\n"
-        for event in events:
-            dt = datetime.fromisoformat(event["due_datetime"])
-            formatted = dt.strftime("%B %d at %I:%M %p")
-            result += f"\n- {event['title']} - {formatted}"
-            if event["repeat_pattern"] != "none":
-                result += f" (repeats {event['repeat_pattern']})"
-            if event.get("description"):
-                result += f"\n  Details: {event['description']}"
-
-        return result
+        return self.calendar_service.get_events(days, event_type)
 
     def manage_event(self, operation: str, search_term: str) -> str:
         """
@@ -339,32 +298,7 @@ class SimpleFunctions:
         @param search_term: Text to search for in event titles/descriptions
         @return: Confirmation message
         """
-        # For complete, only search reminders
-        event_type = "reminder" if operation == "complete" else None
-        events = self.calendar.search_events(search_term, event_type=event_type)
-
-        if not events:
-            return f"No event found matching '{search_term}'."
-
-        if len(events) > 1:
-            result = f"Multiple events found for '{search_term}':\n"
-            for event in events:
-                dt = datetime.fromisoformat(event["due_datetime"])
-                formatted = dt.strftime("%B %d at %I:%M %p")
-                result += f"\n- ID {event['id']}: {event['title']} ({event['event_type']}) - {formatted}"
-            result += "\n\nPlease be more specific or use the ID."
-            return result
-
-        event = events[0]
-
-        if operation == "complete":
-            success, message = self.calendar.complete_event(event["id"])
-            return f"Marked '{event['title']}' as completed."
-        elif operation == "delete":
-            success, message = self.calendar.delete_event(event["id"])
-            return f"Deleted {event['event_type']} '{event['title']}'."
-        else:
-            return f"Unknown operation '{operation}'. Use 'complete' or 'delete'."
+        return self.calendar_service.manage_event(operation, search_term)
 
     def get_all_upcoming_events(self, days: int = 7) -> str:
         """
@@ -373,22 +307,7 @@ class SimpleFunctions:
         @param days: Number of days to look ahead (default 7)
         @return: Formatted list of all upcoming events
         """
-        events = self.calendar.get_upcoming_events(days=days)
-
-        if not events:
-            return f"No events scheduled for the next {days} days."
-
-        result = f"Upcoming events (next {days} days):\n"
-        for event in events:
-            dt = datetime.fromisoformat(event["due_datetime"])
-            formatted = dt.strftime("%B %d at %I:%M %p")
-            result += (
-                f"\n- [{event['event_type'].upper()}] {event['title']} - {formatted}"
-            )
-            if event["repeat_pattern"] != "none":
-                result += f" (repeats {event['repeat_pattern']})"
-
-        return result
+        return self.calendar_service.get_all_upcoming_events(days)
 
     def list_calendar(self, days: int = 7) -> str:
         """
@@ -398,57 +317,7 @@ class SimpleFunctions:
         @param days: Number of days to look ahead (default 7)
         @return: Formatted calendar listing grouped by type
         """
-        all_events = self.calendar.get_upcoming_events(
-            days=days, include_completed=False
-        )
-
-        if not all_events:
-            return f"Calendar is empty for the next {days} days."
-
-        # Group events by type
-        reminders = [e for e in all_events if e["event_type"] == "reminder"]
-        appointments = [e for e in all_events if e["event_type"] == "appointment"]
-        alarms = [e for e in all_events if e["event_type"] == "alarm"]
-
-        result = f"CALENDAR (next {days} days):\n"
-
-        # Show reminders
-        if reminders:
-            result += f"\nREMINDERS ({len(reminders)}):\n"
-            for event in reminders:
-                dt = datetime.fromisoformat(event["due_datetime"])
-                formatted = dt.strftime("%b %d at %I:%M %p")
-                result += f"  - {event['title']} - {formatted}"
-                if event["repeat_pattern"] != "none":
-                    result += f" [repeats {event['repeat_pattern']}]"
-                if event.get("description"):
-                    result += f"\n    Details: {event['description']}"
-                result += "\n"
-
-        # Show alarms
-        if alarms:
-            result += f"\nALARMS ({len(alarms)}):\n"
-            for event in alarms:
-                dt = datetime.fromisoformat(event["due_datetime"])
-                formatted = dt.strftime("%b %d at %I:%M %p")
-                result += f"  - {event['title']} - {formatted}"
-                if event["repeat_pattern"] != "none":
-                    result += f" [repeats {event['repeat_pattern']}]"
-                result += "\n"
-
-        # Show appointments
-        if appointments:
-            result += f"\nAPPOINTMENTS ({len(appointments)}):\n"
-            for event in appointments:
-                dt = datetime.fromisoformat(event["due_datetime"])
-                formatted = dt.strftime("%b %d at %I:%M %p")
-                result += f"  - {event['title']} - {formatted}"
-                if event.get("description"):
-                    result += f"\n    Details: {event['description']}"
-                result += "\n"
-
-        result += f"\nTotal: {len(all_events)} event(s)"
-        return result
+        return self.calendar_service.list_calendar(days)
 
     def get_coordinates(self, place_name):
         """
@@ -601,25 +470,9 @@ class SimpleFunctions:
         @param current_request_commands: Commands from current request (injected by command processor)
         @return: Confirmation message
         """
-        # If save_previous_commands is True and we have current request commands, use those
-        if save_previous_commands and current_request_commands:
-            # Filter out the create_automation command itself
-            actions = [
-                cmd
-                for cmd in current_request_commands
-                if cmd.get("action") != "create_automation"
-            ]
-            if not actions:
-                return "No commands to save - create_automation was the only command in the request."
-
-        # Fallback to provided actions parameter
-        if not actions:
-            return "No actions provided. Either specify actions or use save_previous_commands with other commands in the request."
-
-        success, message, automation_id = self.automation.create_automation(
-            name, actions, description, user_id
+        return self.automation_service.create_automation(
+            name, actions, description, user_id, save_previous_commands, current_request_commands
         )
-        return message
 
     def trigger_automation(self, name: str, user_id: int = None, ha_client=None) -> str:
         """
@@ -630,47 +483,7 @@ class SimpleFunctions:
         @param ha_client: HomeAssistantClient instance for executing commands
         @return: Result message
         """
-        # Get the automation
-        automation = self.automation.get_automation(name, user_id)
-
-        if not automation:
-            return f"Automation '{name}' not found."
-
-        if not ha_client:
-            return "Cannot execute automation: Home Assistant client not available."
-
-        # Execute all actions in the automation
-        actions = automation.get("actions", [])
-        if not actions:
-            return f"Automation '{name}' has no actions to execute."
-
-        try:
-            # Build command payload
-            payload = {"commands": actions}
-
-            # Execute through HA client (which handles both HA and simple functions)
-            results = ha_client.send_commands(payload, debug=True, user_id=user_id)
-
-            # Update last triggered timestamp
-            self.automation.update_last_triggered(automation["id"])
-
-            # Build response
-            success_count = sum(
-                1 for r in results if isinstance(r, dict) and not r.get("error")
-            )
-            total_count = len(actions)
-
-            if success_count == total_count:
-                return f"Automation '{name}' executed successfully ({total_count} action(s))."
-            elif success_count > 0:
-                return f"Automation '{name}' partially executed ({success_count}/{total_count} actions succeeded)."
-            else:
-                return f"Automation '{name}' failed to execute."
-
-        except Exception as e:
-            error_msg = f"Error executing automation '{name}': {str(e)}"
-            print(f"{CLASS_PREFIX_MESSAGE} [{LogLevel.ERROR.name}] {error_msg}")
-            return error_msg
+        return self.automation_service.trigger_automation(name, user_id, ha_client)
 
     def list_automations(self, user_id: int = None) -> str:
         """
@@ -679,21 +492,7 @@ class SimpleFunctions:
         @param user_id: Optional user ID to filter automations
         @return: Formatted list of automations
         """
-        automations = self.automation.list_automations(user_id)
-
-        if not automations:
-            return "No automations found."
-
-        result = "Your automations:\n"
-        for auto in automations:
-            result += f"\n- {auto['name']}"
-            if auto.get("description"):
-                result += f": {auto['description']}"
-            result += f" ({auto['action_count']} action(s))"
-            if auto.get("last_triggered"):
-                result += f"\n  Last used: {auto['last_triggered']}"
-
-        return result
+        return self.automation_service.list_automations(user_id)
 
     def delete_automation(self, name: str, user_id: int = None) -> str:
         """
@@ -703,8 +502,7 @@ class SimpleFunctions:
         @param user_id: Optional user ID to filter automations
         @return: Confirmation message
         """
-        success, message = self.automation.delete_automation(name, user_id)
-        return message
+        return self.automation_service.delete_automation(name, user_id)
 
     def get_wikipedia_image(self, topic: str = None, user_id: int = None) -> dict:
         """
