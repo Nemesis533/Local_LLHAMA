@@ -7,8 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from . import memory_search_helpers as mem_helpers
-from . import simple_functions_helpers as helpers
+from .utils import memory_search_helpers as mem_helpers
+from .utils import simple_functions_helpers as helpers
 from .auth.automation_manager import AutomationManager
 from .auth.calendar_manager import CalendarManager
 

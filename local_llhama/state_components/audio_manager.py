@@ -7,13 +7,13 @@ Manages all audio-related components including recording, transcription, and pla
 import threading
 import time
 
-from ..audio_input import (
+from ..audio.audio_input import (
     AudioRecorderClass,
     AudioTranscriptionClass,
     NoiseFloorMonitor,
     WakeWordListener,
 )
-from ..audio_output import SoundPlayer, TextToSpeech
+from ..audio.audio_output import SoundPlayer, TextToSpeech
 from ..shared_logger import LogLevel
 
 

@@ -8,7 +8,7 @@ Each state has its own dedicated handler method.
 import time
 from queue import Empty
 
-from ..audio_output import SoundActions
+from ..audio.audio_output import SoundActions
 from ..error_handler import ErrorHandler
 from ..ollama import OllamaClient
 from ..shared_logger import LogLevel

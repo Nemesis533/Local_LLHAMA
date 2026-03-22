@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timedelta
 from queue import Empty
 
-from ..audio_output import SoundActions
+from ..audio.audio_output import SoundActions
 
 # === Custom Imports ===
 from ..ollama import OllamaClient
