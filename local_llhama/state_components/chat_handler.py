@@ -416,315 +416,356 @@ class ChatHandler:
         @param conversation_id UUID of the conversation
         """
         try:
-            simple_function_results = [
-                r
-                for r in command_result
-                if isinstance(r, dict) and r.get("type") == "simple_function"
-            ]
+            # Categorize results by type
+            categorized = self._categorize_function_results(command_result)
 
-            # --- Separate image generation requests from regular results ---
-            image_gen_requests = [
-                r
-                for r in simple_function_results
-                if isinstance(r.get("response"), dict)
-                and r["response"].get("type") == "image_generation_request"
-            ]
+            # Handle special result types
+            self._handle_image_requests(categorized, client_id, conversation_id)
+            self._handle_wikipedia_image_workflow(categorized, client_id, conversation_id)
 
-            # --- Separate image analysis requests from regular results ---
-            image_analysis_requests = [
-                r
-                for r in simple_function_results
-                if isinstance(r.get("response"), dict)
-                and r["response"].get("type") == "image_analysis_request"
-            ]
-
-            # --- Separate Wikipedia image requests from regular results ---
-            wiki_image_requests = [
-                r
-                for r in simple_function_results
-                if isinstance(r.get("response"), dict)
-                and r["response"].get("type") == "wikipedia_image_request"
-            ]
-
-            regular_results = [
-                r
-                for r in simple_function_results
-                if r not in image_gen_requests
-                and r not in image_analysis_requests
-                and r not in wiki_image_requests
-            ]
-
-            # Handle image generation (runs in background thread)
-            for img_req in image_gen_requests:
-                self.media_service.handle_image_generation(
-                    img_req["response"], client_id, conversation_id
-                )
-
-            # Handle image analysis (runs in background thread, bypasses main LLM)
-            for analysis_req in image_analysis_requests:
-                self.media_service.handle_image_analysis(
-                    analysis_req["response"], client_id, conversation_id,
-                    context_manager=self.context_manager,
-                    pending_user_queries=self.pending_user_queries
-                )
-
-            # Handle Wikipedia image requests
-            # Strategy: Show Wikipedia images immediately (verification disabled by default for speed).
-            # If user wants a different/better image, they can ask again and verification can be enabled.
-            if wiki_image_requests:
-                pg_client = getattr(self.command_llm, "pg_client", None)
-                original_user_query = self.pending_user_queries.get(client_id, "")
-                for wiki_req in wiki_image_requests:
-                    wiki_data = wiki_req["response"]
-
-                    # Send status to user
-                    topic = wiki_data.get("topic", "")
-                    status_msg = (
-                        f"{self.log_prefix} [Status]: Searching for images of {topic}…"
-                    )
-                    self.message_handler.send_to_web_server(
-                        status_msg, client_id=client_id
-                    )
-
-                    chosen_url = self.wiki_orchestrator.select_image(
-                        wiki_data, original_user_query, conversation_id, client_id
-                    )
-
-                    # If no URL returned (all images shown, verification failed, or no candidates),
-                    # fall back to image generation
-                    if not chosen_url:
-                        print(
-                            f"{self.log_prefix} [{LogLevel.INFO.name}] No appropriate Wikipedia images available for '{topic}', "
-                            "falling back to image generation"
-                        )
-                        # Send status to user about fallback
-                        fallback_status = (
-                            f"{self.log_prefix} [Status]: Generating image: {topic}"
-                        )
-                        self.message_handler.send_to_web_server(
-                            fallback_status, client_id=client_id
-                        )
-
-                        # Create and immediately process image generation fallback
-                        image_gen_fallback = {
-                            "type": "image_generation_request",
-                            "prompt": f"Create an image depicting: {topic}",
-                            "title": topic,
-                            "user_id": client_id,
-                        }
-                        # Process immediately - don't add to already-processed list
-                        self.media_service.handle_image_generation(
-                            image_gen_fallback, client_id, conversation_id
-                        )
-                        continue
-
-                    chosen_title = wiki_data.get(
-                        "page_title", wiki_data.get("topic", "")
-                    )
-
-                    # Convert to 500px thumbnail for faster loading
-                    display_url = self.wiki_orchestrator.get_thumbnail_url(
-                        chosen_url, max_width=500
-                    )
-
-                    # Check if this image was already shown in this conversation
-                    # Normalize filenames by removing size prefixes (e.g., "500px-")
-                    if conversation_id:
-                        shown_images = self.context_manager.get_shown_wikipedia_images(
-                            conversation_id
-                        )
-                        display_filename = WikipediaImageOrchestrator.normalize_filename(display_url)
-                        shown_filenames = {
-                            WikipediaImageOrchestrator.normalize_filename(url) for url, _, _ in shown_images
-                        }
-
-                        if display_filename in shown_filenames:
-                            print(
-                                f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image already shown, "
-                                "using VLM to analyze and generate better image"
-                            )
-
-                            # Use VLM to understand what's wrong with the existing Wikipedia image
-                            # and create a better prompt for generation
-                            vlm_analysis_prompt = (
-                                f'The user previously saw this Wikipedia image but is asking again: "{original_user_query}"\n'
-                                f"Looking at this image, what aspect of '{topic}' is the user actually interested in "
-                                f"that this photo doesn't show? Reply with a brief description of what image should be generated instead."
-                            )
-
-                            # Send status
-                            status_msg = f"{self.log_prefix} [Status]: Analyzing previous image ..."
-                            self.message_handler.send_to_web_server(
-                                status_msg, client_id=client_id
-                            )
-
-                            # Analyze with VLM - send status to user
-                            try:
-                                # Send analyzing status to user
-                                analyzing_msg = f"{self.log_prefix} [VLM Analysis]: Analyzing existing image ..."
-                                self.message_handler.send_to_web_server(
-                                    analyzing_msg, client_id=client_id
-                                )
-                                
-                                is_appropriate, analysis = (
-                                    self.wiki_orchestrator.verify_image_appropriateness(
-                                        display_url, vlm_analysis_prompt, chosen_title
-                                    )
-                                )
-
-                                # Use the VLM's analysis to build a better generation prompt
-                                generation_prompt = (
-                                    f"Create an image of {topic} showing: {analysis}. "
-                                    f"User's request: {original_user_query}"
-                                )
-
-                                print(
-                                    f"{self.log_prefix} [{LogLevel.INFO.name}] VLM analysis complete, "
-                                    f"generating image with prompt: {generation_prompt[:100]}"
-                                )
-                            except Exception as vlm_err:
-                                print(
-                                    f"{self.log_prefix} [{LogLevel.WARNING.name}] VLM analysis failed: {vlm_err}, "
-                                    "using basic prompt"
-                                )
-                                generation_prompt = f"Create an image depicting: {topic}. {original_user_query}"
-
-                            # Generate image with improved prompt
-                            fallback_status = f"{self.log_prefix} [Status]: Generating custom image: {topic}"
-                            self.message_handler.send_to_web_server(
-                                fallback_status, client_id=client_id
-                            )
-
-                            image_gen_request = {
-                                "type": "image_generation_request",
-                                "prompt": generation_prompt,
-                                "title": topic,
-                                "user_id": client_id,
-                            }
-                            self.media_service.handle_image_generation(
-                                image_gen_request, client_id, conversation_id
-                            )
-                            continue
-
-                    # Track this image as shown (use display_url so it matches what we store in DB)
-                    if conversation_id:
-                        self.context_manager.track_wikipedia_image(
-                            conversation_id, display_url, chosen_title
-                        )
-
-                    self.message_handler.send_wikipedia_image_ready(
-                        {
-                            "url": display_url,
-                            "title": chosen_title,
-                            "topic": wiki_data.get("topic", ""),
-                        },
-                        client_id=client_id,
-                    )
-                    # Persist inline tag to DB so conversation recovery can re-render
-                    if pg_client and conversation_id:
-                        try:
-                            pg_client.insert_message(
-                                conversation_id,
-                                "assistant",
-                                f"[wikipedia_image:{display_url}]",
-                            )
-                        except Exception as db_err:
-                            print(
-                                f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not persist "
-                                f"wikipedia image tag to DB: {db_err}"
-                            )
-
-            # If there are no regular results left, return now
-            if (
-                not regular_results
-                and not image_gen_requests
-                and not image_analysis_requests
-                and not wiki_image_requests
-            ):
-                return
-            if not regular_results:
-                if (
-                    wiki_image_requests
-                    and conversation_id
-                    and isinstance(self.command_llm, OllamaClient)
-                ):
-                    # Generate a brief LLM comment about the displayed image(s)
-                    original_user_query = self.pending_user_queries.get(client_id, "")
-                    wiki_topics = ", ".join(
-                        w["response"].get("page_title")
-                        or w["response"].get("topic", "")
-                        for w in wiki_image_requests
-                    )
-                    llm_input = (
-                        f'The user asked: "{original_user_query}"\n'
-                        f"You just displayed a Wikipedia image for: {wiki_topics}.\n"
-                        f"Write a short, informative comment relevant to what the user asked."
-                    )
-                    self._handle_simple_function_streaming(
-                        llm_input, original_user_query, client_id, conversation_id
-                    )
+            # If no regular results remain, we're done
+            if not categorized["regular_results"]:
+                if categorized["wiki_image_requests"] and conversation_id and isinstance(self.command_llm, OllamaClient):
+                    # Generate LLM comment about displayed Wikipedia images
+                    self._generate_wikipedia_comment(categorized["wiki_image_requests"], client_id, conversation_id)
                 else:
                     self.pending_user_queries.pop(client_id, None)
                 return
 
-            # --- Process remaining regular results normally ---
-            # Extract display names for showing what the assistant is doing
-            display_names = [
-                r.get("display_name") for r in regular_results if r.get("display_name")
-            ]
-
-            # Send display message to show what's being processed
-            if display_names:
-                status_message = ", ".join(display_names)
-                message = f"{self.log_prefix} [Status]: {status_message}"
-                self.message_handler.send_to_web_server(message, client_id=client_id)
-
-            # Send to LLM for natural language conversion
-            llm_input = f"Convert these function results into a natural language response in {language} language: {regular_results}"
-            original_user_query = self.pending_user_queries.get(client_id, "")
-
-            # Use streaming if from chat, otherwise regular response
-            if conversation_id and isinstance(self.command_llm, OllamaClient):
-                # Streaming response for chat
-                self._handle_simple_function_streaming(
-                    llm_input, original_user_query, client_id, conversation_id
-                )
-            else:
-                # Non-streaming fallback
-                nl_output = self.command_llm.send_message(
-                    llm_input,
-                    max_tokens=self.max_tokens,
-                    message_type="response",
-                    conversation_id=conversation_id,
-                    original_text=original_user_query,
-                )
-
-                if nl_output and nl_output.get("nl_response"):
-                    nl_message = nl_output.get("nl_response")
-                    message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
-                    self.message_handler.send_to_web_server(
-                        message, client_id=client_id
-                    )
-
-                    # Store interaction in history
-                    if client_id in self.pending_user_queries:
-                        self.context_manager.add_to_history(
-                            client_id, self.pending_user_queries[client_id], nl_message
-                        )
-                        del self.pending_user_queries[client_id]
-                else:
-                    # Fallback
-                    fallback_msg = str(regular_results)
-                    message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
-                    self.message_handler.send_to_web_server(
-                        message, client_id=client_id
-                    )
+            # Process remaining regular results
+            self._process_regular_function_results(
+                categorized["regular_results"], language, client_id, conversation_id
+            )
 
         except Exception as e:
             print(
                 f"{self.log_prefix} [{LogLevel.CRITICAL.name}] Simple function conversion failed: {type(e).__name__}: {e}"
             )
             self._send_error_response("Failed to format response", client_id)
+
+    def _categorize_function_results(self, command_result):
+        """
+        Categorize command results into different types (image gen, analysis, Wikipedia, regular).
+
+        @param command_result Raw command execution results
+        @return Dict with categorized results
+        """
+        simple_function_results = [
+            r for r in command_result
+            if isinstance(r, dict) and r.get("type") == "simple_function"
+        ]
+
+        image_gen_requests = [
+            r for r in simple_function_results
+            if isinstance(r.get("response"), dict)
+            and r["response"].get("type") == "image_generation_request"
+        ]
+
+        image_analysis_requests = [
+            r for r in simple_function_results
+            if isinstance(r.get("response"), dict)
+            and r["response"].get("type") == "image_analysis_request"
+        ]
+
+        wiki_image_requests = [
+            r for r in simple_function_results
+            if isinstance(r.get("response"), dict)
+            and r["response"].get("type") == "wikipedia_image_request"
+        ]
+
+        regular_results = [
+            r for r in simple_function_results
+            if r not in image_gen_requests
+            and r not in image_analysis_requests
+            and r not in wiki_image_requests
+        ]
+
+        return {
+            "image_gen_requests": image_gen_requests,
+            "image_analysis_requests": image_analysis_requests,
+            "wiki_image_requests": wiki_image_requests,
+            "regular_results": regular_results,
+        }
+
+    def _handle_image_requests(self, categorized, client_id, conversation_id):
+        """
+        Dispatch image generation and analysis requests to media service.
+
+        @param categorized Dict of categorized results
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        # Handle image generation (runs in background thread)
+        for img_req in categorized["image_gen_requests"]:
+            self.media_service.handle_image_generation(
+                img_req["response"], client_id, conversation_id
+            )
+
+        # Handle image analysis (runs in background thread)
+        for analysis_req in categorized["image_analysis_requests"]:
+            self.media_service.handle_image_analysis(
+                analysis_req["response"], client_id, conversation_id,
+                context_manager=self.context_manager,
+                pending_user_queries=self.pending_user_queries
+            )
+
+    def _handle_wikipedia_image_workflow(self, categorized, client_id, conversation_id):
+        """
+        Handle Wikipedia image requests with deduplication and VLM-based fallback.
+
+        Strategy: Show Wikipedia images immediately (verification disabled by default).
+        If user wants a different/better image, they can ask again and the system
+        uses VLM to analyze what was wrong, then generates a better image.
+
+        @param categorized Dict of categorized results
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        wiki_image_requests = categorized["wiki_image_requests"]
+        if not wiki_image_requests:
+            return
+
+        pg_client = getattr(self.command_llm, "pg_client", None)
+        original_user_query = self.pending_user_queries.get(client_id, "")
+
+        for wiki_req in wiki_image_requests:
+            wiki_data = wiki_req["response"]
+            topic = wiki_data.get("topic", "")
+
+            # Send status to user
+            status_msg = f"{self.log_prefix} [Status]: Searching for images of {topic}…"
+            self.message_handler.send_to_web_server(status_msg, client_id=client_id)
+
+            # Select image from candidates
+            chosen_url = self.wiki_orchestrator.select_image(
+                wiki_data, original_user_query, conversation_id, client_id
+            )
+
+            # Handle no available images - fallback to generation
+            if not chosen_url:
+                self._fallback_to_image_generation(topic, original_user_query, client_id, conversation_id)
+                continue
+
+            chosen_title = wiki_data.get("page_title", wiki_data.get("topic", ""))
+            display_url = self.wiki_orchestrator.get_thumbnail_url(chosen_url, max_width=500)
+
+            # Check for duplicate images and handle with VLM analysis
+            if self._is_wikipedia_image_duplicate(display_url, conversation_id):
+                self._handle_duplicate_wikipedia_image(
+                    display_url, topic, chosen_title, original_user_query, client_id, conversation_id
+                )
+                continue
+
+            # Track and send the image
+            if conversation_id:
+                self.context_manager.track_wikipedia_image(conversation_id, display_url, chosen_title)
+
+            self.message_handler.send_wikipedia_image_ready(
+                {"url": display_url, "title": chosen_title, "topic": wiki_data.get("topic", "")},
+                client_id=client_id
+            )
+
+            # Persist to DB for conversation recovery
+            if pg_client and conversation_id:
+                try:
+                    pg_client.insert_message(
+                        conversation_id, "assistant", f"[wikipedia_image:{display_url}]"
+                    )
+                except Exception as db_err:
+                    print(
+                        f"{self.log_prefix} [{LogLevel.WARNING.name}] Could not persist "
+                        f"wikipedia image tag to DB: {db_err}"
+                    )
+
+    def _fallback_to_image_generation(self, topic, user_query, client_id, conversation_id):
+        """
+        Fall back to image generation when no Wikipedia images are available.
+
+        @param topic Topic/subject for image
+        @param user_query Original user query
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] No appropriate Wikipedia images "
+            f"available for '{topic}', falling back to image generation"
+        )
+
+        fallback_status = f"{self.log_prefix} [Status]: Generating image: {topic}"
+        self.message_handler.send_to_web_server(fallback_status, client_id=client_id)
+
+        image_gen_fallback = {
+            "type": "image_generation_request",
+            "prompt": f"Create an image depicting: {topic}",
+            "title": topic,
+            "user_id": client_id,
+        }
+        self.media_service.handle_image_generation(image_gen_fallback, client_id, conversation_id)
+
+    def _is_wikipedia_image_duplicate(self, display_url, conversation_id):
+        """
+        Check if a Wikipedia image was already shown in this conversation.
+
+        @param display_url URL of the image
+        @param conversation_id Conversation UUID
+        @return True if duplicate, False otherwise
+        """
+        if not conversation_id:
+            return False
+
+        shown_images = self.context_manager.get_shown_wikipedia_images(conversation_id)
+        display_filename = WikipediaImageOrchestrator.normalize_filename(display_url)
+        shown_filenames = {
+            WikipediaImageOrchestrator.normalize_filename(url) for url, _, _ in shown_images
+        }
+
+        return display_filename in shown_filenames
+
+    def _handle_duplicate_wikipedia_image(
+        self, display_url, topic, chosen_title, original_user_query, client_id, conversation_id
+    ):
+        """
+        Handle duplicate Wikipedia image using VLM analysis to generate better alternative.
+
+        Uses VLM to understand what aspect the user wants that the existing image doesn't show,
+        then generates a custom image with improved prompt.
+
+        @param display_url URL of the duplicate image
+        @param topic Topic/subject
+        @param chosen_title Image title
+        @param original_user_query Original user query
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        print(
+            f"{self.log_prefix} [{LogLevel.INFO.name}] Wikipedia image already shown, "
+            "using VLM to analyze and generate better image"
+        )
+
+        # Build VLM analysis prompt
+        vlm_analysis_prompt = (
+            f'The user previously saw this Wikipedia image but is asking again: "{original_user_query}"\n'
+            f"Looking at this image, what aspect of '{topic}' is the user actually interested in "
+            f"that this photo doesn't show? Reply with a brief description of what image should be generated instead."
+        )
+
+        # Send status
+        status_msg = f"{self.log_prefix} [Status]: Analyzing previous image ..."
+        self.message_handler.send_to_web_server(status_msg, client_id=client_id)
+
+        # Analyze with VLM
+        try:
+            analyzing_msg = f"{self.log_prefix} [VLM Analysis]: Analyzing existing image ..."
+            self.message_handler.send_to_web_server(analyzing_msg, client_id=client_id)
+
+            is_appropriate, analysis = self.wiki_orchestrator.verify_image_appropriateness(
+                display_url, vlm_analysis_prompt, chosen_title
+            )
+
+            # Use VLM analysis to build better generation prompt
+            generation_prompt = (
+                f"Create an image of {topic} showing: {analysis}. "
+                f"User's request: {original_user_query}"
+            )
+
+            print(
+                f"{self.log_prefix} [{LogLevel.INFO.name}] VLM analysis complete, "
+                f"generating image with prompt: {generation_prompt[:100]}"
+            )
+        except Exception as vlm_err:
+            print(
+                f"{self.log_prefix} [{LogLevel.WARNING.name}] VLM analysis failed: {vlm_err}, "
+                "using basic prompt"
+            )
+            generation_prompt = f"Create an image depicting: {topic}. {original_user_query}"
+
+        # Generate improved image
+        fallback_status = f"{self.log_prefix} [Status]: Generating custom image: {topic}"
+        self.message_handler.send_to_web_server(fallback_status, client_id=client_id)
+
+        image_gen_request = {
+            "type": "image_generation_request",
+            "prompt": generation_prompt,
+            "title": topic,
+            "user_id": client_id,
+        }
+        self.media_service.handle_image_generation(image_gen_request, client_id, conversation_id)
+
+    def _generate_wikipedia_comment(self, wiki_image_requests, client_id, conversation_id):
+        """
+        Generate a brief LLM comment about displayed Wikipedia images.
+
+        @param wiki_image_requests List of Wikipedia image requests
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        original_user_query = self.pending_user_queries.get(client_id, "")
+        wiki_topics = ", ".join(
+            w["response"].get("page_title") or w["response"].get("topic", "")
+            for w in wiki_image_requests
+        )
+
+        llm_input = (
+            f'The user asked: "{original_user_query}"\n'
+            f"You just displayed a Wikipedia image for: {wiki_topics}.\n"
+            f"Write a short, informative comment relevant to what the user asked."
+        )
+
+        self._handle_simple_function_streaming(
+            llm_input, original_user_query, client_id, conversation_id
+        )
+
+    def _process_regular_function_results(self, regular_results, language, client_id, conversation_id):
+        """
+        Process regular function results by converting to natural language.
+
+        @param regular_results List of regular function results
+        @param language Target language
+        @param client_id Client identifier
+        @param conversation_id Conversation UUID
+        """
+        # Extract and send status display names
+        display_names = [r.get("display_name") for r in regular_results if r.get("display_name")]
+        if display_names:
+            status_message = ", ".join(display_names)
+            message = f"{self.log_prefix} [Status]: {status_message}"
+            self.message_handler.send_to_web_server(message, client_id=client_id)
+
+        # Build LLM conversion prompt
+        llm_input = f"Convert these function results into a natural language response in {language} language: {regular_results}"
+        original_user_query = self.pending_user_queries.get(client_id, "")
+
+        # Use streaming if from chat, otherwise regular response
+        if conversation_id and isinstance(self.command_llm, OllamaClient):
+            self._handle_simple_function_streaming(
+                llm_input, original_user_query, client_id, conversation_id
+            )
+        else:
+            # Non-streaming fallback
+            nl_output = self.command_llm.send_message(
+                llm_input,
+                max_tokens=self.max_tokens,
+                message_type="response",
+                conversation_id=conversation_id,
+                original_text=original_user_query,
+            )
+
+            if nl_output and nl_output.get("nl_response"):
+                nl_message = nl_output.get("nl_response")
+                message = f"{self.log_prefix} [LLM Reply]: {nl_message}"
+                self.message_handler.send_to_web_server(message, client_id=client_id)
+
+                # Store interaction in history
+                if client_id in self.pending_user_queries:
+                    self.context_manager.add_to_history(
+                        client_id, self.pending_user_queries[client_id], nl_message
+                    )
+                    del self.pending_user_queries[client_id]
+            else:
+                # Fallback
+                fallback_msg = str(regular_results)
+                message = f"{self.log_prefix} [Command Result]: {fallback_msg}"
+                self.message_handler.send_to_web_server(message, client_id=client_id)
 
     def _handle_simple_function_streaming(
         self, llm_input, original_user_query, client_id, conversation_id
