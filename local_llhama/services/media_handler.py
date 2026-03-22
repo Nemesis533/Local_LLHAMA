@@ -35,18 +35,20 @@ class MediaHandlingService:
     Separated from ChatHandler for better organization and testability.
     """
 
-    def __init__(self, model_registry, message_handler, command_llm, log_prefix="[Media]"):
+    def __init__(self, model_registry, message_handler, command_llm, pg_client, log_prefix="[Media]"):
         """
         Initialize the media handling service.
 
         @param model_registry    ModelRegistry instance for GPU memory coordination
         @param message_handler   MessageHandler for sending status/results  to clients
         @param command_llm       OllamaClient for LLM operations
+        @param pg_client         PostgreSQL client for database operations
         @param log_prefix        Prefix for log messages
         """
         self.registry = model_registry
         self.message_handler = message_handler
         self.command_llm = command_llm
+        self.pg_client = pg_client
         self.log_prefix = log_prefix
         self._image_manager = None
 
@@ -494,16 +496,22 @@ class MediaHandlingService:
 
                 # Generate the image
                 _send_status(f"Generating: {title}...")
-                result = image_manager.generate_image(
-                    prompt=prompt,
+                image = image_manager.generate(prompt)
+
+                # Save the image to disk and database
+                _send_status("Saving image...")
+                result = image_manager.save_image(
+                    image,
                     user_id=user_id,
                     title=title,
+                    prompt=prompt,
                     conversation_id=conversation_id,
+                    pg_client=self.pg_client,
                 )
 
-                if result and result.get("success"):
+                if result and result.get("id"):
                     image_id = result.get("image_id")
-                    image_url = result.get("image_url", f"/api/images/{image_id}")
+                    image_url = result.get("url", f"/api/images/{image_id}")
 
                     # Send image_ready message
                     message_handler.send_image_ready(
@@ -518,8 +526,8 @@ class MediaHandlingService:
                         f"{log_prefix} [{LogLevel.INFO.name}] Image generation complete: {image_id}"
                     )
                 else:
-                    error_msg = result.get("error", "Unknown error") if result else "No result"
-                    _send_status(f"Image generation failed: {error_msg}")
+                    error_msg = "Image save failed: no result returned"
+                    _send_status(error_msg)
 
             except Exception as e:
                 print(

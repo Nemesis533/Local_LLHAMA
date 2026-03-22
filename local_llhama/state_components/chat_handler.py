@@ -76,7 +76,7 @@ class ChatHandler:
         self.max_tokens = max_tokens
 
         # Get PostgreSQL client and ConversationLoader from command_llm
-        pg_client = getattr(command_llm, "pg_client", None)
+        self.pg_client = getattr(command_llm, "pg_client", None)
         conversation_loader = getattr(command_llm, "conversation_loader", None)
 
         # Get decision model if separate decision model is enabled
@@ -89,7 +89,7 @@ class ChatHandler:
 
         # Initialize context manager
         self.context_manager = ChatContextManager(
-            pg_client=pg_client,
+            pg_client=self.pg_client,
             conversation_loader=conversation_loader,
             log_prefix=f"{log_prefix} [Context]",
             default_context_words=default_context_words,
@@ -118,6 +118,7 @@ class ChatHandler:
             model_registry=self.registry,
             message_handler=message_handler,
             command_llm=command_llm,
+            pg_client=self.pg_client,
             log_prefix=log_prefix,
         )
 
