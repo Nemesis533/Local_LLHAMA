@@ -51,7 +51,7 @@ class ModelInfo:
         self.state = ModelState.UNLOADED
         self.last_state_change = datetime.now(timezone.utc)
         self.last_used = None
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.load_count = 0
         self.error_message = None
 

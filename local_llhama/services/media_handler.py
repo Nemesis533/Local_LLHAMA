@@ -213,7 +213,7 @@ class MediaHandlingService:
                         {"role": "user", "content": user_msg},
                     ],
                     "stream": False,
-                    "options": {"temperature": 0.7, "num_predict": 120},
+                    "options": {"temperature": 0.7, "num_predict": 300},
                 },
                 timeout=60,
             )
@@ -221,7 +221,11 @@ class MediaHandlingService:
             if resp.status_code == 200:
                 content = resp.json().get("message", {}).get("content", "")
                 # Strip possible markdown fences
-                content = content.strip().strip("```json").strip("```").strip()
+                content = content.strip()
+                if content.startswith("```"):
+                    content = content.split("```")[-2] if content.count("```") >= 2 else content
+                    content = content.lstrip("json").strip()
+                content = content.strip()
 
                 if not content:
                     print(
@@ -230,7 +234,17 @@ class MediaHandlingService:
                     )
                     return default_title, default_comment
 
-                parsed = json.loads(content)
+                # If JSON is truncated, attempt to extract what we can with regex
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError:
+                    import re
+                    title_match = re.search(r'"title"\s*:\s*"([^"]+)"', content)
+                    comment_match = re.search(r'"comment"\s*:\s*"([^"]+)"', content)
+                    title = title_match.group(1) if title_match else default_title
+                    comment = comment_match.group(1) if comment_match else default_comment
+                    return title, comment
+
                 title = parsed.get("title") or default_title
                 comment = parsed.get("comment") or default_comment
                 return title, comment
@@ -480,23 +494,21 @@ class MediaHandlingService:
         def _generation_thread():
             image_manager = self._get_image_manager()
             try:
-                # Offload Ollama model to free VRAM
+                # Offload Ollama model to free VRAM (updates registry state)
                 _send_status("Freeing GPU memory...")
-                try:
-                    if ollama_host and ollama_model:
-                        from ..image_generation import ImageGenerationManager as _IM
-                        host_url = _IM._normalize_ollama_host(ollama_host)
-                        requests.post(
-                            f"{host_url}/api/generate",
-                            json={"model": ollama_model, "keep_alive": 0},
-                            timeout=10,
-                        )
-                except Exception:
-                    pass  # Non-critical
+                if ollama_host and ollama_model:
+                    image_manager.offload_ollama_model(ollama_host, ollama_model)
 
-                # Generate the image
+                # Load the diffusion pipeline
+                _send_status(f"Loading image pipeline...")
+                image_manager.load_pipeline()
+
+                # Generate the image, then unload pipeline immediately to free VRAM
                 _send_status(f"Generating: {title}...")
-                image = image_manager.generate(prompt)
+                try:
+                    image = image_manager.generate(prompt)
+                finally:
+                    image_manager.unload_pipeline()
 
                 # Save the image to disk and database
                 _send_status("Saving image...")
@@ -509,16 +521,19 @@ class MediaHandlingService:
                     pg_client=self.pg_client,
                 )
 
-                if result and result.get("id"):
+                if result and result.get("image_id"):
                     image_id = result.get("image_id")
                     image_url = result.get("url", f"/api/images/{image_id}")
 
                     # Send image_ready message
                     message_handler.send_image_ready(
-                        image_url=image_url,
-                        image_id=image_id,
-                        title=title,
-                        comment=comment,
+                        image_data={
+                            "image_id": image_id,
+                            "url": image_url,
+                            "download_url": f"/api/images/{image_id}/download",
+                            "title": title,
+                            "comment": comment,
+                        },
                         client_id=client_id,
                     )
 
