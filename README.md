@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-alpha-yellow)
 ![License](https://img.shields.io/badge/license-CC%20BY%204.0-blue)
 
-**Now on version 0.8** 
+**Now on version 0.9** 
 
 **Local_LLAMA** is anorchestration middleware that sits between Home Assistant and Ollama, enabling smaller LLM models (8-20B parameters) to handle complex multi-intent, multi-language workloads through intelligent task decomposition, adaptive context management, and multi-pass prompt engineering.
 
@@ -45,6 +45,7 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - **Adaptive performance tuning** based on real-time latency feedback
 - **Hardware-validated presets** for 8GB to 24GB VRAM configurations
 - **Complete offline operation** — no cloud APIs, no telemetry, full privacy
+- **NEW** - Added both image generation and visual understanding.
 
 ## Architecture & Features
 
@@ -105,7 +106,9 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - Set reminders, alarms, and appointments with natural language
 - Per-user calendar with automatic notifications, both voical and in chat
 - Unified interface for all event types; each users sees only their calendar, the admin can only see voice-created events.
-- **NEW!** You can now create automations via Chat/Voice commands, which are then stored in the database.
+- You can now create automations via Chat/Voice commands, which are then stored in the database.
+
+### Smart Assistant Features
 
 **Semantic Memory Search**
 - Vector-based conversation history search using Ollama embeddings
@@ -126,22 +129,9 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - Customizable model name for chat usage
 - Admin panel with user, language, prompt, system, web settings and more.
 - Role-based access control (admin, chat permission)
-- **NEW** Added system resource monitoring (CPU, RAM, GPU) in the chat panel (for admins only).
+- Added system resource monitoring (CPU, RAM, GPU) in the chat panel (for admins only).
 
 ![Admin Prompt Page](screenshots/admin_window.png)
-
-## Latest Additions
-
-- **Semantic Memory Search** - Vector embeddings + keyword matching for conversational context retrieval
-- **Dual-Pipeline Architecture** - Voice and chat both share LLM capabilities, optimized for their respective UX patterns
-- **Real-time Chat Interface** - Multi-user WebSocket communication with persistent message history
-- **Per-User Context** - Conversation history tracking (last 3 exchanges) for contextual, aware responses
-- **Unified Calendar System** - Single consolidated API for reminders, appointments, and alarms
-- **Admin Panel** - User management, permissions assignment, password reset
-- **Markdown Chat Rendering** - Bold, italic, code blocks with syntax highlighting
-- **Role-Based Access Control** - Admin and User permissions for web interface
-- **Response Streaming and Optimized Context** - Context passing has been optimized to maintain proper command/context handling while keeping a reasonable length conversational context.
-
 
 ## System Requirements
 
@@ -151,7 +141,7 @@ When you say *"Turn off the kitchen lights, set a 7am alarm, and tell me the wea
 - **GPU**: 8-24GB VRAM depending on preset (tested with RTX 4060ti 16GB (with and without RTX 2080Ti as secondary), RTX 4060 8GB Mobile)
 - **OS**: Linux (Ubuntu 22.04+, tested on 24.04+)
 
-**Required Services (leverage, not replace):**
+**Required Services:**
 - **Ollama Server**: Local or remote for LLM inference
 - **Home Assistant**: Local or remote for smart home control
 - **PostgreSQL**: For conversation history and embeddings
@@ -168,7 +158,8 @@ Configurations tested on real hardware with performance benchmarks:
 | **english_only_small** | 8GB | Qwen2.5:8B | English | Entry-level, basic control |
 | **english_only_large** | 16GB | GPT-OSS:20B | English | High-quality single language |
 | **multi_lingual_small** | 16GB | Qwen2.5:14B | 6 languages | Balanced multilingual |
-| **multi_lingual_large** | 24GB | GPT-OSS:20B | 6 languages | Maximum performance |
+| **multi_lingual_large** | 24GB | GPT-OSS:20B | 6 languages | High performance |
+| **multi_lingual_very_large** | 32GB | qwen3:30b-instruct | 6 languages | Maximum performance |
 
 The Qwen family is being used because of how well they follow instructions and their size-availability. GPT-OSS is used as alternative for larger GPUS.
 qwen3:30b-instruct works very well too but woudl be on edge of a 24GB card - recommned at least 28 GB+ VRAM for that model.
@@ -339,22 +330,6 @@ Configures web information sources (news, Wikipedia, etc.) with allowed websites
 - **Chat**: WebSocket streaming with Markdown rendering
 - **Logging**: Comprehensive audit trail with dev mode
 
-### Adaptive Context Management Example
-
-```
-Initial Request: 400 word context window
-   ↓
-[Latency > 20s detected]
-   ↓
-Context Reduction: 400 → 280 → 196 → 137 → 100 words
-   ↓
-[Success < 10s]
-   ↓
-Context Recovery: Gradual expansion on subsequent requests
-```
-
-**Why This Matters:** Prevents timeout cascades while maintaining conversation quality. System self-tunes based on hardware performance.
-  
 ## Example Commands
 
 ```text
@@ -376,17 +351,33 @@ Key libraries used in this project include:
 
 Lowest supported python version is 3.10, but 3.12 is recommended.
 
-- `torch` (required by openai-whisper for audio processing)
+**Web Framework**
+- `flask`, `flask-login`, `flask-socketio`, `flask-cors` (web UI, auth, and real-time communication)
+- `python-socketio`, `eventlet` (async WebSocket support)
+
+**Database**
+- `psycopg2-binary`, `asyncpg` (PostgreSQL integration)
+
+**Audio Processing**
+- `torch` (required by openai-whisper — installed separately via installer script)
 - `openai-whisper` (speech-to-text)
 - `openwakeword` (wake word detection)
 - `piper-tts` (text-to-speech)
-- `pygame` (audio playback)
 - `pyaudio` (audio I/O)
-- `flask`, `flask-socketio` (web UI and real-time communication)
-- `psycopg2-binary`, `asyncpg` (PostgreSQL integration)
-- `requests` (HTTP client for Ollama and web APIs)
+- `pygame` (audio playback)
+- `numpy` (audio signal processing)
 
-**Note:** While `torch` is required for Whisper's audio processing, the system uses Ollama for all LLM inference.
+**Image Generation**
+- `diffusers`, `transformers`, `accelerate`, `bitsandbytes` (Stable Diffusion inference)
+
+**Utilities**
+- `requests`, `beautifulsoup4` (HTTP client and HTML parsing for web APIs)
+- `psutil` (system resource monitoring)
+- `python-dotenv` (environment variable loading)
+- `sentencepiece` (tokenization for multilingual models)
+- `colorama` (terminal output formatting)
+
+**Note:** While `torch` is required for Whisper's audio processing, the system uses Ollama for all LLM inference. `torch` is installed separately by the installer script to ensure compatibility with your Python version and CUDA setup.
 
 All dependencies are listed in `requirements.txt`.
 
@@ -407,13 +398,15 @@ Read the full license here: [https://creativecommons.org/licenses/by/4.0/](https
 
 ## Acknowledgments
 
-- OpenAI for Whisper [https://github.com/openai/whisper]
-- Piper TTS by rhasspy [https://github.com/rhasspy/piper]
-- OpenWakeWord by dscripka [https://github.com/dscripka/openWakeWord]
-- Home Assistant open-source platform [https://www.home-assistant.io/]
-- GDELT Project for real-time global event data [https://www.gdeltproject.org/]
-- Developers of Pygame ([https://github.com/pygame/pygame]) and other community-driven tools
-- StabilityAI for the image generation model ([https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo])
+- [OpenAI](https://github.com/openai/whisper) for Whisper (speech-to-text)
+- [rhasspy](https://github.com/rhasspy/piper) for Piper TTS
+- [dscripka](https://github.com/dscripka/openWakeWord) for OpenWakeWord
+- [Home Assistant](https://www.home-assistant.io/) open-source smart home platform
+- [GDELT Project](https://www.gdeltproject.org/) for real-time global event data
+- Developers of [Pygame](https://github.com/pygame/pygame) and other community-driven tools
+- [StabilityAI](https://huggingface.co/stabilityai/stable-diffusion-3.5-large-turbo) for Stable Diffusion 3.5 Large Turbo (image generation model)
+- [HuggingFace](https://huggingface.co/) for the `diffusers`, `transformers`, and `accelerate` libraries powering image generation
+- [TimDettmers](https://github.com/TimDettmers/bitsandbytes) for `bitsandbytes` (quantization support)
 
 ## Contributing
 
@@ -421,30 +414,19 @@ Contributions and suggestions welcome! See "Future Work" for ideas. Response tim
 
 Open discussions before submitting major PRs.
 
-## Roadmap: Advancing Orchestration Patterns
-
-### Completed Enhanced Orchestration (v0.8)
-
 **Based on feedback and testing, the scope of work was updated**
 
-**0.85 version was scrapped and functionality moved to a separate project**
-
-~~### v0.85 — Coding Abilities~~ 
-~~- Streamlined custom function integration with examples ~~
-~~- TBC: Creation of dedicated functionality for a coding assistant that integrates with vscode.~~
-
-### v0.9 — Advanced Capabilities
+### Completed v0.9 — Advanced Capabilities
 
 **Orchestration Expansion:**
 - Vision capabilities with multimodal routing
 - Contextual model swapping (task-specific model selection)
 - Test coverage for orchestration patterns
-~~- Performance regression testing~~
 
 ### v0.95 — Advanced Capabilities
 
 **Additional API support:**
-- ADDED: plex and jellyfin media control functions
+- Plex and jellyfin media control functions
 
 ### v1.0 — Production Release
 
