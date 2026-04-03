@@ -6,7 +6,6 @@ Handles appointments, alarms, and reminders using PostgreSQL database.
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from ..postgresql_client import PostgreSQLClient
 from ..shared_logger import LogLevel
 from .base import BaseManager
 
