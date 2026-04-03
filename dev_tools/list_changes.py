@@ -6,8 +6,6 @@ Useful for tracking which files need manual review.
 
 import subprocess
 import sys
-from datetime import datetime
-
 
 def get_changed_files(commit_hash):
     """
