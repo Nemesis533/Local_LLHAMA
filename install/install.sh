@@ -23,6 +23,7 @@ source "$LIB_DIR/ollama_setup.sh"
 source "$LIB_DIR/database_wizard.sh"
 source "$LIB_DIR/env_wizard.sh"
 source "$LIB_DIR/service_setup.sh"
+source "$LIB_DIR/image_generation_setup.sh"
 
 # Track what was installed for cleanup
 export INSTALLED_PYTHON311="no"
@@ -59,7 +60,11 @@ printf "    - Installed via official install script\n"
 printf "  • PostgreSQL database configuration\n"
 printf "    - Database and user creation wizard\n"
 printf "  • Systemd service (optional)\n"
-printf "    - Auto-start on boot configuration\n\n"
+printf "    - Auto-start on boot configuration\n"
+printf "  • Stable Diffusion 3.5 image generation (optional)\n"
+printf "    - Requires NVIDIA GPU with 12+ GB VRAM\n"
+printf "    - Requires a HuggingFace account and model licence acceptance\n"
+printf "    - Model weights (~14 GB) downloaded on first use\n\n"
 printf "REQUIRED (from requirements.txt):\n"
 printf "  • Python packages: Flask, psycopg2, whisper, piper-tts, etc.\n"
 printf "  • System dependencies: portaudio19-dev (for pyaudio)\n\n"
@@ -152,6 +157,9 @@ fi
 
 # Setup Ollama
 setup_ollama
+
+# Setup optional image generation
+setup_image_generation
 
 # Run database configuration wizard
 run_database_wizard
