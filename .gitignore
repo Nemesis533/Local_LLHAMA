@@ -51,6 +51,9 @@ coverage.xml
 
 # Personal notes
 notes.txt
+
+# Generated/uploaded data files
+local_llhama/data/
 .pytest_cache/
 cover/
 
