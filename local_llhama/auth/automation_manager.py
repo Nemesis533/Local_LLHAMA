@@ -7,7 +7,6 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from ..postgresql_client import PostgreSQLClient
 from ..shared_logger import LogLevel
 from .base import BaseManager
 
