@@ -504,7 +504,7 @@ class SimpleFunctions:
         """
         return self.automation_service.delete_automation(name, user_id)
 
-    def get_wikipedia_image(self, topic: str = None, user_id: int = None) -> dict:
+    def get_wikipedia_image(self, topic: str = None) -> dict:
         """
         @brief Fetch a list of image candidates for a topic from Wikipedia.
 
@@ -596,6 +596,7 @@ class SimpleFunctions:
                 self.headers,
                 timeout=timeout,
             )
+            # Added filter as otherwise the result could potentially be too messy
             if media_data and media_data.get("items"):
                 SKIP_EXTENSIONS = (
                     ".svg",
