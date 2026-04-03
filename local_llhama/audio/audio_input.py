@@ -342,7 +342,7 @@ class AudioRecorderClass:
                         stream.close()
                     except:
                         pass
-                # Don't terminate PyAudio - it's a global shutdown,just allow time for device cleanup
+                # Don't terminate PyAudio - it's a global shutdown and breaks the system, just allow time for device cleanup
                 time.sleep(0.3)
             else:
                 print(
@@ -430,7 +430,7 @@ class WakeWordListener:
         # Load audio device settings
         self._load_settings()
 
-        # Load OpenWakeWord model once during initialization
+        # Only oad OpenWakeWord model once during initialization
         print(
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] Loading OpenWakeWord model..."
         )
@@ -485,7 +485,7 @@ class WakeWordListener:
             f"{self.class_prefix_message} [{LogLevel.INFO.name}] RESUME requested, setting pause_event"
         )
 
-        # Clear any stale wake word detections from the queue
+        # Clear any stale wake word detections from the queue to avoid retriggering
         if hasattr(self, "result_queue"):
             while not self.result_queue.empty():
                 try:
@@ -601,7 +601,7 @@ class WakeWordListener:
         """
         np_audio = np.frombuffer(audio_data, dtype=np.int16)
 
-        # Resample to 16kHz if device is using a different sample rate
+        # Resample to 16kHz if device is using a different sample rate as
         # OpenWakeWord models are trained on 16kHz audio
         if device_sample_rate != 16000:
             from scipy import signal
