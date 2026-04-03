@@ -11,7 +11,6 @@ Handles the full lifecycle of image generation:
 # === System Imports ===
 import os
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -78,12 +77,11 @@ class ImageGenerationManager:
         self.keep_pipeline_loaded = keep_pipeline_loaded
         self.keep_pipeline_loaded_min_vram_gb = keep_pipeline_loaded_min_vram_gb
 
-        # Pipeline is loaded lazily; _pipeline_kept_alive tracks whether it is
-        # intentionally staying resident across requests.
+        # Pipeline is loaded lazily; _pipeline_kept_alive tracks whether it is intentionally staying resident across requests.
         self._pipeline = None
         self._pipeline_kept_alive = False
 
-        # Register with model registry
+        # Register with model registry to track loading state and coordinate with Ollama offloading
         self.registry = get_model_registry()
         self.model_registry_name = f"sd3.5-{cuda_device}"
         self.registry.register_model(
@@ -169,6 +167,7 @@ class ImageGenerationManager:
         @param ollama_host Ollama server URL (e.g. "http://192.168.1.10:11434").
         @param model_name  Model name to unload (e.g. "qwen3-14b").
         @return True if unload succeeded or was not needed, False on error.
+        TODO: Consider moving this to media_manager or to a dedicated OllamaManager
         """
         if not ollama_host or not model_name:
             print(
@@ -437,7 +436,7 @@ class ImageGenerationManager:
             self._pipeline_kept_alive = False
             # TODO: worth adding gc.collect() here before empty_cache() if we ever
             # see VRAM not draining cleanly between generations — haven't hit it yet
-            # but keeping it in mind for smaller cards. — (llhama)
+            # but keeping it in mind for smaller cards.
             torch.cuda.empty_cache()
 
             self.registry.set_model_state(self.model_registry_name, ModelState.UNLOADED)
@@ -511,7 +510,7 @@ class ImageGenerationManager:
         user_dir = self.ensure_storage_dir(user_id)
         file_path = user_dir / filename
 
-        # Save image to disk (format negotiation: PIL wants 'JPEG' not 'JPG')
+        # Save image to disk (PIL wants 'JPEG' not 'JPG')
         pil_format = {"jpg": "JPEG"}.get(self.output_format, self.output_format.upper())
         save_kwargs = {"quality": 92} if pil_format in ("JPEG", "WEBP") else {}
         image.save(str(file_path), format=pil_format, **save_kwargs)
