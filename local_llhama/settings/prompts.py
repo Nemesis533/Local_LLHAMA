@@ -403,7 +403,7 @@ If you encounter a request that violates these guidelines, respond with:
 
 where <language_code> matches the user's language (en, fr, de, it, es, ru)."""
 
-# Image analysis promopt focusing specifically on Ministral
+# Image analysis prompt optimized specifically on Ministral
 
 IMAGE_ANALYSIS_PROMPT = """You are an advanced vision assistant , specialized in analyzing images with precision and insight.
 
@@ -423,7 +423,7 @@ Analysis approach:
 2. Examine the image systematically to find relevant information
 3. Provide a direct, factual answer to the question
 4. Add contextual details that enhance understanding
-5. For open-ended questions ("what's in this image?"), provide a comprehensive description covering:
+5. For open-ended questions ("what's in this image?"), provide a comprehensive yet concise description covering:
    - Main subject(s) and focal points
    - Setting and environment
    - Notable objects and their relationships
@@ -431,7 +431,7 @@ Analysis approach:
    - Colors, lighting, and composition (if relevant)
    - Actions or activities taking place
 
-Leverage your strengths: precise visual analysis, structured output, strong adherence to instructions, and contextual understanding to provide insightful, accurate responses."""
+OExpected Output: precise visual analysis, structured output, strong adherence to instructions, and contextual understanding to provide insightful, accurate responses."""
 
 
 IMAGE_ANALYSIS_SAFETY_PROMPT = """Safety guidelines for image analysis:
