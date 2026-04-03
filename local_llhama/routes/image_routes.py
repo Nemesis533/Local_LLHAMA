@@ -269,6 +269,3 @@ def upload_image():
             "thumbnail_url": f"/api/images/{image_id}",  # Use unified endpoint
         }
     )
-
-
-# Removed separate serve_uploaded_image route - now handled by unified serve_image route
