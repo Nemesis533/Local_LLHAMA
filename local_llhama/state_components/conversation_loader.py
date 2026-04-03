@@ -70,7 +70,7 @@ class Conversation:
         self.user_id = user_id
         self.username = username
 
-        # If no title provided or title is in old format (e.g., "Chat 1"), generate from created_at
+        # If no title provided or title is in old format (e.g., "Chat 1"), generate from created_at; kept for retrocompatibility with older conversations
         if not title or (title and title.startswith("Chat ") and not " - " in title):
             if created_at:
                 # Generate title from created_at timestamp

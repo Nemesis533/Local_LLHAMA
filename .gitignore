@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -32,7 +32,7 @@ wiki_docs
 *.manifest
 *.spec
 
-# Installer logs
+# Installer logs (NOT the install/ directory itself)
 pip-log.txt
 pip-delete-this-directory.txt
 
